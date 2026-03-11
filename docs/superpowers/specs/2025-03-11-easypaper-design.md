@@ -168,6 +168,74 @@ data: {"done": true}
 }
 ```
 
+### GET /api/papers
+
+获取论文列表
+
+**Response:**
+```json
+{
+  "papers": [
+    {
+      "id": "uuid-xxx",
+      "title": "论文标题",
+      "createdAt": "2025-03-11T10:00:00Z",
+      "status": "analyzed"
+    }
+  ]
+}
+```
+
+### DELETE /api/paper/[id]
+
+删除论文
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
+## 错误处理
+
+### 统一错误响应格式
+
+所有 API 在出错时返回统一格式：
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "人类可读的错误描述",
+    "details": {}  // 可选，额外错误详情
+  }
+}
+```
+
+### HTTP 状态码规范
+
+| 状态码 | 说明 | 使用场景 |
+|--------|------|----------|
+| 200 | 成功 | 请求成功处理 |
+| 201 | 创建成功 | 资源创建成功 |
+| 400 | 请求错误 | 参数缺失、格式错误 |
+| 404 | 未找到 | 资源不存在 |
+| 413 | 实体过大 | 文件超过大小限制 |
+| 500 | 服务器错误 | 内部处理错误 |
+
+### 错误码定义
+
+| 错误码 | 说明 |
+|--------|------|
+| `INVALID_FILE_TYPE` | 文件类型不支持（非 PDF） |
+| `FILE_TOO_LARGE` | 文件超过大小限制（默认 50MB） |
+| `PARSING_FAILED` | PDF 解析失败 |
+| `ANALYSIS_FAILED` | AI 分析失败 |
+| `API_KEY_MISSING` | API Key 未配置 |
+| `API_CALL_FAILED` | AI API 调用失败 |
+| `PAPER_NOT_FOUND` | 论文不存在 |
+
 ## 数据存储设计
 
 ### 目录结构
@@ -208,13 +276,40 @@ config/
 
 ```json
 {
-  "summary": "核心摘要内容...",
-  "contributions": ["贡献1", "贡献2"],
-  "methodology": "方法概述...",
-  "conclusions": "关键结论...",
+  "summary": {
+    "content": "核心摘要内容...",
+    "references": [
+      {"text": "本文提出...", "page": 1},
+      {"text": "实验结果表明...", "page": 8}
+    ]
+  },
+  "contributions": {
+    "items": ["贡献1", "贡献2"],
+    "references": [
+      {"text": "主要贡献包括...", "page": 2}
+    ]
+  },
+  "methodology": {
+    "content": "方法概述...",
+    "references": [
+      {"text": "我们采用的方法...", "page": 3},
+      {"text": "模型架构如图所示...", "page": 4}
+    ]
+  },
+  "conclusions": {
+    "content": "关键结论...",
+    "references": [
+      {"text": "实验验证了...", "page": 10}
+    ]
+  },
   "generatedAt": "2025-03-11T10:05:00Z"
 }
 ```
+
+**页面引用说明：**
+- `references` 数组记录内容与 PDF 页码的映射关系
+- 每个引用包含 `text`（引用文本片段）和 `page`（页码，从 1 开始）
+- 前端点击引用时，通过页码调用 PDF.js 的跳转功能
 
 #### chat-history.json
 
@@ -232,17 +327,119 @@ config/
 ```json
 {
   "baseUrl": "https://api.openai.com/v1",
-  "apiKey": "sk-xxx",
+  "apiKeyEncrypted": "加密后的 API Key",
+  "apiKeyIV": "加密向量",
   "model": "gpt-4o",
   "visionModel": "gpt-4o"
 }
 ```
+
+**API Key 安全存储方案：**
+
+1. **加密存储**：API Key 使用 AES-256-GCM 加密后存储
+2. **加密密钥来源**：使用机器唯一标识（如 MAC 地址 hash）作为加密密钥
+3. **运行时解密**：应用启动时解密到内存，不暴露明文
+
+**实现示例：**
+```typescript
+import crypto from 'crypto';
+
+// 获取机器标识作为密钥
+function getMachineKey(): Buffer {
+  // 使用 hostname 或其他机器标识生成固定密钥
+  const hostname = require('os').hostname();
+  return crypto.createHash('sha256').update(hostname).digest();
+}
+
+// 加密
+function encryptApiKey(apiKey: string): { encrypted: string; iv: string } {
+  const key = getMachineKey();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  let encrypted = cipher.update(apiKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag();
+  return {
+    encrypted: encrypted + ':' + authTag.toString('hex'),
+    iv: iv.toString('hex')
+  };
+}
+
+// 解密
+function decryptApiKey(encrypted: string, iv: string): string {
+  const key = getMachineKey();
+  const [data, authTag] = encrypted.split(':');
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(iv, 'hex')
+  );
+  decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+  let decrypted = decipher.update(data, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+```
+
+**备选方案（更简单）：**
+- 仅在环境变量中配置 API Key，不持久化到文件
+- 设置页面配置仅在当前会话有效，刷新后恢复环境变量值
 
 ## 核心功能模块
 
 ### PDF 处理模块
 
 **技术方案：Marker + 视觉模型补充**
+
+**Marker 与 Next.js 集成方案：**
+
+Marker 是 Python 工具，Next.js 通过 Node.js 子进程调用：
+
+```typescript
+import { spawn } from 'child_process';
+import path from 'path';
+
+async function parsePdfWithMarker(pdfPath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const markerPath = path.join(process.cwd(), 'scripts', 'parse-pdf.py');
+    const process = spawn('python', [markerPath, pdfPath]);
+
+    let output = '';
+    let error = '';
+
+    process.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    process.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    process.on('close', (code) => {
+      if (code === 0) {
+        resolve(output);
+      } else {
+        reject(new Error(`Marker failed: ${error}`));
+      }
+    });
+  });
+}
+```
+
+**Python 脚本 (`scripts/parse-pdf.py`)：**
+```python
+#!/usr/bin/env python3
+import sys
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+from marker.output import text_from_rendered
+
+pdf_path = sys.argv[1]
+converter = PdfConverter(artifact_dict=create_model_dict())
+rendered = converter(pdf_path)
+text, _, images = text_from_rendered(rendered)
+print(text)
+```
 
 1. **主要流程**：使用 Marker 将 PDF 转换为 Markdown
    - 保留表格、公式、图片链接
