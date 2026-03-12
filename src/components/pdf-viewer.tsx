@@ -1,23 +1,28 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 interface PdfViewerProps {
   url: string;
   currentPage?: number;
+  highlightText?: string | null;
   onPageChange?: (page: number) => void;
+  onHighlightClear?: () => void;
 }
 
-export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps) {
+export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, onHighlightClear }: PdfViewerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(currentPage);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
+  const textLayerInstanceRef = useRef<{ cancel: () => void } | null>(null);
 
-  // Load PDF document (dynamic import to avoid SSR issues with DOMMatrix)
+  // Load PDF document
   useEffect(() => {
     let cancelled = false;
 
@@ -46,11 +51,17 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
   }, [currentPage, totalPages]);
 
-  // Render current page
+  // Render current page (canvas + text layer)
   useEffect(() => {
-    if (!pdf || !canvasRef.current) return;
+    if (!pdf || !canvasRef.current || !textLayerRef.current) return;
 
     let cancelled = false;
+
+    // Cancel previous text layer render
+    if (textLayerInstanceRef.current) {
+      textLayerInstanceRef.current.cancel();
+      textLayerInstanceRef.current = null;
+    }
 
     async function renderPage() {
       const pdfPage = await pdf!.getPage(page);
@@ -60,14 +71,86 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      if (!cancelled) {
-        await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
+      if (cancelled) return;
+
+      await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
+
+      if (cancelled) return;
+
+      // Render text layer
+      const textLayerDiv = textLayerRef.current!;
+      textLayerDiv.innerHTML = '';
+      textLayerDiv.style.width = `${viewport.width}px`;
+      textLayerDiv.style.height = `${viewport.height}px`;
+
+      const textContent = await pdfPage.getTextContent();
+      if (cancelled) return;
+
+      const { TextLayer } = await import('pdfjs-dist');
+      const textLayer = new TextLayer({
+        textContentSource: textContent,
+        container: textLayerDiv,
+        viewport,
+      });
+
+      textLayerInstanceRef.current = textLayer;
+      await textLayer.render();
+
+      if (cancelled) return;
+
+      // Apply highlight if needed
+      if (highlightText) {
+        applyHighlight(textLayerDiv, highlightText);
       }
     }
 
     renderPage();
     return () => { cancelled = true; };
-  }, [pdf, page, scale]);
+  }, [pdf, page, scale, highlightText]);
+
+  // Apply highlight when highlightText changes (but page/scale don't)
+  const applyHighlight = useCallback((container: HTMLDivElement, text: string) => {
+    // Clear existing highlights
+    container.querySelectorAll('.highlight-active').forEach((el) => {
+      el.classList.remove('highlight-active');
+    });
+
+    if (!text) return;
+
+    const normalizedSearch = text.trim().toLowerCase();
+    if (!normalizedSearch) return;
+
+    const spans = container.querySelectorAll('span');
+    let found = false;
+
+    // Try exact substring match first
+    spans.forEach((span) => {
+      const spanText = span.textContent?.toLowerCase() || '';
+      if (spanText.includes(normalizedSearch) || normalizedSearch.includes(spanText)) {
+        if (spanText.trim().length > 0 && (
+          spanText.includes(normalizedSearch) ||
+          (normalizedSearch.includes(spanText) && spanText.length > 3)
+        )) {
+          span.classList.add('highlight-active');
+          found = true;
+        }
+      }
+    });
+
+    // Scroll the first highlighted element into view
+    if (found) {
+      const firstHighlight = container.querySelector('.highlight-active');
+      firstHighlight?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
+  // Handle click on PDF canvas area to clear highlight
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    // Only clear if clicking the background, not text layer spans
+    if ((e.target as HTMLElement).tagName === 'CANVAS') {
+      onHighlightClear?.();
+    }
+  }, [onHighlightClear]);
 
   const goToPage = (p: number) => {
     if (p >= 1 && p <= totalPages) {
@@ -87,6 +170,36 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
   return (
     <div className="flex flex-col h-full">
+      {/* TextLayer + Highlight CSS */}
+      <style>{`
+        .textLayer {
+          position: absolute;
+          left: 0;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          overflow: hidden;
+          opacity: 0.25;
+          line-height: 1.0;
+        }
+        .textLayer > span {
+          color: transparent;
+          position: absolute;
+          white-space: pre;
+          transform-origin: 0% 0%;
+        }
+        .textLayer > span.highlight-active {
+          background-color: rgba(250, 204, 21, 0.5);
+          color: transparent;
+          border-radius: 2px;
+          opacity: 1;
+          transition: background-color 0.3s ease;
+        }
+        .textLayer ::selection {
+          background: rgba(99, 102, 241, 0.3);
+        }
+      `}</style>
+
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-1.5">
@@ -135,9 +248,12 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4">
-        <canvas ref={canvasRef} className="shadow-xl rounded" />
+      {/* Canvas + TextLayer */}
+      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4" onClick={handleCanvasClick}>
+        <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+          <canvas ref={canvasRef} className="shadow-xl rounded" />
+          <div ref={textLayerRef} className="textLayer" />
+        </div>
       </div>
     </div>
   );

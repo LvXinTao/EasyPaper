@@ -13,6 +13,7 @@ export default function PaperDetailPage() {
   const paperId = params.id as string;
   const { data, loading, error, refetch } = usePaper(paperId);
   const [currentPage, setCurrentPage] = useState(1);
+  const [highlightText, setHighlightText] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
@@ -59,8 +60,9 @@ export default function PaperDetailPage() {
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
 
-  const handleReferenceClick = useCallback((page: number) => {
-    setCurrentPage(page);
+  const handleReferenceClick = useCallback((ref: { page: number; text: string }) => {
+    setCurrentPage(ref.page);
+    setHighlightText(ref.text);
   }, []);
 
   if (loading) {
@@ -93,7 +95,9 @@ export default function PaperDetailPage() {
         <PdfViewer
           url={`/api/paper/${paperId}/pdf`}
           currentPage={currentPage}
-          onPageChange={setCurrentPage}
+          highlightText={highlightText}
+          onPageChange={(p) => { setCurrentPage(p); setHighlightText(null); }}
+          onHighlightClear={() => setHighlightText(null)}
         />
       </div>
 

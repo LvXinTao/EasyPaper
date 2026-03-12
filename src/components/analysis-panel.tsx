@@ -13,7 +13,7 @@ interface AnalysisPanelProps {
   isAnalyzing?: boolean;
   analysisStep?: string | null;
   analysisMessage?: string | null;
-  onReferenceClick?: (page: number) => void;
+  onReferenceClick?: (ref: { page: number; text: string }) => void;
 }
 
 function ReferenceLink({
@@ -21,11 +21,11 @@ function ReferenceLink({
   onClick,
 }: {
   reference: PageReference;
-  onClick?: (page: number) => void;
+  onClick?: (ref: { page: number; text: string }) => void;
 }) {
   return (
     <button
-      onClick={() => onClick?.(reference.page)}
+      onClick={() => onClick?.({ page: reference.page, text: reference.text })}
       className="inline-flex items-center text-xs text-indigo-500 hover:text-indigo-700 hover:underline ml-1 font-mono"
       title={reference.text}
     >
@@ -41,7 +41,7 @@ function SectionContent({
 }: {
   analysis: PaperAnalysis;
   section: string;
-  onReferenceClick?: (page: number) => void;
+  onReferenceClick?: (ref: { page: number; text: string }) => void;
 }) {
   const sectionData = analysis[section as keyof PaperAnalysis];
   if (!sectionData || typeof sectionData === 'string') return null;

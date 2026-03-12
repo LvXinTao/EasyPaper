@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { ChatMessage } from '@/types';
+import { useTypewriter } from '@/hooks/use-typewriter';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -11,10 +12,13 @@ interface ChatMessagesProps {
 
 export function ChatMessages({ messages, streamingContent, isStreaming }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { displayedText, isTyping } = useTypewriter(streamingContent || '', {
+    isStreaming,
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingContent]);
+  }, [messages, displayedText]);
 
   if (messages.length === 0 && !isStreaming) {
     return (
@@ -45,10 +49,10 @@ export function ChatMessages({ messages, streamingContent, isStreaming }: ChatMe
           </div>
         </div>
       ))}
-      {isStreaming && streamingContent && (
+      {isTyping && displayedText && (
         <div className="flex justify-start">
           <div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-slate-100 text-slate-700 text-sm leading-relaxed">
-            <div className="whitespace-pre-wrap">{streamingContent}</div>
+            <div className="whitespace-pre-wrap">{displayedText}</div>
             <span className="inline-block w-1.5 h-4 bg-indigo-400 animate-pulse ml-0.5 rounded-sm" />
           </div>
         </div>
