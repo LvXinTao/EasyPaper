@@ -1,10 +1,19 @@
 import { parsePdfWithMarker } from '@/lib/marker';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 
-jest.mock('child_process', () => ({ spawn: jest.fn() }));
+jest.mock('child_process', () => ({
+  spawn: jest.fn(),
+  execSync: jest.fn(),
+}));
 const mockSpawn = spawn as jest.MockedFunction<typeof spawn>;
+const mockExecSync = execSync as jest.MockedFunction<typeof execSync>;
 
 describe('parsePdfWithMarker', () => {
+  beforeEach(() => {
+    // findPythonWithMarker calls execSync to detect python with marker
+    mockExecSync.mockReturnValue(Buffer.from(''));
+  });
+
   it('returns parsed markdown on success', async () => {
     const mockProcess = { stdout: { on: jest.fn() }, stderr: { on: jest.fn() }, on: jest.fn() };
     mockSpawn.mockReturnValue(mockProcess as any);

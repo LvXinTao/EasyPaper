@@ -1,10 +1,52 @@
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import path from 'path';
 
+let cachedPython: string | null = null;
+
+function findPythonWithMarker(): string {
+  if (cachedPython) return cachedPython;
+
+  // Candidates to try, in order of preference
+  const candidates = ['python3', 'python'];
+
+  // Also check common conda/venv locations
+  const home = process.env.HOME || '';
+  if (home) {
+    candidates.push(
+      path.join(home, 'miniconda3', 'bin', 'python3'),
+      path.join(home, 'anaconda3', 'bin', 'python3'),
+      path.join(home, '.conda', 'bin', 'python3'),
+    );
+  }
+
+  for (const candidate of candidates) {
+    try {
+      execSync(`"${candidate}" -c "import marker"`, {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
+      cachedPython = candidate;
+      return candidate;
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  throw new Error(
+    'marker-pdf not found in any Python installation. ' +
+    'Install with: pip install marker-pdf (in the Python environment accessible to this app)'
+  );
+}
+
 export async function parsePdfWithMarker(pdfPath: string, outputDir: string): Promise<string> {
+  const pythonBin = findPythonWithMarker();
+
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), 'scripts', 'parse-pdf.py');
-    const proc = spawn('python3', [scriptPath, pdfPath, outputDir]);
+    const proc = spawn(pythonBin, [scriptPath, pdfPath, outputDir], {
+      shell: true,
+      env: { ...process.env },
+    });
     let stdout = '';
     let stderr = '';
     proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });

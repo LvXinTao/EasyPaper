@@ -15,6 +15,7 @@ export default function PaperDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const { start: startAnalysis } = useSSE('/api/analyze', {
     onMessage: (event) => {
@@ -37,14 +38,16 @@ export default function PaperDetailPage() {
       setIsAnalyzing(false);
       refetch();
     },
-    onError: () => {
+    onError: (err) => {
       setIsAnalyzing(false);
+      setAnalysisError(err.message);
       refetch();
     },
   });
 
   const handleAnalyze = useCallback(() => {
     setIsAnalyzing(true);
+    setAnalysisError(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
 
@@ -98,6 +101,13 @@ export default function PaperDetailPage() {
             </button>
           )}
         </div>
+
+        {/* Analysis error banner */}
+        {analysisError && (
+          <div className="px-4 py-3 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+            <strong>Analysis failed:</strong> {analysisError}
+          </div>
+        )}
 
         {/* Analysis */}
         <div className="flex-1 overflow-hidden">
