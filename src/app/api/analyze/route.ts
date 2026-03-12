@@ -20,15 +20,21 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (data: Record<string, unknown>) => { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); };
         try {
-          // Step 1: Parse PDF with Marker
-          console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
-          send({ step: 'parsing', message: 'Parsing PDF with Marker...' });
-          await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
-          const pdfPath = storage.getPdfPath(paperId);
-          const paperDir = pdfPath.replace('/original.pdf', '');
-          const markdown = await parsePdfWithMarker(pdfPath, paperDir);
-          await storage.saveParsedContent(paperId, markdown);
-          console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
+          // Step 1: Parse PDF with Marker (skip if cached)
+          let markdown = await storage.getParsedContent(paperId);
+          if (markdown) {
+            console.log(`[analyze] Paper ${paperId}: Using cached parsed content (${markdown.length} chars)`);
+            send({ step: 'parsing', message: 'Using cached parsed content...' });
+          } else {
+            console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
+            send({ step: 'parsing', message: 'Parsing PDF with Marker...' });
+            await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
+            const pdfPath = storage.getPdfPath(paperId);
+            const paperDir = pdfPath.replace('/original.pdf', '');
+            markdown = await parsePdfWithMarker(pdfPath, paperDir);
+            await storage.saveParsedContent(paperId, markdown);
+            console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
+          }
 
           // Step 2: Send to AI for analysis
           const prompt = ANALYSIS_PROMPT.replace('{content}', markdown);
