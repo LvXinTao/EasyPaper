@@ -6,8 +6,7 @@ jest.mock('@/lib/crypto', () => ({ encryptApiKey: jest.fn().mockReturnValue({ en
 describe('GET /api/settings', () => {
   it('returns settings without exposing API key', async () => {
     (storage.getSettings as jest.Mock).mockResolvedValue({ baseUrl: 'https://api.test.com/v1', apiKeyEncrypted: 'encrypted', apiKeyIV: 'iv', model: 'gpt-4o', visionModel: 'gpt-4o' });
-    const request = new Request('http://localhost/api/settings');
-    const response = await GET(request);
+    const response = await GET();
     const data = await response.json();
     expect(response.status).toBe(200);
     expect(data.baseUrl).toBe('https://api.test.com/v1');
