@@ -68,10 +68,10 @@ export function UploadZone() {
 
   return (
     <div
-      className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${
+      className={`relative border-2 border-dashed rounded-2xl p-14 text-center transition-all cursor-pointer group ${
         isDragging
-          ? 'border-blue-500 bg-blue-50'
-          : 'border-gray-300 hover:border-gray-400'
+          ? 'border-indigo-400 bg-indigo-50 scale-[1.01] shadow-lg'
+          : 'border-slate-300 hover:border-indigo-300 hover:bg-white hover:shadow-md'
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -91,23 +91,27 @@ export function UploadZone() {
 
       {uploading ? (
         <div>
-          <div className="text-lg text-gray-600">{progress}</div>
-          <div className="mt-4 w-48 mx-auto h-2 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full animate-pulse w-full" />
+          <div className="text-lg font-medium text-indigo-600">{progress}</div>
+          <div className="mt-4 w-48 mx-auto h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-500 rounded-full animate-pulse w-full" />
           </div>
         </div>
       ) : (
         <div>
-          <div className="text-4xl mb-4">&#128196;</div>
-          <div className="text-lg text-gray-600 mb-2">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+            <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          </div>
+          <div className="text-lg font-medium text-slate-700 mb-1">
             Drag & drop your PDF here
           </div>
-          <div className="text-sm text-gray-400">or click to select a file</div>
+          <div className="text-sm text-slate-400">or click to select a file</div>
         </div>
       )}
 
       {error && (
-        <div className="mt-4 text-red-500 text-sm">{error}</div>
+        <div className="mt-4 text-rose-500 text-sm font-medium">{error}</div>
       )}
     </div>
   );

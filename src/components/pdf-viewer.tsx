@@ -78,8 +78,9 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        Loading PDF...
+      <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-100">
+        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-3" />
+        <span className="text-sm">Loading PDF...</span>
       </div>
     );
   }
@@ -87,46 +88,56 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page <= 1}
-            className="px-2 py-1 text-sm bg-white border rounded disabled:opacity-50"
+            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            Previous
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <span className="text-sm">
+          <span className="text-xs text-slate-300 tabular-nums px-2">
             {page} / {totalPages}
           </span>
           <button
             onClick={() => goToPage(page + 1)}
             disabled={page >= totalPages}
-            className="px-2 py-1 text-sm bg-white border rounded disabled:opacity-50"
+            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
-            Next
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
-            className="px-2 py-1 text-sm bg-white border rounded"
+            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors"
           >
-            -
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            </svg>
           </button>
-          <span className="text-sm">{Math.round(scale * 100)}%</span>
+          <span className="text-xs text-slate-300 tabular-nums px-1 min-w-[3rem] text-center">
+            {Math.round(scale * 100)}%
+          </span>
           <button
             onClick={() => setScale((s) => Math.min(3, s + 0.2))}
-            className="px-2 py-1 text-sm bg-white border rounded"
+            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors"
           >
-            +
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
           </button>
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="flex-1 overflow-auto bg-gray-200 flex justify-center p-4">
-        <canvas ref={canvasRef} className="shadow-lg" />
+      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4">
+        <canvas ref={canvasRef} className="shadow-xl rounded" />
       </div>
     </div>
   );

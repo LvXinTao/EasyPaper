@@ -15,18 +15,21 @@ const SECTIONS = [
 
 export function SectionTabs({ activeSection, onSectionChange }: SectionTabsProps) {
   return (
-    <div className="flex border-b">
+    <div className="flex border-b border-slate-200 bg-white">
       {SECTIONS.map(({ key, label }) => (
         <button
           key={key}
           onClick={() => onSectionChange(key)}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
             activeSection === key
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'text-indigo-600'
+              : 'text-slate-400 hover:text-slate-600'
           }`}
         >
           {label}
+          {activeSection === key && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-t" />
+          )}
         </button>
       ))}
     </div>

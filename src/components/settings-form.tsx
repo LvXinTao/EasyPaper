@@ -66,66 +66,68 @@ export function SettingsForm() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Base URL
         </label>
         <input
           type="url"
           value={settings.baseUrl}
           onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 bg-slate-50"
           placeholder="https://api.openai.com/v1"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           API Key
           {settings.hasApiKey && (
-            <span className="ml-2 text-xs text-green-600">(configured)</span>
+            <span className="ml-2 text-xs text-emerald-600 font-normal bg-emerald-50 px-2 py-0.5 rounded-full">configured</span>
           )}
         </label>
         <input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 bg-slate-50"
           placeholder={settings.hasApiKey ? 'Enter new key to update' : 'sk-xxx'}
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Model
         </label>
         <input
           type="text"
           value={settings.model}
           onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 bg-slate-50"
           placeholder="gpt-4o"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Vision Model
         </label>
         <input
           type="text"
           value={settings.visionModel}
           onChange={(e) => setSettings({ ...settings, visionModel: e.target.value })}
-          className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 bg-slate-50"
           placeholder="gpt-4o"
         />
       </div>
 
       {message && (
         <div
-          className={`text-sm ${
-            message.type === 'success' ? 'text-green-600' : 'text-red-600'
+          className={`text-sm font-medium px-4 py-2.5 rounded-xl ${
+            message.type === 'success'
+              ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+              : 'text-rose-700 bg-rose-50 border border-rose-200'
           }`}
         >
           {message.text}
@@ -135,7 +137,7 @@ export function SettingsForm() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
+        className="w-full px-4 py-3 bg-indigo-500 text-white text-sm font-semibold rounded-xl hover:bg-indigo-600 disabled:opacity-50 transition-colors shadow-sm"
       >
         {saving ? 'Saving...' : 'Save Settings'}
       </button>

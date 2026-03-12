@@ -14,11 +14,17 @@ export default function PaperDetailPage() {
   const { data, loading, error, refetch } = usePaper(paperId);
   const [currentPage, setCurrentPage] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStep, setAnalysisStep] = useState<string | null>(null);
+  const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const { start: startAnalysis } = useSSE('/api/analyze', {
     onMessage: (event) => {
+      if ('step' in event) {
+        setAnalysisStep(event.step as string);
+        setAnalysisMessage((event.message as string) || null);
+      }
       if ('section' in event) {
         setAnalysis((prev) => {
           if (!prev) {
@@ -48,6 +54,8 @@ export default function PaperDetailPage() {
   const handleAnalyze = useCallback(() => {
     setIsAnalyzing(true);
     setAnalysisError(null);
+    setAnalysisStep(null);
+    setAnalysisMessage(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
 
@@ -57,16 +65,20 @@ export default function PaperDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-60px)]">
-        <div className="text-gray-400">Loading paper...</div>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-52px)] bg-slate-50">
+        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-3" />
+        <div className="text-slate-400 text-sm">Loading paper...</div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-60px)]">
-        <div className="text-red-500">{error || 'Paper not found'}</div>
+      <div className="flex items-center justify-center h-[calc(100vh-52px)] bg-slate-50">
+        <div className="text-center">
+          <div className="text-rose-500 font-medium">{error || 'Paper not found'}</div>
+          <a href="/" className="text-sm text-indigo-500 hover:underline mt-2 inline-block">Back to home</a>
+        </div>
       </div>
     );
   }
@@ -75,9 +87,9 @@ export default function PaperDetailPage() {
   const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing;
 
   return (
-    <div className="flex h-[calc(100vh-60px)]">
+    <div className="flex h-[calc(100vh-52px)]">
       {/* Left: PDF Viewer (55%) */}
-      <div className="w-[55%] border-r">
+      <div className="w-[55%] border-r border-slate-200">
         <PdfViewer
           url={`/api/paper/${paperId}/pdf`}
           currentPage={currentPage}
@@ -86,16 +98,16 @@ export default function PaperDetailPage() {
       </div>
 
       {/* Right: Analysis Panel (45%) */}
-      <div className="w-[45%] flex flex-col">
+      <div className="w-[45%] flex flex-col bg-white">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-white">
-          <h1 className="text-lg font-semibold text-gray-800 truncate">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+          <h1 className="text-base font-semibold text-slate-800 truncate mr-3">
             {data.metadata.title}
           </h1>
           {needsAnalysis && (
             <button
               onClick={handleAnalyze}
-              className="px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors"
+              className="flex-shrink-0 px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors shadow-sm"
             >
               Analyze
             </button>
@@ -104,8 +116,13 @@ export default function PaperDetailPage() {
 
         {/* Analysis error banner */}
         {analysisError && (
-          <div className="px-4 py-3 bg-red-50 border-b border-red-200 text-red-700 text-sm">
-            <strong>Analysis failed:</strong> {analysisError}
+          <div className="px-4 py-3 bg-rose-50 border-b border-rose-200 text-rose-700 text-sm flex items-start gap-2">
+            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <strong>Analysis failed:</strong> {analysisError}
+            </div>
           </div>
         )}
 
@@ -116,6 +133,8 @@ export default function PaperDetailPage() {
             analysis={displayAnalysis}
             initialChatMessages={data.chatHistory?.messages || []}
             isAnalyzing={isAnalyzing}
+            analysisStep={analysisStep}
+            analysisMessage={analysisMessage}
             onReferenceClick={handleReferenceClick}
           />
         </div>

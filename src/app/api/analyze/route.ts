@@ -20,18 +20,28 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (data: Record<string, unknown>) => { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); };
         try {
-          send({ step: 'parsing' });
+          // Step 1: Parse PDF with Marker
+          console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
+          send({ step: 'parsing', message: 'Parsing PDF with Marker...' });
           await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
           const pdfPath = storage.getPdfPath(paperId);
           const paperDir = pdfPath.replace('/original.pdf', '');
           const markdown = await parsePdfWithMarker(pdfPath, paperDir);
           await storage.saveParsedContent(paperId, markdown);
+          console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
 
-          send({ step: 'analyzing' });
+          // Step 2: Send to AI for analysis
+          console.log(`[analyze] Paper ${paperId}: Sending to AI for analysis (model: ${model})...`);
+          send({ step: 'analyzing', message: 'Analyzing with AI...' });
           await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'analyzing' });
           const client = createAIClient({ baseUrl, apiKey, model });
           const prompt = ANALYSIS_PROMPT.replace('{content}', markdown);
           const result = await client.complete([{ role: 'user', content: prompt }]);
+          console.log(`[analyze] Paper ${paperId}: AI analysis complete`);
+
+          // Step 3: Save and stream results
+          console.log(`[analyze] Paper ${paperId}: Saving analysis results...`);
+          send({ step: 'saving', message: 'Saving results...' });
           const analysis: PaperAnalysis = { ...JSON.parse(result), generatedAt: new Date().toISOString() };
           await storage.saveAnalysis(paperId, analysis);
 
@@ -40,8 +50,10 @@ export async function POST(request: Request) {
             send({ section, content: 'content' in sectionData ? sectionData.content : JSON.stringify(sectionData.items) });
           }
           await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'analyzed' });
+          console.log(`[analyze] Paper ${paperId}: Analysis complete!`);
           send({ done: true });
         } catch (error) {
+          console.error(`[analyze] Paper ${paperId}: Error -`, error instanceof Error ? error.message : error);
           await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'error' });
           send({ error: error instanceof Error ? error.message : 'Analysis failed' });
         } finally { controller.close(); }
