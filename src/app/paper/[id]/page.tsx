@@ -39,6 +39,7 @@ export default function PaperDetailPage() {
     },
     onError: () => {
       setIsAnalyzing(false);
+      refetch();
     },
   });
 
@@ -68,7 +69,7 @@ export default function PaperDetailPage() {
   }
 
   const displayAnalysis = data.analysis || analysis;
-  const needsAnalysis = data.metadata.status === 'pending' && !isAnalyzing;
+  const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing;
 
   return (
     <div className="flex h-[calc(100vh-60px)]">

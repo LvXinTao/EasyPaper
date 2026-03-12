@@ -10,8 +10,22 @@ export async function parsePdfWithMarker(pdfPath: string, outputDir: string): Pr
     proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
     proc.on('close', (code: number | null) => {
-      if (code === 0) { resolve(stdout); } else { reject(new Error(`Marker failed (exit ${code}): ${stderr}`)); }
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        const errorDetail = stderr || stdout || 'Unknown error';
+        const hint = errorDetail.includes('marker-pdf not installed') || errorDetail.includes('No module named')
+          ? '. Install with: pip install marker-pdf'
+          : '';
+        reject(new Error(`PDF parsing failed: ${errorDetail.trim()}${hint}`));
+      }
     });
-    proc.on('error', (err: Error) => { reject(new Error(`Failed to start Marker: ${err.message}`)); });
+    proc.on('error', (err: Error) => {
+      reject(new Error(
+        err.message.includes('ENOENT')
+          ? 'python3 not found. Please install Python 3 to use PDF parsing.'
+          : `Failed to start PDF parser: ${err.message}`
+      ));
+    });
   });
 }

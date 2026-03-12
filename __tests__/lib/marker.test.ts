@@ -25,6 +25,6 @@ describe('parsePdfWithMarker', () => {
     stderrCallback(Buffer.from('Error occurred'));
     const closeCallback = mockProcess.on.mock.calls.find((c: any[]) => c[0] === 'close')![1];
     closeCallback(1);
-    await expect(promise).rejects.toThrow('Marker failed');
+    await expect(promise).rejects.toThrow('PDF parsing failed');
   });
 });
