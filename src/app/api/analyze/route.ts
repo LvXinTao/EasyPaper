@@ -31,13 +31,18 @@ export async function POST(request: Request) {
           console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
 
           // Step 2: Send to AI for analysis
-          console.log(`[analyze] Paper ${paperId}: Sending to AI for analysis (model: ${model})...`);
-          send({ step: 'analyzing', message: 'Analyzing with AI...' });
+          const prompt = ANALYSIS_PROMPT.replace('{content}', markdown);
+          const promptLength = prompt.length;
+          const estimatedTokens = Math.ceil(promptLength / 4);
+          console.log(`[analyze] Paper ${paperId}: Sending to AI for analysis`);
+          console.log(`[analyze]   URL: ${baseUrl}/chat/completions`);
+          console.log(`[analyze]   Model: ${model}`);
+          console.log(`[analyze]   Prompt length: ${promptLength} chars (~${estimatedTokens} tokens)`);
+          send({ step: 'analyzing', message: `Analyzing with AI (${model}, ~${estimatedTokens} tokens)...` });
           await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'analyzing' });
           const client = createAIClient({ baseUrl, apiKey, model });
-          const prompt = ANALYSIS_PROMPT.replace('{content}', markdown);
           const result = await client.complete([{ role: 'user', content: prompt }]);
-          console.log(`[analyze] Paper ${paperId}: AI analysis complete`);
+          console.log(`[analyze] Paper ${paperId}: AI analysis complete (${result.length} chars returned)`);
 
           // Step 3: Save and stream results
           console.log(`[analyze] Paper ${paperId}: Saving analysis results...`);

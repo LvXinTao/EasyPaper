@@ -24,7 +24,7 @@ describe('createAIClient', () => {
 
     it('throws on API error', async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized', text: async () => 'Invalid API key' });
-      await expect(client.complete([{ role: 'user', content: 'test' }])).rejects.toThrow('API call failed');
+      await expect(client.complete([{ role: 'user', content: 'test' }])).rejects.toThrow('API error 401');
     });
   });
 

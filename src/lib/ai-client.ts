@@ -1,6 +1,28 @@
 interface AIClientConfig { baseUrl: string; apiKey: string; model: string; }
 interface Message { role: 'system' | 'user' | 'assistant'; content: string; }
 
+function parseAPIError(status: number, errorText: string, url: string, model: string): string {
+  let detail = '';
+  try {
+    const parsed = JSON.parse(errorText);
+    detail = parsed.error?.message || parsed.message || errorText;
+  } catch {
+    detail = errorText;
+  }
+
+  const hints: string[] = [];
+  if (status === 401) hints.push('Check your API key in Settings');
+  if (status === 404) hints.push(`Model "${model}" may not exist on this provider`);
+  if (status === 429) hints.push('Rate limit exceeded - wait and try again');
+  if (status === 500) hints.push(`Server error from ${new URL(url).hostname} - the model "${model}" may be unavailable or the input may be too long`);
+  if (status === 413 || detail.toLowerCase().includes('too long') || detail.toLowerCase().includes('context')) {
+    hints.push('The paper content may exceed the model context window');
+  }
+
+  const hintStr = hints.length > 0 ? ` [Hint: ${hints.join('; ')}]` : '';
+  return `API error ${status}: ${detail}${hintStr}`;
+}
+
 export function createAIClient(config: AIClientConfig) {
   const { baseUrl, apiKey, model } = config;
 
@@ -12,7 +34,7 @@ export function createAIClient(config: AIClientConfig) {
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`API call failed (${response.status}): ${errorText}`);
+      throw new Error(parseAPIError(response.status, errorText, `${baseUrl}/chat/completions`, model));
     }
     const data = await response.json();
     return data.choices[0].message.content;
@@ -26,7 +48,7 @@ export function createAIClient(config: AIClientConfig) {
     });
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`API call failed (${response.status}): ${errorText}`);
+      throw new Error(parseAPIError(response.status, errorText, `${baseUrl}/chat/completions`, model));
     }
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
