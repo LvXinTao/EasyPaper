@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 interface PdfViewerProps {
   url: string;
@@ -14,18 +11,21 @@ interface PdfViewerProps {
 
 export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(currentPage);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
 
-  // Load PDF document
+  // Load PDF document (dynamic import to avoid SSR issues with DOMMatrix)
   useEffect(() => {
     let cancelled = false;
 
     async function loadPdf() {
       setLoading(true);
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
       const loadingTask = pdfjsLib.getDocument(url);
       const pdfDoc = await loadingTask.promise;
       if (!cancelled) {
