@@ -189,4 +189,19 @@ describe('applyHighlight', () => {
     applyHighlight(container, 'deep learning model');
     expect(getHighlighted(container)).toEqual(['the deep learning model is powerful']);
   });
+
+  it('falls back to word subsequence when exact match fails', () => {
+    // AI reference has extra words not in the PDF
+    const container = makeSpans(['novel deep learning ', 'framework for NLP']);
+    applyHighlight(container, 'we propose a novel deep learning framework for NLP tasks');
+    // Should match the longest word subsequence found: "novel deep learning framework for nlp"
+    expect(getHighlighted(container)).toEqual(['novel deep learning ', 'framework for NLP']);
+  });
+
+  it('falls back to partial word match when text differs significantly', () => {
+    const container = makeSpans(['deep learning ', 'model achieves state']);
+    applyHighlight(container, 'the deep learning model achieves excellent results');
+    // Should find "deep learning model achieves"
+    expect(getHighlighted(container)).toEqual(['deep learning ', 'model achieves state']);
+  });
 });

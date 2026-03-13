@@ -72,6 +72,7 @@ export function buildTextMap(container: HTMLDivElement): { fullText: string; cha
 
 /**
  * Find search text within page text using normalized matching.
+ * Uses progressive fallback: exact match → longest word subsequence.
  * Returns true if any spans were highlighted.
  */
 export function applyHighlight(container: HTMLDivElement, text: string): boolean {
@@ -92,8 +93,30 @@ export function applyHighlight(container: HTMLDivElement, text: string): boolean
 
   if (!searchNorm.normalized) return false;
 
-  // Find match position in normalized page text
-  const matchIndex = pageNorm.normalized.indexOf(searchNorm.normalized);
+  // Strategy 1: exact normalized substring match
+  let matchIndex = pageNorm.normalized.indexOf(searchNorm.normalized);
+
+  // Strategy 2: progressive word subsequence — try longest match first
+  if (matchIndex === -1) {
+    const searchWords = searchNorm.normalized.split(' ').filter(w => w.length > 2);
+    const minWords = Math.max(2, Math.ceil(searchWords.length * 0.4));
+
+    for (let len = searchWords.length; len >= minWords; len--) {
+      let found = false;
+      for (let start = 0; start <= searchWords.length - len; start++) {
+        const subSearch = searchWords.slice(start, start + len).join(' ');
+        matchIndex = pageNorm.normalized.indexOf(subSearch);
+        if (matchIndex !== -1) {
+          // Update searchNorm to reflect the actual matched substring
+          searchNorm.normalized = subSearch;
+          found = true;
+          break;
+        }
+      }
+      if (found) break;
+    }
+  }
+
   if (matchIndex === -1) return false;
 
   // Map normalized match range back to original charMap indices
