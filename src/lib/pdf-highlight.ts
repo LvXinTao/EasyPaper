@@ -71,32 +71,32 @@ export function buildTextMap(container: HTMLDivElement): { fullText: string; cha
 }
 
 /**
+ * Result of finding a match range in page text.
+ * Indices refer to the raw (unnormalized) fullText from buildTextMap.
+ * Both startIdx and endIdx are inclusive (endIdx = index of last matched char).
+ */
+export interface MatchRange {
+  startIdx: number;
+  endIdx: number;
+}
+
+/**
  * Find search text within page text using normalized matching.
  * Uses progressive fallback: exact match → longest word subsequence.
- * Returns true if any spans were highlighted.
+ * Returns indices into the raw (unnormalized) pageText, or null if not found.
  */
-export function applyHighlight(container: HTMLDivElement, text: string): boolean {
-  // Clear existing highlights
-  container.querySelectorAll('.highlight-active').forEach((el) => {
-    el.classList.remove('highlight-active');
-  });
+export function findMatchRange(pageText: string, searchText: string): MatchRange | null {
+  if (!searchText || !searchText.trim()) return null;
+  if (!pageText) return null;
 
-  if (!text || !text.trim()) return false;
+  const pageNorm = normalizeText(pageText);
+  const searchNorm = normalizeText(searchText.normalize('NFC'));
 
-  // Build full page text with span mapping (already NFC-normalized)
-  const { fullText, charMap } = buildTextMap(container);
-  if (!fullText) return false;
+  if (!searchNorm.normalized) return null;
 
-  // Normalize both texts (NFC is already applied by buildTextMap for page text)
-  const pageNorm = normalizeText(fullText);
-  const searchNorm = normalizeText(text.normalize('NFC'));
-
-  if (!searchNorm.normalized) return false;
-
-  // Strategy 1: exact normalized substring match
   let matchIndex = pageNorm.normalized.indexOf(searchNorm.normalized);
+  let matchLength = searchNorm.normalized.length;
 
-  // Strategy 2: progressive word subsequence — try longest match first
   if (matchIndex === -1) {
     const searchWords = searchNorm.normalized.split(' ').filter(w => w.length > 2);
     const minWords = Math.max(2, Math.ceil(searchWords.length * 0.4));
@@ -107,8 +107,7 @@ export function applyHighlight(container: HTMLDivElement, text: string): boolean
         const subSearch = searchWords.slice(start, start + len).join(' ');
         matchIndex = pageNorm.normalized.indexOf(subSearch);
         if (matchIndex !== -1) {
-          // Update searchNorm to reflect the actual matched substring
-          searchNorm.normalized = subSearch;
+          matchLength = subSearch.length;
           found = true;
           break;
         }
@@ -117,26 +116,43 @@ export function applyHighlight(container: HTMLDivElement, text: string): boolean
     }
   }
 
-  if (matchIndex === -1) return false;
+  if (matchIndex === -1) return null;
 
-  // Map normalized match range back to original charMap indices
-  const origStart = pageNorm.indexMap[matchIndex];
-  const origEnd = pageNorm.indexMap[matchIndex + searchNorm.normalized.length - 1];
+  const startIdx = pageNorm.indexMap[matchIndex];
+  const endIdx = pageNorm.indexMap[matchIndex + matchLength - 1];
 
-  // Collect unique spans that contain matched characters
+  return { startIdx, endIdx };
+}
+
+/**
+ * Find search text within page text using normalized matching.
+ * Uses progressive fallback: exact match → longest word subsequence.
+ * Returns true if any spans were highlighted.
+ */
+export function applyHighlight(container: HTMLDivElement, text: string): boolean {
+  container.querySelectorAll('.highlight-active').forEach((el) => {
+    el.classList.remove('highlight-active');
+  });
+
+  if (!text || !text.trim()) return false;
+
+  const { fullText, charMap } = buildTextMap(container);
+  if (!fullText) return false;
+
+  const range = findMatchRange(fullText, text);
+  if (!range) return false;
+
   const matchedSpans = new Set<HTMLElement>();
-  for (let i = origStart; i <= origEnd; i++) {
+  for (let i = range.startIdx; i <= range.endIdx; i++) {
     if (charMap[i]) {
       matchedSpans.add(charMap[i].span);
     }
   }
 
-  // Apply highlight class
   matchedSpans.forEach((span) => {
     span.classList.add('highlight-active');
   });
 
-  // Scroll first highlighted span into view
   if (matchedSpans.size > 0) {
     const first = container.querySelector('.highlight-active');
     first?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });

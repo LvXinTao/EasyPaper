@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { normalizeText, buildTextMap, applyHighlight } from '@/lib/pdf-highlight';
+import { normalizeText, buildTextMap, findMatchRange, applyHighlight } from '@/lib/pdf-highlight';
 
 describe('normalizeText', () => {
   it('collapses consecutive whitespace into single space', () => {
@@ -114,6 +114,43 @@ describe('buildTextMap', () => {
     const result = buildTextMap(container);
     expect(result.fullText).toBe('\u00e9');
     expect(result.charMap.length).toBe(1);
+  });
+});
+
+describe('findMatchRange', () => {
+  it('returns match indices for exact normalized match', () => {
+    const result = findMatchRange('hello world foo bar', 'world foo');
+    expect(result).not.toBeNull();
+    expect(result!.startIdx).toBe(6);
+    expect(result!.endIdx).toBe(14);
+  });
+
+  it('returns null when no match found', () => {
+    const result = findMatchRange('hello world', 'nonexistent');
+    expect(result).toBeNull();
+  });
+
+  it('matches case-insensitively', () => {
+    const result = findMatchRange('Deep Learning Model', 'deep learning');
+    expect(result).not.toBeNull();
+  });
+
+  it('matches with whitespace normalization', () => {
+    const result = findMatchRange('deep   learning   model', 'deep learning model');
+    expect(result).not.toBeNull();
+  });
+
+  it('falls back to word subsequence when exact match fails', () => {
+    const result = findMatchRange(
+      'novel deep learning framework for NLP',
+      'we propose a novel deep learning framework for NLP tasks'
+    );
+    expect(result).not.toBeNull();
+  });
+
+  it('returns null for empty search text', () => {
+    expect(findMatchRange('hello', '')).toBeNull();
+    expect(findMatchRange('hello', '   ')).toBeNull();
   });
 });
 
