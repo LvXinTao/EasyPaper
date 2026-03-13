@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { PaperMetadata, PaperAnalysis, ChatHistory, PaperListItem } from '@/types';
+import type { PaperMetadata, PaperAnalysis, ChatHistory, PaperListItem, Annotation, AnnotationsFile } from '@/types';
 
 function getDataDir(): string {
   return process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -100,5 +100,20 @@ export const storage = {
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch { return null; }
+  },
+  async getAnnotations(paperId: string): Promise<Annotation[]> {
+    try {
+      const filePath = path.join(paperDir(paperId), 'annotations.json');
+      const data = await fs.readFile(filePath, 'utf-8');
+      const parsed: AnnotationsFile = JSON.parse(data);
+      return parsed.annotations || [];
+    } catch {
+      return [];
+    }
+  },
+  async saveAnnotations(paperId: string, annotations: Annotation[]): Promise<void> {
+    const filePath = path.join(paperDir(paperId), 'annotations.json');
+    const data: AnnotationsFile = { annotations };
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
   },
 };
