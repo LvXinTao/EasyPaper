@@ -259,10 +259,12 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       </div>
 
       {/* Canvas + TextLayer */}
-      <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4" onClick={handleCanvasClick}>
-        <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
-          <canvas ref={canvasRef} style={{ display: 'block' }} />
-          <div ref={textLayerRef} className="textLayer" />
+      <div className="flex-1 overflow-auto bg-slate-200 p-4" onClick={handleCanvasClick}>
+        <div className="text-center">
+          <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
+            <canvas ref={canvasRef} style={{ display: 'block' }} />
+            <div ref={textLayerRef} className="textLayer" />
+          </div>
         </div>
       </div>
     </div>
