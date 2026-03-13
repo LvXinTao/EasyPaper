@@ -40,3 +40,32 @@ export function normalizeText(text: string): NormalizeResult {
 
   return { normalized: normalized.join(''), indexMap };
 }
+
+/**
+ * A character in the full page text mapped back to its source span.
+ */
+export interface CharMapping {
+  span: HTMLElement;
+  offsetInSpan: number;
+}
+
+/**
+ * Build a full-text string from all spans in the container,
+ * with a character-to-span mapping for traceback.
+ * Text is NFC-normalized so indices align with normalizeText output.
+ */
+export function buildTextMap(container: HTMLDivElement): { fullText: string; charMap: CharMapping[] } {
+  const spans = container.querySelectorAll<HTMLElement>('span');
+  const chars: string[] = [];
+  const charMap: CharMapping[] = [];
+
+  spans.forEach((span) => {
+    const text = (span.textContent || '').normalize('NFC');
+    for (let i = 0; i < text.length; i++) {
+      chars.push(text[i]);
+      charMap.push({ span, offsetInSpan: i });
+    }
+  });
+
+  return { fullText: chars.join(''), charMap };
+}

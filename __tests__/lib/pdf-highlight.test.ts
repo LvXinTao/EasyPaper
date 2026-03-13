@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { normalizeText } from '@/lib/pdf-highlight';
+import { normalizeText, buildTextMap } from '@/lib/pdf-highlight';
 
 describe('normalizeText', () => {
   it('collapses consecutive whitespace into single space', () => {
@@ -50,5 +50,69 @@ describe('normalizeText', () => {
     const result = normalizeText('   ');
     expect(result.normalized).toBe('');
     expect(result.indexMap).toEqual([]);
+  });
+});
+
+describe('buildTextMap', () => {
+  function makeSpans(texts: string[]): { container: HTMLDivElement; spans: HTMLSpanElement[] } {
+    const container = document.createElement('div');
+    const spans = texts.map((t) => {
+      const span = document.createElement('span');
+      span.textContent = t;
+      container.appendChild(span);
+      return span;
+    });
+    return { container, spans };
+  }
+
+  it('concatenates span texts into fullText', () => {
+    const { container } = makeSpans(['hello ', 'world']);
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('hello world');
+  });
+
+  it('maps each character back to its source span', () => {
+    const { container, spans } = makeSpans(['ab', 'cd']);
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('abcd');
+    expect(result.charMap[0].span).toBe(spans[0]);
+    expect(result.charMap[1].span).toBe(spans[0]);
+    expect(result.charMap[2].span).toBe(spans[1]);
+    expect(result.charMap[3].span).toBe(spans[1]);
+  });
+
+  it('tracks offsetInSpan correctly', () => {
+    const { container } = makeSpans(['abc']);
+    const result = buildTextMap(container);
+    expect(result.charMap[0].offsetInSpan).toBe(0);
+    expect(result.charMap[1].offsetInSpan).toBe(1);
+    expect(result.charMap[2].offsetInSpan).toBe(2);
+  });
+
+  it('handles empty container', () => {
+    const container = document.createElement('div');
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('');
+    expect(result.charMap).toEqual([]);
+  });
+
+  it('handles spans with empty text', () => {
+    const { container } = makeSpans(['', 'hello', '']);
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('hello');
+    expect(result.charMap.length).toBe(5);
+  });
+
+  it('concatenates without inserting separators between spans', () => {
+    const { container } = makeSpans(['hello', 'world']);
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('helloworld');
+  });
+
+  it('NFC-normalizes span text content', () => {
+    const { container } = makeSpans(['e\u0301']);
+    const result = buildTextMap(container);
+    expect(result.fullText).toBe('\u00e9');
+    expect(result.charMap.length).toBe(1);
   });
 });
