@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { normalizeText, buildTextMap } from '@/lib/pdf-highlight';
+import { normalizeText, buildTextMap, applyHighlight } from '@/lib/pdf-highlight';
 
 describe('normalizeText', () => {
   it('collapses consecutive whitespace into single space', () => {
@@ -114,5 +114,79 @@ describe('buildTextMap', () => {
     const result = buildTextMap(container);
     expect(result.fullText).toBe('\u00e9');
     expect(result.charMap.length).toBe(1);
+  });
+});
+
+describe('applyHighlight', () => {
+  function makeSpans(texts: string[]): HTMLDivElement {
+    const container = document.createElement('div');
+    texts.forEach((t) => {
+      const span = document.createElement('span');
+      span.textContent = t;
+      container.appendChild(span);
+    });
+    return container;
+  }
+
+  function getHighlighted(container: HTMLDivElement): string[] {
+    return Array.from(container.querySelectorAll('.highlight-active'))
+      .map((el) => el.textContent || '');
+  }
+
+  it('highlights entire span when search text is a substring', () => {
+    const container = makeSpans(['deep learning model']);
+    applyHighlight(container, 'deep learning');
+    expect(getHighlighted(container)).toEqual(['deep learning model']);
+  });
+
+  it('highlights multiple spans when search text crosses span boundaries', () => {
+    const container = makeSpans(['deep ', 'learning ', 'model']);
+    applyHighlight(container, 'deep learning model');
+    expect(getHighlighted(container)).toEqual(['deep ', 'learning ', 'model']);
+  });
+
+  it('handles whitespace differences between search and page text', () => {
+    const container = makeSpans(['deep  ', ' learning']);
+    applyHighlight(container, 'deep learning');
+    expect(getHighlighted(container)).toEqual(['deep  ', ' learning']);
+  });
+
+  it('is case-insensitive', () => {
+    const container = makeSpans(['Deep Learning']);
+    applyHighlight(container, 'deep learning');
+    expect(getHighlighted(container)).toEqual(['Deep Learning']);
+  });
+
+  it('does not highlight when text is not found', () => {
+    const container = makeSpans(['hello world']);
+    applyHighlight(container, 'nonexistent');
+    expect(getHighlighted(container)).toEqual([]);
+  });
+
+  it('clears previous highlights before applying new ones', () => {
+    const container = makeSpans(['hello', ' world']);
+    applyHighlight(container, 'hello');
+    expect(getHighlighted(container)).toEqual(['hello']);
+
+    applyHighlight(container, 'world');
+    expect(getHighlighted(container)).toEqual([' world']);
+  });
+
+  it('does nothing for empty search text', () => {
+    const container = makeSpans(['hello']);
+    applyHighlight(container, '');
+    expect(getHighlighted(container)).toEqual([]);
+  });
+
+  it('does nothing for whitespace-only search text', () => {
+    const container = makeSpans(['hello']);
+    applyHighlight(container, '   ');
+    expect(getHighlighted(container)).toEqual([]);
+  });
+
+  it('highlights partial span match (search text within a longer span)', () => {
+    const container = makeSpans(['the deep learning model is powerful']);
+    applyHighlight(container, 'deep learning model');
+    expect(getHighlighted(container)).toEqual(['the deep learning model is powerful']);
   });
 });

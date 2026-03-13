@@ -69,3 +69,55 @@ export function buildTextMap(container: HTMLDivElement): { fullText: string; cha
 
   return { fullText: chars.join(''), charMap };
 }
+
+/**
+ * Find search text within page text using normalized matching.
+ * Returns true if any spans were highlighted.
+ */
+export function applyHighlight(container: HTMLDivElement, text: string): boolean {
+  // Clear existing highlights
+  container.querySelectorAll('.highlight-active').forEach((el) => {
+    el.classList.remove('highlight-active');
+  });
+
+  if (!text || !text.trim()) return false;
+
+  // Build full page text with span mapping (already NFC-normalized)
+  const { fullText, charMap } = buildTextMap(container);
+  if (!fullText) return false;
+
+  // Normalize both texts (NFC is already applied by buildTextMap for page text)
+  const pageNorm = normalizeText(fullText);
+  const searchNorm = normalizeText(text.normalize('NFC'));
+
+  if (!searchNorm.normalized) return false;
+
+  // Find match position in normalized page text
+  const matchIndex = pageNorm.normalized.indexOf(searchNorm.normalized);
+  if (matchIndex === -1) return false;
+
+  // Map normalized match range back to original charMap indices
+  const origStart = pageNorm.indexMap[matchIndex];
+  const origEnd = pageNorm.indexMap[matchIndex + searchNorm.normalized.length - 1];
+
+  // Collect unique spans that contain matched characters
+  const matchedSpans = new Set<HTMLElement>();
+  for (let i = origStart; i <= origEnd; i++) {
+    if (charMap[i]) {
+      matchedSpans.add(charMap[i].span);
+    }
+  }
+
+  // Apply highlight class
+  matchedSpans.forEach((span) => {
+    span.classList.add('highlight-active');
+  });
+
+  // Scroll first highlighted span into view
+  if (matchedSpans.size > 0) {
+    const first = container.querySelector('.highlight-active');
+    first?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }
+
+  return matchedSpans.size > 0;
+}
