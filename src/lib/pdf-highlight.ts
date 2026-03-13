@@ -60,6 +60,11 @@ export function buildTextMap(container: HTMLDivElement): { fullText: string; cha
   const charMap: CharMapping[] = [];
 
   spans.forEach((span) => {
+    // Skip wrapper spans (e.g. pdfjs markedContent containers) that contain
+    // child spans — their textContent includes all descendants' text, which
+    // would double-count characters and corrupt charMap indices.
+    if (span.querySelector('span')) return;
+
     const text = (span.textContent || '').normalize('NFC');
     for (let i = 0; i < text.length; i++) {
       chars.push(text[i]);
@@ -146,7 +151,8 @@ export function detectParagraphBounds(
 ): ParagraphBounds | null {
   if (matchedSpans.size === 0) return null;
 
-  const allSpans = Array.from(container.querySelectorAll<HTMLElement>('span'));
+  const allSpans = Array.from(container.querySelectorAll<HTMLElement>('span'))
+    .filter((span) => !span.querySelector('span')); // skip wrapper/markedContent spans
   if (allSpans.length === 0) return null;
 
   // Get bounding rects for all spans

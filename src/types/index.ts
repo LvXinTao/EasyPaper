@@ -80,25 +80,3 @@ export interface PaperData {
   parsedContent: string | null;
   chatHistory: ChatHistory;
 }
-
-// --- Annotation types ---
-
-export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
-
-export interface Annotation {
-  id: string;
-  page: number;
-  text: string;
-  color: HighlightColor;
-  comment: string;
-  spanRange: {
-    startIdx: number;
-    endIdx: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AnnotationsFile {
-  annotations: Annotation[];
-}
