@@ -1,7 +1,5 @@
 export const ANALYSIS_PROMPT = `You are an academic paper analyst. Given the following paper content in Markdown format, provide a structured analysis.
 
-For each section, include page references where relevant content appears. Format references as JSON arrays.
-
 Respond in the SAME LANGUAGE as the paper content. If the paper is in Chinese, respond in Chinese. If in English, respond in English.
 
 Paper content:
@@ -10,20 +8,19 @@ Paper content:
 Provide your analysis in the following JSON format:
 {
   "summary": {
-    "content": "Core summary of the paper's main ideas and innovations",
-    "references": [{"text": "quoted text snippet", "page": 1}]
+    "content": "Core summary of the paper's main ideas and innovations"
   },
   "contributions": {
-    "items": ["Contribution 1", "Contribution 2"],
-    "references": [{"text": "quoted text snippet", "page": 2}]
+    "items": ["Contribution 1", "Contribution 2"]
   },
   "methodology": {
-    "content": "Overview of research methods and technical approach",
-    "references": [{"text": "quoted text snippet", "page": 3}]
+    "content": "Overview of research methods and technical approach"
+  },
+  "experiments": {
+    "content": "Description of experimental setup, datasets, metrics, and key results"
   },
   "conclusions": {
-    "content": "Key findings and conclusions",
-    "references": [{"text": "quoted text snippet", "page": 10}]
+    "content": "Key findings and conclusions"
   }
 }
 

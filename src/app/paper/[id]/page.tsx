@@ -13,7 +13,6 @@ export default function PaperDetailPage() {
   const paperId = params.id as string;
   const { data, loading, error, refetch } = usePaper(paperId);
   const [currentPage, setCurrentPage] = useState(1);
-  const [highlightText, setHighlightText] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
@@ -30,10 +29,11 @@ export default function PaperDetailPage() {
         setAnalysis((prev) => {
           if (!prev) {
             return {
-              summary: { content: '', references: [] },
-              contributions: { items: [], references: [] },
-              methodology: { content: '', references: [] },
-              conclusions: { content: '', references: [] },
+              summary: { content: '' },
+              contributions: { items: [] },
+              methodology: { content: '' },
+              experiments: { content: '' },
+              conclusions: { content: '' },
               generatedAt: new Date().toISOString(),
             };
           }
@@ -59,11 +59,6 @@ export default function PaperDetailPage() {
     setAnalysisMessage(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
-
-  const handleReferenceClick = useCallback((ref: { page: number; text: string }) => {
-    setCurrentPage(ref.page);
-    setHighlightText(ref.text);
-  }, []);
 
   if (loading) {
     return (
@@ -95,9 +90,7 @@ export default function PaperDetailPage() {
         <PdfViewer
           url={`/api/paper/${paperId}/pdf`}
           currentPage={currentPage}
-          highlightText={highlightText}
-          onPageChange={(p) => { setCurrentPage(p); setHighlightText(null); }}
-          onHighlightClear={() => setHighlightText(null)}
+          onPageChange={setCurrentPage}
         />
       </div>
 
@@ -139,7 +132,6 @@ export default function PaperDetailPage() {
             isAnalyzing={isAnalyzing}
             analysisStep={analysisStep}
             analysisMessage={analysisMessage}
-            onReferenceClick={handleReferenceClick}
           />
         </div>
       </div>

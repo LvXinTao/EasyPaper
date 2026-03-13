@@ -9,25 +9,19 @@ export interface PaperMetadata {
   status: PaperStatus;
 }
 
-export interface PageReference {
-  text: string;
-  page: number;
-}
-
 export interface AnalysisSection {
   content: string;
-  references: PageReference[];
 }
 
 export interface ContributionsSection {
   items: string[];
-  references: PageReference[];
 }
 
 export interface PaperAnalysis {
   summary: AnalysisSection;
   contributions: ContributionsSection;
   methodology: AnalysisSection;
+  experiments: AnalysisSection;
   conclusions: AnalysisSection;
   generatedAt: string;
 }

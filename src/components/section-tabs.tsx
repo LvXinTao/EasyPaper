@@ -9,6 +9,7 @@ const SECTIONS = [
   { key: 'summary', label: 'Summary' },
   { key: 'contributions', label: 'Contributions' },
   { key: 'methodology', label: 'Methodology' },
+  { key: 'experiments', label: 'Experiments' },
   { key: 'conclusions', label: 'Conclusions' },
   { key: 'chat', label: 'Q&A' },
 ];

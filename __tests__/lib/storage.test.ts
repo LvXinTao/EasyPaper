@@ -71,10 +71,11 @@ describe('storage', () => {
       const paperId = 'test-analysis';
       await storage.createPaperDir(paperId);
       const analysis = {
-        summary: { content: 'test', references: [] },
-        contributions: { items: ['a'], references: [] },
-        methodology: { content: 'test', references: [] },
-        conclusions: { content: 'test', references: [] },
+        summary: { content: 'test' },
+        contributions: { items: ['a'] },
+        methodology: { content: 'test' },
+        experiments: { content: 'test' },
+        conclusions: { content: 'test' },
         generatedAt: '2025-03-11T10:05:00Z',
       };
       await storage.saveAnalysis(paperId, analysis);

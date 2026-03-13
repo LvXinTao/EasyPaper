@@ -2,18 +2,14 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { applyParagraphHighlight } from '@/lib/pdf-highlight';
 
 interface PdfViewerProps {
   url: string;
   currentPage?: number;
-  highlightText?: string | null;
   onPageChange?: (page: number) => void;
-  onHighlightClear?: () => void;
 }
 
-export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, onHighlightClear }: PdfViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -96,38 +92,18 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
 
       textLayerInstanceRef.current = textLayer;
       await textLayer.render();
-
-      // Apply highlight unconditionally after TextLayer render completes.
-      // No `cancelled` guard here — if a newer render has already cleared
-      // textLayerDiv.innerHTML, applyHighlight finds no spans (safe no-op).
-      if (highlightText) {
-        const parentContainer = containerRef.current;
-        if (parentContainer) {
-          applyParagraphHighlight(parentContainer as HTMLDivElement, highlightText);
-        }
-      }
     }
 
     renderPage();
     return () => { cancelled = true; };
-  }, [pdf, page, scale, highlightText]);
+  }, [pdf, page, scale]);
 
-  // Handle click on PDF canvas area to clear highlight
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).tagName === 'CANVAS') {
-      // Clear paragraph highlight overlay
-      const overlay = containerRef.current?.querySelector('.highlight-overlay');
-      if (overlay) overlay.innerHTML = '';
-      onHighlightClear?.();
-    }
-  }, [onHighlightClear]);
-
-  const goToPage = (p: number) => {
+  const goToPage = useCallback((p: number) => {
     if (p >= 1 && p <= totalPages) {
       setPage(p);
       onPageChange?.(p);
     }
-  };
+  }, [totalPages, onPageChange]);
 
   if (loading) {
     return (
@@ -140,19 +116,8 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
 
   return (
     <div className="flex flex-col h-full">
-      {/* TextLayer: official pdfjs CSS + highlight override */}
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/pdf_viewer.css" />
-      <style>{`
-        .paragraph-highlight-box {
-          border: 2.5px solid rgba(234, 179, 8, 0.9);
-          border-radius: 4px;
-          background: rgba(250, 204, 21, 0.15);
-          box-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
-          pointer-events: none;
-          transition: opacity 0.3s ease-in-out;
-        }
-      `}</style>
 
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
@@ -203,12 +168,11 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       </div>
 
       {/* Canvas + TextLayer */}
-      <div className="flex-1 overflow-auto bg-slate-200 p-4" onClick={handleCanvasClick}>
+      <div className="flex-1 overflow-auto bg-slate-200 p-4">
         <div className="text-center">
-          <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
+          <div className="relative inline-block shadow-xl rounded overflow-hidden">
             <canvas ref={canvasRef} style={{ display: 'block' }} />
-            <div className="highlight-overlay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }} />
-            <div ref={textLayerRef} className="textLayer" style={{ zIndex: 2 }} />
+            <div ref={textLayerRef} className="textLayer" />
           </div>
         </div>
       </div>

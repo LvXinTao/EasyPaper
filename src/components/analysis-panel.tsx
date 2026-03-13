@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import type { PaperAnalysis, PageReference, ChatMessage } from '@/types';
+import type { PaperAnalysis, ChatMessage } from '@/types';
 import { SectionTabs } from './section-tabs';
 import { ChatInput } from './chat-input';
 import { ChatMessages } from './chat-messages';
@@ -13,72 +13,31 @@ interface AnalysisPanelProps {
   isAnalyzing?: boolean;
   analysisStep?: string | null;
   analysisMessage?: string | null;
-  onReferenceClick?: (ref: { page: number; text: string }) => void;
-}
-
-function ReferenceLink({
-  reference,
-  onClick,
-}: {
-  reference: PageReference;
-  onClick?: (ref: { page: number; text: string }) => void;
-}) {
-  return (
-    <button
-      onClick={() => onClick?.({ page: reference.page, text: reference.text })}
-      className="inline-flex items-center text-xs text-indigo-500 hover:text-indigo-700 hover:underline ml-1 font-mono"
-      title={reference.text}
-    >
-      [p.{reference.page}]
-    </button>
-  );
 }
 
 function SectionContent({
   analysis,
   section,
-  onReferenceClick,
 }: {
   analysis: PaperAnalysis;
   section: string;
-  onReferenceClick?: (ref: { page: number; text: string }) => void;
 }) {
   const sectionData = analysis[section as keyof PaperAnalysis];
   if (!sectionData || typeof sectionData === 'string') return null;
 
   if (section === 'contributions' && 'items' in sectionData) {
     return (
-      <div>
-        <ul className="list-disc pl-5 space-y-2">
-          {sectionData.items.map((item, i) => (
-            <li key={i} className="text-slate-700 leading-relaxed">{item}</li>
-          ))}
-        </ul>
-        {sectionData.references.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
-            References:
-            {sectionData.references.map((ref, i) => (
-              <ReferenceLink key={i} reference={ref} onClick={onReferenceClick} />
-            ))}
-          </div>
-        )}
-      </div>
+      <ul className="list-disc pl-5 space-y-2">
+        {sectionData.items.map((item, i) => (
+          <li key={i} className="text-slate-700 leading-relaxed">{item}</li>
+        ))}
+      </ul>
     );
   }
 
   if ('content' in sectionData) {
     return (
-      <div>
-        <div className="text-slate-700 whitespace-pre-wrap leading-relaxed">{sectionData.content}</div>
-        {sectionData.references.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-slate-100 text-xs text-slate-400">
-            References:
-            {sectionData.references.map((ref, i) => (
-              <ReferenceLink key={i} reference={ref} onClick={onReferenceClick} />
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="text-slate-700 whitespace-pre-wrap leading-relaxed">{sectionData.content}</div>
     );
   }
 
@@ -146,7 +105,6 @@ export function AnalysisPanel({
   isAnalyzing,
   analysisStep,
   analysisMessage,
-  onReferenceClick,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
@@ -253,7 +211,6 @@ export function AnalysisPanel({
           <SectionContent
             analysis={analysis}
             section={activeSection}
-            onReferenceClick={onReferenceClick}
           />
         )}
       </div>

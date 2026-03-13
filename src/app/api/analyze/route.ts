@@ -56,7 +56,7 @@ export async function POST(request: Request) {
           const analysis: PaperAnalysis = { ...JSON.parse(result), generatedAt: new Date().toISOString() };
           await storage.saveAnalysis(paperId, analysis);
 
-          for (const section of ['summary', 'contributions', 'methodology', 'conclusions'] as const) {
+          for (const section of ['summary', 'contributions', 'methodology', 'experiments', 'conclusions'] as const) {
             const sectionData = analysis[section];
             send({ section, content: 'content' in sectionData ? sectionData.content : JSON.stringify(sectionData.items) });
           }
