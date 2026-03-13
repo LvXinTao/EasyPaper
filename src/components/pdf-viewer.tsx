@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { applyHighlight } from '@/lib/pdf-highlight';
 
 interface PdfViewerProps {
   url: string;
@@ -96,9 +97,9 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       textLayerInstanceRef.current = textLayer;
       await textLayer.render();
 
-      if (cancelled) return;
-
-      // Apply highlight if needed
+      // Apply highlight unconditionally after TextLayer render completes.
+      // No `cancelled` guard here — if a newer render has already cleared
+      // textLayerDiv.innerHTML, applyHighlight finds no spans (safe no-op).
       if (highlightText) {
         applyHighlight(textLayerDiv, highlightText);
       }
@@ -107,42 +108,6 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
     renderPage();
     return () => { cancelled = true; };
   }, [pdf, page, scale, highlightText]);
-
-  // Apply highlight when highlightText changes (but page/scale don't)
-  const applyHighlight = useCallback((container: HTMLDivElement, text: string) => {
-    // Clear existing highlights
-    container.querySelectorAll('.highlight-active').forEach((el) => {
-      el.classList.remove('highlight-active');
-    });
-
-    if (!text) return;
-
-    const normalizedSearch = text.trim().toLowerCase();
-    if (!normalizedSearch) return;
-
-    const spans = container.querySelectorAll('span');
-    let found = false;
-
-    // Try exact substring match first
-    spans.forEach((span) => {
-      const spanText = span.textContent?.toLowerCase() || '';
-      if (spanText.includes(normalizedSearch) || normalizedSearch.includes(spanText)) {
-        if (spanText.trim().length > 0 && (
-          spanText.includes(normalizedSearch) ||
-          (normalizedSearch.includes(spanText) && spanText.length > 3)
-        )) {
-          span.classList.add('highlight-active');
-          found = true;
-        }
-      }
-    });
-
-    // Scroll the first highlighted element into view
-    if (found) {
-      const firstHighlight = container.querySelector('.highlight-active');
-      firstHighlight?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, []);
 
   // Handle click on PDF canvas area to clear highlight
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
