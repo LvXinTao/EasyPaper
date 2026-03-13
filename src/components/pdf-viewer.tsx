@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { applyParagraphHighlight } from '@/lib/pdf-highlight';
+import { applyUserHighlights, getSelectionInfo } from '@/lib/pdf-annotations';
+import { HighlightToolbar } from '@/components/highlight-toolbar';
+import { CommentPopover } from '@/components/comment-popover';
+import type { Annotation, HighlightColor } from '@/types';
 
 interface PdfViewerProps {
   url: string;
@@ -10,9 +14,11 @@ interface PdfViewerProps {
   highlightText?: string | null;
   onPageChange?: (page: number) => void;
   onHighlightClear?: () => void;
+  annotations?: Annotation[];
+  onAnnotationCreate?: (annotation: { page: number; text: string; color: HighlightColor; comment: string; spanRange: { startIdx: number; endIdx: number } }) => void;
 }
 
-export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, onHighlightClear }: PdfViewerProps) {
+export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, onHighlightClear, annotations, onAnnotationCreate }: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +28,10 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
   const textLayerInstanceRef = useRef<{ cancel: () => void } | null>(null);
+  const [toolbarPos, setToolbarPos] = useState<{ top: number; left: number } | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [selectionInfo, setSelectionInfo] = useState<{ text: string; startIdx: number; endIdx: number } | null>(null);
+  const [selectedColor, setSelectedColor] = useState<HighlightColor>('yellow');
 
   // Load PDF document
   useEffect(() => {
@@ -106,11 +116,17 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
           applyParagraphHighlight(parentContainer as HTMLDivElement, highlightText);
         }
       }
+
+      // Apply user annotations
+      const pageAnnotations = (annotations || []).filter((a) => a.page === page);
+      if (pageAnnotations.length > 0) {
+        applyUserHighlights(textLayerDiv, pageAnnotations);
+      }
     }
 
     renderPage();
     return () => { cancelled = true; };
-  }, [pdf, page, scale, highlightText]);
+  }, [pdf, page, scale, highlightText, annotations]);
 
   // Handle click on PDF canvas area to clear highlight
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
@@ -121,6 +137,80 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       onHighlightClear?.();
     }
   }, [onHighlightClear]);
+
+  const handleTextLayerMouseUp = useCallback(() => {
+    if (!textLayerRef.current) return;
+    setTimeout(() => {
+      const info = getSelectionInfo(textLayerRef.current!);
+      if (!info) {
+        setToolbarPos(null);
+        return;
+      }
+      setSelectionInfo({ text: info.text, startIdx: info.startIdx, endIdx: info.endIdx });
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+      const top = info.rect.bottom - containerRect.top + 8;
+      let left = (info.rect.left + info.rect.right) / 2 - containerRect.left;
+      left = Math.max(80, Math.min(left, containerRect.width - 80));
+      setToolbarPos({ top, left });
+    }, 10);
+  }, []);
+
+  const handleColorSelect = useCallback((color: HighlightColor) => {
+    if (!selectionInfo) return;
+    onAnnotationCreate?.({
+      page,
+      text: selectionInfo.text,
+      color,
+      comment: '',
+      spanRange: { startIdx: selectionInfo.startIdx, endIdx: selectionInfo.endIdx },
+    });
+    setToolbarPos(null);
+    setSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+  }, [selectionInfo, page, onAnnotationCreate]);
+
+  const handleCommentClick = useCallback(() => {
+    if (!toolbarPos) return;
+    setPopoverPos(toolbarPos);
+    setToolbarPos(null);
+  }, [toolbarPos]);
+
+  const handleCommentSave = useCallback((comment: string) => {
+    if (!selectionInfo) return;
+    onAnnotationCreate?.({
+      page,
+      text: selectionInfo.text,
+      color: selectedColor,
+      comment,
+      spanRange: { startIdx: selectionInfo.startIdx, endIdx: selectionInfo.endIdx },
+    });
+    setPopoverPos(null);
+    setSelectionInfo(null);
+    window.getSelection()?.removeAllRanges();
+  }, [selectionInfo, selectedColor, page, onAnnotationCreate]);
+
+  const handleHighlightClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const annotationId = target.dataset?.annotationId;
+    if (!annotationId) return;
+    const annotation = annotations?.find((a) => a.id === annotationId);
+    if (!annotation) return;
+    e.stopPropagation();
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    const spanRect = target.getBoundingClientRect();
+    if (!containerRect) return;
+    const top = spanRect.bottom - containerRect.top + 8;
+    let left = (spanRect.left + spanRect.right) / 2 - containerRect.left;
+    left = Math.max(80, Math.min(left, containerRect.width - 80));
+    setSelectionInfo({
+      text: annotation.text,
+      startIdx: annotation.spanRange.startIdx,
+      endIdx: annotation.spanRange.endIdx,
+    });
+    setSelectedColor(annotation.color);
+    setToolbarPos({ top, left });
+  }, [annotations]);
 
   const goToPage = (p: number) => {
     if (p >= 1 && p <= totalPages) {
@@ -152,6 +242,11 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
           pointer-events: none;
           transition: opacity 0.3s ease-in-out;
         }
+        .user-highlight { border-radius: 2px; padding: 0 1px; cursor: pointer; }
+        .user-highlight-yellow { background: rgba(250, 204, 21, 0.4); border-bottom: 2px solid rgba(234, 179, 8, 0.6); }
+        .user-highlight-green { background: rgba(74, 222, 128, 0.4); border-bottom: 2px solid rgba(34, 197, 94, 0.6); }
+        .user-highlight-blue { background: rgba(96, 165, 250, 0.4); border-bottom: 2px solid rgba(59, 130, 246, 0.6); }
+        .user-highlight-pink { background: rgba(244, 114, 182, 0.4); border-bottom: 2px solid rgba(236, 72, 153, 0.6); }
       `}</style>
 
       {/* Toolbar */}
@@ -208,7 +303,23 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
           <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
             <canvas ref={canvasRef} style={{ display: 'block' }} />
             <div className="highlight-overlay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }} />
-            <div ref={textLayerRef} className="textLayer" style={{ zIndex: 2 }} />
+            <div ref={textLayerRef} className="textLayer" style={{ zIndex: 2 }} onMouseUp={handleTextLayerMouseUp} onClick={handleHighlightClick} />
+            {toolbarPos && (
+              <HighlightToolbar
+                position={toolbarPos}
+                onColorSelect={handleColorSelect}
+                onCommentClick={handleCommentClick}
+                onClose={() => { setToolbarPos(null); setSelectionInfo(null); }}
+              />
+            )}
+            {popoverPos && selectionInfo && (
+              <CommentPopover
+                position={popoverPos}
+                selectedText={selectionInfo.text}
+                onSave={handleCommentSave}
+                onCancel={() => { setPopoverPos(null); setSelectionInfo(null); }}
+              />
+            )}
           </div>
         </div>
       </div>
