@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { normalizeText, buildTextMap, findMatchRange, applyHighlight } from '@/lib/pdf-highlight';
+import { normalizeText, buildTextMap, findMatchRange, detectParagraphBounds, applyHighlight } from '@/lib/pdf-highlight';
 
 describe('normalizeText', () => {
   it('collapses consecutive whitespace into single space', () => {
@@ -151,6 +151,72 @@ describe('findMatchRange', () => {
   it('returns null for empty search text', () => {
     expect(findMatchRange('hello', '')).toBeNull();
     expect(findMatchRange('hello', '   ')).toBeNull();
+  });
+});
+
+describe('detectParagraphBounds', () => {
+  function makePositionedSpans(
+    items: Array<{ text: string; top: number; left: number; width: number; height: number }>
+  ): HTMLDivElement {
+    const container = document.createElement('div');
+    items.forEach((item) => {
+      const span = document.createElement('span');
+      span.textContent = item.text;
+      span.getBoundingClientRect = () => ({
+        top: item.top,
+        left: item.left,
+        width: item.width,
+        height: item.height,
+        bottom: item.top + item.height,
+        right: item.left + item.width,
+        x: item.left,
+        y: item.top,
+        toJSON: () => ({}),
+      });
+      container.appendChild(span);
+    });
+    return container;
+  }
+
+  it('returns bounding box of a single-line paragraph', () => {
+    const container = makePositionedSpans([
+      { text: 'hello world', top: 100, left: 50, width: 200, height: 16 },
+    ]);
+    const matchedSpans = new Set([container.querySelectorAll('span')[0]]);
+    const bounds = detectParagraphBounds(container, matchedSpans);
+    expect(bounds).toEqual({ top: 100, left: 50, width: 200, height: 16 });
+  });
+
+  it('expands to include adjacent lines in same paragraph', () => {
+    const container = makePositionedSpans([
+      { text: 'line 1', top: 100, left: 50, width: 200, height: 16 },
+      { text: 'line 2', top: 118, left: 50, width: 180, height: 16 }, // gap=2, same paragraph
+      { text: 'line 3', top: 136, left: 50, width: 190, height: 16 }, // gap=2, same paragraph
+    ]);
+    const matchedSpans = new Set([container.querySelectorAll('span')[1]]);
+    const bounds = detectParagraphBounds(container, matchedSpans);
+    expect(bounds!.top).toBe(100);
+    expect(bounds!.height).toBe(52); // 136 + 16 - 100
+  });
+
+  it('stops at paragraph boundary (large gap)', () => {
+    const container = makePositionedSpans([
+      { text: 'para 1', top: 100, left: 50, width: 200, height: 16 },
+      { text: 'para 1 line 2', top: 118, left: 50, width: 200, height: 16 },
+      // Large gap = new paragraph
+      { text: 'para 2', top: 170, left: 50, width: 200, height: 16 },
+      { text: 'para 2 line 2', top: 188, left: 50, width: 200, height: 16 },
+    ]);
+    const matchedSpans = new Set([container.querySelectorAll('span')[2]]); // para 2
+    const bounds = detectParagraphBounds(container, matchedSpans);
+    expect(bounds!.top).toBe(170);
+    expect(bounds!.height).toBe(34); // 188 + 16 - 170
+  });
+
+  it('returns null for empty matchedSpans', () => {
+    const container = makePositionedSpans([]);
+    const bounds = detectParagraphBounds(container, new Set());
+    expect(bounds).toBeNull();
   });
 });
 
