@@ -170,43 +170,23 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
 
   return (
     <div className="flex flex-col h-full">
-      {/* TextLayer + Highlight CSS */}
+      {/* TextLayer: official pdfjs CSS + highlight override */}
+      {/* eslint-disable-next-line @next/next/no-css-tags */}
+      <link rel="stylesheet" href="/pdf_viewer.css" />
       <style>{`
-        .textLayer {
-          position: absolute;
-          left: 0;
-          top: 0;
-          right: 0;
-          bottom: 0;
-          overflow: hidden;
-          line-height: 1.0;
-          text-size-adjust: none;
-          forced-color-adjust: none;
-          z-index: 2;
-        }
-        .textLayer > span {
-          color: transparent;
-          position: absolute;
-          white-space: pre;
-          transform-origin: 0% 0%;
-          pointer-events: all;
-        }
-        .textLayer > span.highlight-active {
-          background-color: rgba(250, 204, 21, 0.85);
+        .textLayer .highlight-active {
+          background-color: rgba(250, 204, 21, 0.85) !important;
           border-radius: 2px;
           box-shadow: 0 0 4px 1px rgba(250, 204, 21, 0.6);
           transition: background-color 0.3s ease;
         }
-        .textLayer > span.highlight-active::after {
+        .textLayer .highlight-active::after {
           content: '';
           position: absolute;
           inset: -2px;
           border: 2px solid rgba(234, 179, 8, 0.8);
           border-radius: 3px;
           pointer-events: none;
-        }
-        .textLayer ::selection {
-          background: rgba(99, 102, 241, 0.3);
         }
       `}</style>
 
