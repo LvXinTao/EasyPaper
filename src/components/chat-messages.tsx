@@ -49,7 +49,18 @@ export function ChatMessages({ messages, streamingContent, isStreaming }: ChatMe
           </div>
         </div>
       ))}
-      {isTyping && displayedText && (
+      {isStreaming && !displayedText && (
+        <div className="flex justify-start">
+          <div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-slate-100 text-slate-700 text-sm leading-relaxed">
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+          </div>
+        </div>
+      )}
+      {(isTyping || isStreaming) && displayedText && (
         <div className="flex justify-start">
           <div className="max-w-[80%] rounded-2xl rounded-bl-md px-4 py-2.5 bg-slate-100 text-slate-700 text-sm leading-relaxed">
             <div className="whitespace-pre-wrap">{displayedText}</div>

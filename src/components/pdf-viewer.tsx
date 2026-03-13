@@ -179,21 +179,31 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
           right: 0;
           bottom: 0;
           overflow: hidden;
-          opacity: 0.25;
           line-height: 1.0;
+          text-size-adjust: none;
+          forced-color-adjust: none;
+          z-index: 2;
         }
         .textLayer > span {
           color: transparent;
           position: absolute;
           white-space: pre;
           transform-origin: 0% 0%;
+          pointer-events: all;
         }
         .textLayer > span.highlight-active {
-          background-color: rgba(250, 204, 21, 0.5);
-          color: transparent;
+          background-color: rgba(250, 204, 21, 0.85);
           border-radius: 2px;
-          opacity: 1;
+          box-shadow: 0 0 4px 1px rgba(250, 204, 21, 0.6);
           transition: background-color 0.3s ease;
+        }
+        .textLayer > span.highlight-active::after {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border: 2px solid rgba(234, 179, 8, 0.8);
+          border-radius: 3px;
+          pointer-events: none;
         }
         .textLayer ::selection {
           background: rgba(99, 102, 241, 0.3);
@@ -250,8 +260,8 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
 
       {/* Canvas + TextLayer */}
       <div className="flex-1 overflow-auto bg-slate-200 flex justify-center p-4" onClick={handleCanvasClick}>
-        <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
-          <canvas ref={canvasRef} className="shadow-xl rounded" />
+        <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
+          <canvas ref={canvasRef} style={{ display: 'block' }} />
           <div ref={textLayerRef} className="textLayer" />
         </div>
       </div>
