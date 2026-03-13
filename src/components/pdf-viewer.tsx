@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { applyHighlight } from '@/lib/pdf-highlight';
+import { applyParagraphHighlight } from '@/lib/pdf-highlight';
 
 interface PdfViewerProps {
   url: string;
@@ -101,7 +101,10 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       // No `cancelled` guard here — if a newer render has already cleared
       // textLayerDiv.innerHTML, applyHighlight finds no spans (safe no-op).
       if (highlightText) {
-        applyHighlight(textLayerDiv, highlightText);
+        const parentContainer = containerRef.current;
+        if (parentContainer) {
+          applyParagraphHighlight(parentContainer as HTMLDivElement, highlightText);
+        }
       }
     }
 
@@ -111,8 +114,10 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
 
   // Handle click on PDF canvas area to clear highlight
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    // Only clear if clicking the background, not text layer spans
     if ((e.target as HTMLElement).tagName === 'CANVAS') {
+      // Clear paragraph highlight overlay
+      const overlay = containerRef.current?.querySelector('.highlight-overlay');
+      if (overlay) overlay.innerHTML = '';
       onHighlightClear?.();
     }
   }, [onHighlightClear]);
@@ -139,19 +144,13 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/pdf_viewer.css" />
       <style>{`
-        .textLayer .highlight-active {
-          background-color: rgba(250, 204, 21, 0.85) !important;
-          border-radius: 2px;
-          box-shadow: 0 0 4px 1px rgba(250, 204, 21, 0.6);
-          transition: background-color 0.3s ease;
-        }
-        .textLayer .highlight-active::after {
-          content: '';
-          position: absolute;
-          inset: -2px;
-          border: 2px solid rgba(234, 179, 8, 0.8);
-          border-radius: 3px;
+        .paragraph-highlight-box {
+          border: 2.5px solid rgba(234, 179, 8, 0.9);
+          border-radius: 4px;
+          background: rgba(250, 204, 21, 0.15);
+          box-shadow: 0 0 8px rgba(250, 204, 21, 0.3);
           pointer-events: none;
+          transition: opacity 0.3s ease-in-out;
         }
       `}</style>
 
@@ -208,7 +207,8 @@ export function PdfViewer({ url, currentPage = 1, highlightText, onPageChange, o
         <div className="text-center">
           <div ref={containerRef} className="relative inline-block shadow-xl rounded overflow-hidden">
             <canvas ref={canvasRef} style={{ display: 'block' }} />
-            <div ref={textLayerRef} className="textLayer" />
+            <div className="highlight-overlay" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }} />
+            <div ref={textLayerRef} className="textLayer" style={{ zIndex: 2 }} />
           </div>
         </div>
       </div>
