@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { normalizeText, buildTextMap, findMatchRange, detectParagraphBounds, applyHighlight } from '@/lib/pdf-highlight';
+import { normalizeText, buildTextMap, findMatchRange, detectParagraphBounds, applyParagraphHighlight, applyHighlight } from '@/lib/pdf-highlight';
 
 describe('normalizeText', () => {
   it('collapses consecutive whitespace into single space', () => {
@@ -217,6 +217,72 @@ describe('detectParagraphBounds', () => {
     const container = makePositionedSpans([]);
     const bounds = detectParagraphBounds(container, new Set());
     expect(bounds).toBeNull();
+  });
+});
+
+describe('applyParagraphHighlight', () => {
+  function makePositionedContainer(
+    items: Array<{ text: string; top: number; left: number; width: number; height: number }>
+  ): HTMLDivElement {
+    const container = document.createElement('div');
+    container.getBoundingClientRect = () => ({
+      top: 0, left: 0, width: 500, height: 800,
+      bottom: 800, right: 500, x: 0, y: 0, toJSON: () => ({}),
+    });
+    items.forEach((item) => {
+      const span = document.createElement('span');
+      span.textContent = item.text;
+      span.getBoundingClientRect = () => ({
+        top: item.top, left: item.left,
+        width: item.width, height: item.height,
+        bottom: item.top + item.height,
+        right: item.left + item.width,
+        x: item.left, y: item.top, toJSON: () => ({}),
+      });
+      container.appendChild(span);
+    });
+    // Add overlay div
+    const overlay = document.createElement('div');
+    overlay.className = 'highlight-overlay';
+    container.appendChild(overlay);
+    return container;
+  }
+
+  it('returns paragraph bounds when text is found', () => {
+    const container = makePositionedContainer([
+      { text: 'deep learning model', top: 100, left: 50, width: 200, height: 16 },
+    ]);
+    const result = applyParagraphHighlight(container, 'deep learning');
+    expect(result).not.toBeNull();
+    expect(result!.top).toBe(100);
+  });
+
+  it('returns null for empty search text', () => {
+    const container = makePositionedContainer([
+      { text: 'hello', top: 100, left: 50, width: 100, height: 16 },
+    ]);
+    expect(applyParagraphHighlight(container, '')).toBeNull();
+  });
+
+  it('returns null when text is not found', () => {
+    const container = makePositionedContainer([
+      { text: 'hello world', top: 100, left: 50, width: 100, height: 16 },
+    ]);
+    expect(applyParagraphHighlight(container, 'nonexistent text')).toBeNull();
+  });
+
+  it('clears previous paragraph highlights', () => {
+    const container = makePositionedContainer([
+      { text: 'hello world', top: 100, left: 50, width: 200, height: 16 },
+    ]);
+    const overlay = container.querySelector('.highlight-overlay')!;
+    const oldBox = document.createElement('div');
+    oldBox.className = 'paragraph-highlight-box';
+    overlay.appendChild(oldBox);
+    expect(container.querySelectorAll('.paragraph-highlight-box').length).toBe(1);
+
+    applyParagraphHighlight(container, 'hello');
+    // Old box should be removed (overlay innerHTML cleared), new one added
   });
 });
 

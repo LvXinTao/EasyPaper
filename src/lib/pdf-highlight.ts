@@ -222,6 +222,66 @@ export function detectParagraphBounds(
 }
 
 /**
+ * Find search text, detect its enclosing paragraph, and return the paragraph bounds.
+ * Clears any previous paragraph highlight overlays.
+ * Returns the ParagraphBounds if found, or null.
+ */
+export function applyParagraphHighlight(
+  container: HTMLDivElement,
+  text: string
+): ParagraphBounds | null {
+  // Clear previous paragraph highlights
+  const overlay = container.querySelector('.highlight-overlay');
+  if (overlay) {
+    overlay.innerHTML = '';
+  }
+
+  // Also clear old per-span highlights (backwards compat during migration)
+  container.querySelectorAll('.highlight-active').forEach((el) => {
+    el.classList.remove('highlight-active');
+  });
+
+  if (!text || !text.trim()) return null;
+
+  const { fullText, charMap } = buildTextMap(container);
+  if (!fullText) return null;
+
+  const range = findMatchRange(fullText, text);
+  if (!range) return null;
+
+  // Collect matched spans
+  const matchedSpans = new Set<HTMLElement>();
+  for (let i = range.startIdx; i <= range.endIdx; i++) {
+    if (charMap[i]) {
+      matchedSpans.add(charMap[i].span);
+    }
+  }
+
+  if (matchedSpans.size === 0) return null;
+
+  // Detect paragraph boundary
+  const bounds = detectParagraphBounds(container, matchedSpans);
+  if (!bounds) return null;
+
+  // Render highlight rectangle in overlay
+  if (overlay) {
+    const box = document.createElement('div');
+    box.className = 'paragraph-highlight-box';
+    box.style.position = 'absolute';
+    box.style.top = `${bounds.top - 6}px`;
+    box.style.left = `${bounds.left - 6}px`;
+    box.style.width = `${bounds.width + 12}px`;
+    box.style.height = `${bounds.height + 12}px`;
+    overlay.appendChild(box);
+
+    // Scroll into view
+    box.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }
+
+  return bounds;
+}
+
+/**
  * Find search text within page text using normalized matching.
  * Uses progressive fallback: exact match → longest word subsequence.
  * Returns true if any spans were highlighted.
