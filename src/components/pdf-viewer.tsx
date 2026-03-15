@@ -16,6 +16,7 @@ interface PdfViewerProps {
 export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(currentPage);
   const [totalPages, setTotalPages] = useState(0);
@@ -164,6 +165,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
   const handleBarDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsDraggingBar(true);
     skipAnimationRef.current = true;
     document.body.style.userSelect = 'none';
@@ -268,8 +270,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
   const applyThumbnail = useCallback((pageNum: number) => {
     renderThumbnail(pageNum).then((canvas) => {
-      lastRenderedPageRef.current = pageNum;
-      if (canvas && thumbnailCanvasRef.current) {
+      if (canvas && thumbnailCanvasRef.current && pendingHoverPageRef.current === pageNum) {
+        lastRenderedPageRef.current = pageNum;
         thumbnailCanvasRef.current.innerHTML = '';
         thumbnailCanvasRef.current.appendChild(canvas);
       }
@@ -321,6 +323,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
         return;
       }
 
+      if (!viewerRef.current?.contains(target) &&
+          document.activeElement !== document.body) {
+        return;
+      }
+
       switch (e.key) {
         case 'ArrowLeft':
         case 'PageUp':
@@ -357,7 +364,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={viewerRef} className="flex flex-col h-full" tabIndex={-1}>
       {/* eslint-disable-next-line @next/next/no-css-tags */}
       <link rel="stylesheet" href="/pdf_viewer.css" />
 
