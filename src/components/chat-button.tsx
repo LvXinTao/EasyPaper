@@ -1,16 +1,20 @@
 'use client';
 
+import { forwardRef } from 'react';
+
 interface ChatButtonProps {
   isOpen: boolean;
   onClick: () => void;
 }
 
-export function ChatButton({ isOpen, onClick }: ChatButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className="fixed bottom-5 right-5 z-50 h-10 px-4 flex items-center gap-2 bg-[#6366f1] text-white text-sm font-medium rounded-[20px] shadow-[0_4px_16px_rgba(99,102,241,0.4)] hover:bg-indigo-600 transition-colors cursor-pointer"
-    >
+export const ChatButton = forwardRef<HTMLButtonElement, ChatButtonProps>(
+  function ChatButton({ isOpen, onClick }, ref) {
+    return (
+      <button
+        ref={ref}
+        onClick={onClick}
+        className="fixed bottom-5 right-5 z-50 h-10 px-4 flex items-center gap-2 bg-indigo-500 text-white text-sm font-medium rounded-[20px] shadow-[0_4px_16px_rgba(99,102,241,0.4)] hover:bg-indigo-600 transition-colors cursor-pointer"
+      >
       {isOpen ? (
         <>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -26,6 +30,7 @@ export function ChatButton({ isOpen, onClick }: ChatButtonProps) {
           Ask AI
         </>
       )}
-    </button>
-  );
-}
+      </button>
+    );
+  }
+);
