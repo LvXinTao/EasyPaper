@@ -18,6 +18,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
   const textLayerInstanceRef = useRef<{ cancel: () => void } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
 
   // Load PDF document
   useEffect(() => {
@@ -105,6 +107,18 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
   }, [totalPages, onPageChange]);
 
+  const handlePageInputSubmit = useCallback(() => {
+    const parsed = parseInt(editValue, 10);
+    if (!isNaN(parsed)) {
+      goToPage(Math.max(1, Math.min(parsed, totalPages)));
+    }
+    setIsEditing(false);
+  }, [editValue, totalPages, goToPage]);
+
+  const handlePageInputCancel = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,7 +183,30 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
             </svg>
           </button>
           <span className="text-xs text-slate-300 tabular-nums px-2">
-            {page} / {totalPages}
+            {isEditing ? (
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handlePageInputSubmit();
+                  if (e.key === 'Escape') handlePageInputCancel();
+                }}
+                onBlur={handlePageInputSubmit}
+                className="w-10 bg-slate-600 text-slate-100 text-xs text-center rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-400"
+                aria-label="Go to page"
+                autoFocus
+                onFocus={(e) => e.target.select()}
+              />
+            ) : (
+              <span
+                onClick={() => { setEditValue(String(page)); setIsEditing(true); }}
+                className="cursor-pointer hover:text-indigo-300 hover:underline underline-offset-2"
+              >
+                {page}
+              </span>
+            )}
+            {' / '}{totalPages}
           </span>
           <button
             onClick={() => goToPage(page + 1)}
