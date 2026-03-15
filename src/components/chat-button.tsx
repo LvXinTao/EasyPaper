@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useRef, useEffect, useCallback } from 'react';
+import { forwardRef, useRef, useEffect, useCallback, useState } from 'react';
 
 interface ChatButtonProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface ChatButtonProps {
 export const ChatButton = forwardRef<HTMLButtonElement, ChatButtonProps>(
   function ChatButton({ isOpen, onClick, position, onPositionChange }, ref) {
     const isDragging = useRef(false);
+    const [isDraggingVisual, setIsDraggingVisual] = useState(false);
     const hasDragged = useRef(false);
     const startMouse = useRef({ x: 0, y: 0 });
     const startPos = useRef({ bottom: 0, right: 0 });
@@ -19,10 +20,11 @@ export const ChatButton = forwardRef<HTMLButtonElement, ChatButtonProps>(
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
       e.preventDefault();
       isDragging.current = true;
+      setIsDraggingVisual(true);
       hasDragged.current = false;
       startMouse.current = { x: e.clientX, y: e.clientY };
       startPos.current = { bottom: position.bottom, right: position.right };
-      document.body.classList.add('select-none');
+      document.body.style.userSelect = 'none';
     }, [position]);
 
     useEffect(() => {
@@ -46,7 +48,8 @@ export const ChatButton = forwardRef<HTMLButtonElement, ChatButtonProps>(
       const handleMouseUp = () => {
         if (!isDragging.current) return;
         isDragging.current = false;
-        document.body.classList.remove('select-none');
+        setIsDraggingVisual(false);
+        document.body.style.userSelect = '';
 
         if (!hasDragged.current) {
           onClick();
@@ -71,7 +74,7 @@ export const ChatButton = forwardRef<HTMLButtonElement, ChatButtonProps>(
           position: 'fixed',
         }}
         className={`z-50 h-10 px-4 flex items-center gap-2 bg-indigo-500 text-white text-sm font-medium rounded-[20px] shadow-[0_4px_16px_rgba(99,102,241,0.4)] hover:bg-indigo-600 transition-colors ${
-          isDragging.current ? 'cursor-grabbing' : 'cursor-grab'
+          isDraggingVisual ? 'cursor-grabbing' : 'cursor-grab'
         }`}
       >
       {isOpen ? (

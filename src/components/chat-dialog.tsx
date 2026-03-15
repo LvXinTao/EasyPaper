@@ -81,7 +81,7 @@ export function ChatDialog({
     resizeDir.current = direction;
     resizeStartMouse.current = { x: e.clientX, y: e.clientY };
     resizeStartSize.current = { ...size };
-    document.body.classList.add('select-none');
+    document.body.style.userSelect = 'none';
   }, [size]);
 
   useEffect(() => {
@@ -115,7 +115,7 @@ export function ChatDialog({
     const handleMouseUp = () => {
       if (!isResizing.current) return;
       isResizing.current = false;
-      document.body.classList.remove('select-none');
+      document.body.style.userSelect = '';
     };
 
     document.addEventListener('mousemove', handleMouseMove);
