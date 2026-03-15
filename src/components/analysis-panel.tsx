@@ -1,15 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import type { PaperAnalysis, ChatMessage } from '@/types';
+import { useState } from 'react';
+import type { PaperAnalysis } from '@/types';
 import { SectionTabs } from './section-tabs';
-import { ChatInput } from './chat-input';
-import { ChatMessages } from './chat-messages';
 
 interface AnalysisPanelProps {
-  paperId: string;
   analysis: PaperAnalysis | null;
-  initialChatMessages?: ChatMessage[];
   isAnalyzing?: boolean;
   analysisStep?: string | null;
   analysisMessage?: string | null;
@@ -99,75 +95,12 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
 }
 
 export function AnalysisPanel({
-  paperId,
   analysis,
-  initialChatMessages = [],
   isAnalyzing,
   analysisStep,
   analysisMessage,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [isChatStreaming, setIsChatStreaming] = useState(false);
-
-  const handleSendMessage = useCallback(
-    async (message: string) => {
-      setChatMessages((prev) => [...prev, { role: 'user', content: message }]);
-      setIsChatStreaming(true);
-      setStreamingContent('');
-
-      try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paperId, message }),
-        });
-
-        if (!response.ok) throw new Error('Failed to send message');
-
-        const reader = response.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullResponse = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.content) {
-                fullResponse += data.content;
-                setStreamingContent(fullResponse);
-              }
-              if (data.done) {
-                setChatMessages((prev) => [
-                  ...prev,
-                  { role: 'assistant', content: fullResponse },
-                ]);
-                setStreamingContent('');
-              }
-            } catch {
-              // Skip malformed lines
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Chat error:', error);
-      } finally {
-        setIsChatStreaming(false);
-      }
-    },
-    [paperId]
-  );
 
   if (isAnalyzing) {
     return (
@@ -193,26 +126,10 @@ export function AnalysisPanel({
     <div className="flex flex-col h-full">
       <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
       <div className="flex-1 overflow-auto p-4">
-        {activeSection === 'chat' ? (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-auto">
-              <ChatMessages
-                messages={chatMessages}
-                streamingContent={streamingContent}
-                isStreaming={isChatStreaming}
-              />
-            </div>
-            <ChatInput
-              onSend={handleSendMessage}
-              disabled={isChatStreaming}
-            />
-          </div>
-        ) : (
-          <SectionContent
-            analysis={analysis}
-            section={activeSection}
-          />
-        )}
+        <SectionContent
+          analysis={analysis}
+          section={activeSection}
+        />
       </div>
     </div>
   );

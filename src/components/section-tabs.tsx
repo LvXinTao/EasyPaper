@@ -11,7 +11,6 @@ const SECTIONS = [
   { key: 'methodology', label: 'Methodology' },
   { key: 'experiments', label: 'Experiments' },
   { key: 'conclusions', label: 'Conclusions' },
-  { key: 'chat', label: 'Q&A' },
 ];
 
 export function SectionTabs({ activeSection, onSectionChange }: SectionTabsProps) {
