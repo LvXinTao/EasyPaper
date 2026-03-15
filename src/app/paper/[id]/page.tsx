@@ -24,6 +24,7 @@ export default function PaperDetailPage() {
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
   const chatButtonRef = useRef<HTMLButtonElement>(null);
+  const [buttonPos, setButtonPos] = useState({ bottom: 20, right: 20 });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isChatStreaming, setIsChatStreaming] = useState(false);
@@ -210,7 +211,13 @@ export default function PaperDetailPage() {
         </div>
       </div>
 
-      <ChatButton ref={chatButtonRef} isOpen={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} />
+      <ChatButton
+        ref={chatButtonRef}
+        isOpen={isChatOpen}
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        position={buttonPos}
+        onPositionChange={setButtonPos}
+      />
       <ChatDialog
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
@@ -219,6 +226,7 @@ export default function PaperDetailPage() {
         streamingContent={streamingContent}
         isStreaming={isChatStreaming}
         onSend={handleSendMessage}
+        buttonPosition={buttonPos}
       />
     </>
   );
