@@ -22,6 +22,8 @@ A fixed-position pill button in the bottom-right corner of the paper detail page
   - **Closed**: Chat icon + "Ask AI" text
   - **Open**: X icon + "Close" text
 - Shadow: `0 4px 16px rgba(99,102,241,0.4)`
+- Height: 40px
+- z-index: 50
 - Clicking toggles the chat dialog open/closed
 
 **2. ChatDialog**
@@ -32,6 +34,7 @@ A floating panel that appears above the pill button.
 - Size: 380px wide, 480px tall
 - Border-radius: 16px
 - Shadow: `0 12px 40px rgba(0,0,0,0.15)`
+- z-index: 50
 - Structure (top to bottom):
   - **Drag handle**: Centered 36px bar, decorative only (no drag resize in v1)
   - **Header**: Chat icon in indigo background square + "Ask AI" title + "About this paper" subtitle + close button (X)
@@ -61,10 +64,13 @@ Chat-related state currently lives in `AnalysisPanel`. It must be lifted to `Pap
 - Remove `ChatInput` and `ChatMessages` imports
 - Remove all chat state (`chatMessages`, `streamingContent`, `isChatStreaming`, `handleSendMessage`)
 - Remove the `activeSection === 'chat'` branch in the render
+- Remove `initialChatMessages` from `AnalysisPanelProps` interface
+- Remove `paperId` from props (no longer needed without chat)
 - The component becomes a pure analysis display panel
 
 **paper/[id]/page.tsx**
 - Add chat state and `handleSendMessage` logic (moved from `AnalysisPanel`)
+- Pass `initialChatMessages` to `ChatDialog` instead of `AnalysisPanel`
 - Render `ChatButton` and `ChatDialog` as siblings alongside the existing layout
 - Pass `paperId`, chat state, and send handler to `ChatDialog`
 
@@ -84,3 +90,10 @@ Chat-related state currently lives in `AnalysisPanel`. It must be lifted to `Pap
 - **Small screens**: Dialog uses `max-height: calc(100vh - 100px)` and `max-width: calc(100vw - 40px)` to avoid overflow
 - **Chat history persistence**: Existing behavior preserved — `initialChatMessages` loaded from server, new messages accumulated in state
 - **Multiple open/close**: Chat messages and streaming state persist across open/close toggles within the same page session
+- **Streaming while closed**: If the user closes the dialog while a response is streaming, the fetch continues in the background. Reopening the dialog shows the accumulated response.
+
+## Keyboard Accessibility
+
+- Pressing `Escape` while the dialog is open closes it
+- When dialog opens, focus moves to the chat input field
+- When dialog closes, focus returns to the ChatButton
