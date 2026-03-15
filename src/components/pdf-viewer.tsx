@@ -42,6 +42,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const pageRef = useRef(page);
   pageRef.current = page;
 
+  // Custom selection highlight
+  const [highlightRects, setHighlightRects] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const rafIdRef = useRef<number>(0);
+
   // Load PDF document
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +79,9 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   // Render current page (canvas + text layer) with fade transition
   useEffect(() => {
     if (!pdf || !canvasRef.current || !textLayerRef.current) return;
+
+    // Clear custom selection highlights when page/scale changes
+    setHighlightRects([]);
 
     let cancelled = false;
     const gen = ++animationGenRef.current;
@@ -369,6 +377,62 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [totalPages, goToPage]);
 
+  // Custom selection highlight: listen to selectionchange
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = requestAnimationFrame(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+          setHighlightRects([]);
+          return;
+        }
+
+        const textLayerEl = textLayerRef.current;
+        const wrapperEl = wrapperRef.current;
+        if (!textLayerEl || !wrapperEl) {
+          setHighlightRects([]);
+          return;
+        }
+
+        // Check if selection is within text layer
+        const anchorInTextLayer = selection.anchorNode && textLayerEl.contains(selection.anchorNode);
+        const focusInTextLayer = selection.focusNode && textLayerEl.contains(selection.focusNode);
+        if (!anchorInTextLayer && !focusInTextLayer) {
+          setHighlightRects([]);
+          return;
+        }
+
+        const wrapperRect = wrapperEl.getBoundingClientRect();
+        const rects: Array<{ left: number; top: number; width: number; height: number }> = [];
+
+        for (let i = 0; i < selection.rangeCount; i++) {
+          const range = selection.getRangeAt(i);
+          const clientRects = range.getClientRects();
+          for (let j = 0; j < clientRects.length; j++) {
+            const r = clientRects[j];
+            if (r.width > 0 && r.height > 0) {
+              rects.push({
+                left: r.left - wrapperRect.left,
+                top: r.top - wrapperRect.top,
+                width: r.width,
+                height: r.height,
+              });
+            }
+          }
+        }
+
+        setHighlightRects(rects);
+      });
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      cancelAnimationFrame(rafIdRef.current);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-100">
@@ -458,6 +522,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       <div className="flex-1 overflow-auto bg-slate-200 p-4">
         <div className="text-center">
           <div
+            ref={wrapperRef}
             className="relative inline-block shadow-xl rounded overflow-hidden"
             style={{
               opacity: canvasOpacity,
@@ -465,6 +530,24 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
             }}
           >
             <canvas ref={canvasRef} style={{ display: 'block' }} />
+            {/* Custom selection highlight overlay */}
+            {highlightRects.length > 0 && (
+              <div className="absolute inset-0 pointer-events-none">
+                {highlightRects.map((rect, i) => (
+                  <div
+                    key={i}
+                    className="absolute rounded-sm"
+                    style={{
+                      left: rect.left,
+                      top: rect.top,
+                      width: rect.width,
+                      height: rect.height,
+                      background: 'rgba(0, 0, 255, 0.25)',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
             <div ref={textLayerRef} className="textLayer" />
           </div>
         </div>
