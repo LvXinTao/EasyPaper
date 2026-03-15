@@ -26,7 +26,7 @@ A thin progress bar at the bottom of the PDF viewing area, showing the reader's 
 - Appears when mouse hovers over the progress bar
 - Positioned above the hover point, centered horizontally
 - White card with 8px border-radius, `0 8px 24px rgba(0,0,0,0.2)` shadow
-- Contains a rendered thumbnail of the page at that position (approximately 80px wide)
+- Thumbnail width: fixed at 80px, height proportional to page aspect ratio. Max height: 120px (for landscape pages, scale down width to maintain ratio within this constraint)
 - Page number label below the thumbnail
 - Small downward-pointing arrow/triangle connecting to the progress bar
 - Disappears when mouse leaves the progress bar
@@ -41,6 +41,8 @@ A thin progress bar at the bottom of the PDF viewing area, showing the reader's 
 - Use `pdfjs` `PDFPageProxy.render()` at a small scale (e.g., 0.3) to generate thumbnails
 - Cache rendered thumbnails to avoid re-rendering on every hover
 - Render thumbnails lazily (on first hover near that page position)
+- Throttle thumbnail render requests to at most one every 100ms. If the hovered page changes before a render completes, cancel the in-progress render and start the new one.
+- Cache up to 50 thumbnails (LRU eviction). For most documents this covers all pages; for large documents it keeps memory bounded.
 
 ### 2. Keyboard Shortcuts
 
@@ -50,12 +52,15 @@ Global keyboard event listener on the PDF viewer container.
 |-----|--------|
 | `ArrowLeft` | Previous page |
 | `ArrowRight` | Next page |
+| `PageUp` | Previous page |
+| `PageDown` | Next page |
 | `Home` | First page |
 | `End` | Last page |
 
 **Constraints:**
 - Only active when the PDF viewer area has focus (or no input element is focused)
 - Disabled when the page number input is active (to allow typing)
+- When the progress bar slider is focused, arrow keys are handled by the slider's own handler. The global keyboard shortcut handler should check `event.target` and yield to the slider when it has focus, to avoid double-firing.
 - Respects page bounds (no-op at first/last page)
 
 ### 3. Page Number Jump
@@ -76,7 +81,7 @@ Transform the static page indicator (`5 / 12`) in the toolbar into an interactiv
 **Actions:**
 - `Enter`: Parse input, clamp to `[1, totalPages]`, navigate, exit edit mode
 - `Escape`: Cancel edit, restore display mode
-- `blur`: Same as Escape (cancel)
+- `blur`: Submit the entered value (same as Enter). This avoids accidental cancellation when user clicks elsewhere after typing.
 - Non-numeric input: Ignore or show brief visual feedback
 
 ### 4. Page Transition Animation
@@ -84,14 +89,15 @@ Transform the static page indicator (`5 / 12`) in the toolbar into an interactiv
 Smooth visual transition when switching pages.
 
 **Animation spec:**
-- Type: Crossfade (opacity transition)
-- Duration: 200ms
+- Type: Fade-out-then-in (single canvas — not a true crossfade since there is only one canvas element)
+- Duration: 150ms out + 150ms in = 300ms total
 - Easing: ease-out
-- On page change: current page fades out (opacity 1 → 0), new page fades in (opacity 0 → 1)
+- On page change: canvas opacity transitions from 1 → 0 (150ms), new page renders while invisible, then opacity transitions from 0 → 1 (150ms)
 
 **Rapid navigation handling:**
 - If a new page change is triggered while animating, cancel the current animation and jump directly to the new page
 - This prevents animation queue buildup when holding arrow keys or scrubbing the progress bar
+- During progress bar drag, disable transition animation entirely. Apply animation only on drag end (mouseup) for the final page.
 
 **Implementation approach:**
 - Use a CSS transition on the canvas container's opacity
@@ -121,6 +127,7 @@ This is the only file that needs modification. All four features are internal to
 - `handleProgressBarDrag` — mousedown/mousemove/mouseup handlers for dragging the indicator
 - `handleKeyDown(e: KeyboardEvent)` — keyboard shortcut handler
 - `handlePageInputSubmit()` — validates and navigates to entered page number
+- `handlePageInputCancel()` — restores display mode without navigating
 
 **Render changes:**
 - Toolbar: Replace static page number span with clickable/editable element
@@ -140,6 +147,7 @@ None. All changes are within `pdf-viewer.tsx`.
 - **Thumbnail render failure**: Show a plain colored rectangle with page number text as fallback.
 - **Window resize**: Progress bar is percentage-based, adapts naturally. Thumbnail cache can be kept (scale is fixed).
 - **Page input with invalid value**: Non-numeric or out-of-range values are clamped silently. Empty input cancels.
+- **Touch interaction**: Out of scope for this iteration. Progress bar is mouse-only.
 
 ## Keyboard Accessibility
 
