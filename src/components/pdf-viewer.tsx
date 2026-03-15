@@ -39,6 +39,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const pendingRenderRef = useRef<{ cancel: boolean } | null>(null);
   const lastRenderedPageRef = useRef<number>(0);
   const pendingHoverPageRef = useRef<number>(0);
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
   // Load PDF document
   useEffect(() => {
@@ -272,6 +274,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     renderThumbnail(pageNum).then((canvas) => {
       if (canvas && thumbnailCanvasRef.current && pendingHoverPageRef.current === pageNum) {
         lastRenderedPageRef.current = pageNum;
+        // Imperative DOM: this container is managed outside React for canvas element insertion
         thumbnailCanvasRef.current.innerHTML = '';
         thumbnailCanvasRef.current.appendChild(canvas);
       }
@@ -312,6 +315,18 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      thumbnailCacheRef.current.clear();
+      thumbnailCacheOrder.current = [];
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+        throttleTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -332,12 +347,12 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
         case 'ArrowLeft':
         case 'PageUp':
           e.preventDefault();
-          goToPage(page - 1);
+          goToPage(pageRef.current - 1);
           break;
         case 'ArrowRight':
         case 'PageDown':
           e.preventDefault();
-          goToPage(page + 1);
+          goToPage(pageRef.current + 1);
           break;
         case 'Home':
           e.preventDefault();
@@ -352,7 +367,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [page, totalPages, goToPage]);
+  }, [totalPages, goToPage]);
 
   if (loading) {
     return (
