@@ -20,6 +20,9 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const textLayerInstanceRef = useRef<{ cancel: () => void } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
+  const [canvasOpacity, setCanvasOpacity] = useState(1);
+  const animationGenRef = useRef(0);
+  const skipAnimationRef = useRef(false);
 
   // Load PDF document
   useEffect(() => {
@@ -50,11 +53,12 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
   }, [currentPage, totalPages]);
 
-  // Render current page (canvas + text layer)
+  // Render current page (canvas + text layer) with fade transition
   useEffect(() => {
     if (!pdf || !canvasRef.current || !textLayerRef.current) return;
 
     let cancelled = false;
+    const gen = ++animationGenRef.current;
 
     // Cancel previous text layer render
     if (textLayerInstanceRef.current) {
@@ -63,6 +67,13 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
 
     async function renderPage() {
+      // Fade out (skip if animation disabled, e.g. during drag)
+      if (!skipAnimationRef.current) {
+        setCanvasOpacity(0);
+        await new Promise((r) => setTimeout(r, 150));
+        if (cancelled || gen !== animationGenRef.current) return;
+      }
+
       const pdfPage = await pdf!.getPage(page);
       const viewport = pdfPage.getViewport({ scale });
       const canvas = canvasRef.current!;
@@ -70,11 +81,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
-      if (cancelled) return;
+      if (cancelled || gen !== animationGenRef.current) return;
 
       await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
 
-      if (cancelled) return;
+      if (cancelled || gen !== animationGenRef.current) return;
 
       // Render text layer
       const textLayerDiv = textLayerRef.current!;
@@ -83,7 +94,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       textLayerDiv.style.height = `${viewport.height}px`;
 
       const textContent = await pdfPage.getTextContent();
-      if (cancelled) return;
+      if (cancelled || gen !== animationGenRef.current) return;
 
       const { TextLayer } = await import('pdfjs-dist');
       const textLayer = new TextLayer({
@@ -94,6 +105,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
       textLayerInstanceRef.current = textLayer;
       await textLayer.render();
+
+      if (cancelled || gen !== animationGenRef.current) return;
+
+      // Fade in
+      setCanvasOpacity(1);
     }
 
     renderPage();
@@ -244,7 +260,13 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       {/* Canvas + TextLayer */}
       <div className="flex-1 overflow-auto bg-slate-200 p-4">
         <div className="text-center">
-          <div className="relative inline-block shadow-xl rounded overflow-hidden">
+          <div
+            className="relative inline-block shadow-xl rounded overflow-hidden"
+            style={{
+              opacity: canvasOpacity,
+              transition: 'opacity 150ms ease-out',
+            }}
+          >
             <canvas ref={canvasRef} style={{ display: 'block' }} />
             <div ref={textLayerRef} className="textLayer" />
           </div>
