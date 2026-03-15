@@ -105,6 +105,43 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
     }
   }, [totalPages, onPageChange]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if an input/textarea is focused (covers page-number input from Task 2)
+      // Also skip if progress bar slider is focused (Task 4) — it has its own key handler
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
+          target.getAttribute('role') === 'slider') {
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowLeft':
+        case 'PageUp':
+          e.preventDefault();
+          goToPage(page - 1);
+          break;
+        case 'ArrowRight':
+        case 'PageDown':
+          e.preventDefault();
+          goToPage(page + 1);
+          break;
+        case 'Home':
+          e.preventDefault();
+          goToPage(1);
+          break;
+        case 'End':
+          e.preventDefault();
+          goToPage(totalPages);
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [page, totalPages, goToPage]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-100">
