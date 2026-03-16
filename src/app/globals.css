@@ -1,21 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+/* ============================================
+   Theme: Dark Minimal (default)
+   ============================================ */
+:root,
+[data-theme="dark-minimal"] {
+  --bg: #161618;
+  --bg-deep: #121214;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  --text-primary: #e8e8ec;
+  --text-secondary: #8b8b9e;
+  --text-tertiary: #55556a;
+  --accent: #9d9db5;
+  --accent-subtle: rgba(157, 157, 181, 0.1);
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --green: #6ee7a0;
+  --green-subtle: rgba(110, 231, 160, 0.08);
+  --amber: #fbbf24;
+  --amber-subtle: rgba(251, 191, 36, 0.08);
+  --blue: #7daeff;
+  --blue-subtle: rgba(125, 174, 255, 0.08);
+  --rose: #f87171;
+  --rose-subtle: rgba(248, 113, 113, 0.08);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ============================================
+   Theme: Light Minimal
+   ============================================ */
+[data-theme="light-minimal"] {
+  --bg: #fafafa;
+  --bg-deep: #f0f0f2;
+  --surface: rgba(0, 0, 0, 0.02);
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.1);
+  --text-primary: #1a1a1e;
+  --text-secondary: #6b6b7a;
+  --text-tertiary: #9b9baa;
+  --accent: #6b6b82;
+  --accent-subtle: rgba(107, 107, 130, 0.1);
+  --glass: rgba(0, 0, 0, 0.04);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --green: #16a34a;
+  --green-subtle: rgba(22, 163, 74, 0.08);
+  --amber: #d97706;
+  --amber-subtle: rgba(217, 119, 6, 0.08);
+  --blue: #2563eb;
+  --blue-subtle: rgba(37, 99, 235, 0.08);
+  --rose: #dc2626;
+  --rose-subtle: rgba(220, 38, 38, 0.08);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 }
 
+/* ============================================
+   Theme: Deep Blue
+   ============================================ */
+[data-theme="deep-blue"] {
+  --bg: #0d1117;
+  --bg-deep: #090c10;
+  --surface: rgba(136, 182, 255, 0.03);
+  --surface-hover: rgba(136, 182, 255, 0.06);
+  --border: rgba(136, 182, 255, 0.06);
+  --border-strong: rgba(136, 182, 255, 0.12);
+  --text-primary: #e2e8f0;
+  --text-secondary: #7b8ca8;
+  --text-tertiary: #4a5568;
+  --accent: #7daeff;
+  --accent-subtle: rgba(125, 174, 255, 0.1);
+  --glass: rgba(136, 182, 255, 0.04);
+  --glass-border: rgba(136, 182, 255, 0.08);
+  --green: #6ee7a0;
+  --green-subtle: rgba(110, 231, 160, 0.08);
+  --amber: #fbbf24;
+  --amber-subtle: rgba(251, 191, 36, 0.08);
+  --blue: #7daeff;
+  --blue-subtle: rgba(125, 174, 255, 0.08);
+  --rose: #f87171;
+  --rose-subtle: rgba(248, 113, 113, 0.08);
+  --scrollbar-thumb: rgba(136, 182, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(136, 182, 255, 0.18);
+}
+
+/* ============================================
+   Theme: Warm Dark
+   ============================================ */
+[data-theme="warm-dark"] {
+  --bg: #1a1816;
+  --bg-deep: #141210;
+  --surface: rgba(255, 235, 200, 0.03);
+  --surface-hover: rgba(255, 235, 200, 0.055);
+  --border: rgba(255, 235, 200, 0.06);
+  --border-strong: rgba(255, 235, 200, 0.1);
+  --text-primary: #ece5d8;
+  --text-secondary: #9e9586;
+  --text-tertiary: #6a6358;
+  --accent: #c4a882;
+  --accent-subtle: rgba(196, 168, 130, 0.1);
+  --glass: rgba(255, 235, 200, 0.04);
+  --glass-border: rgba(255, 235, 200, 0.08);
+  --green: #6ee7a0;
+  --green-subtle: rgba(110, 231, 160, 0.08);
+  --amber: #fbbf24;
+  --amber-subtle: rgba(251, 191, 36, 0.08);
+  --blue: #7daeff;
+  --blue-subtle: rgba(125, 174, 255, 0.08);
+  --rose: #f87171;
+  --rose-subtle: rgba(248, 113, 113, 0.08);
+  --scrollbar-thumb: rgba(255, 235, 200, 0.08);
+  --scrollbar-thumb-hover: rgba(255, 235, 200, 0.15);
+}
+
+/* ============================================
+   Base styles
+   ============================================ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
 }
 
 /* Modal animations */
@@ -27,18 +135,23 @@ body {
   from { transform: scale(0.95); }
   to { transform: scale(1); }
 }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--scrollbar-thumb-hover);
 }
