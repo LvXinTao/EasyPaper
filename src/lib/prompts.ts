@@ -24,6 +24,8 @@ Provide your analysis in the following JSON format:
   }
 }
 
+Use Markdown formatting within each "content" field to structure the text clearly. Use ## and ### for headings, bullet lists, **bold** for emphasis, and other Markdown syntax as appropriate. Do NOT use Markdown in the "items" array — each item should be a plain sentence.
+
 IMPORTANT: Return ONLY valid JSON. No markdown code blocks, no extra text.`;
 
 export const CHAT_PROMPT = `You are an academic paper assistant. Answer the user's question based on the paper content provided.
