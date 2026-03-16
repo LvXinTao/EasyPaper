@@ -87,3 +87,41 @@ describe('storage - listPapers with folderId', () => {
     expect(papers[0].folderId).toBeNull();
   });
 });
+
+describe('storage - folders', () => {
+  let testDir: string;
+  let originalConfigDir: string;
+
+  beforeEach(async () => {
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'easypaper-test-'));
+    originalConfigDir = process.env.CONFIG_DIR || '';
+    process.env.CONFIG_DIR = testDir;
+  });
+
+  afterEach(async () => {
+    process.env.CONFIG_DIR = originalConfigDir;
+    await fs.rm(testDir, { recursive: true, force: true });
+  });
+
+  it('returns empty array when no folders.json exists', async () => {
+    const folders = await storage.getFolders();
+    expect(folders).toEqual([]);
+  });
+
+  it('round-trips folders through JSON', async () => {
+    const folders = [
+      { id: 'f_1', name: 'NLP', parentId: null },
+      { id: 'f_2', name: 'Transformer', parentId: 'f_1' },
+    ];
+    await storage.saveFolders(folders);
+    const loaded = await storage.getFolders();
+    expect(loaded).toEqual(folders);
+  });
+
+  it('overwrites existing folders', async () => {
+    await storage.saveFolders([{ id: 'f_1', name: 'Old', parentId: null }]);
+    await storage.saveFolders([{ id: 'f_2', name: 'New', parentId: null }]);
+    const loaded = await storage.getFolders();
+    expect(loaded).toEqual([{ id: 'f_2', name: 'New', parentId: null }]);
+  });
+});

@@ -106,6 +106,20 @@ export const storage = {
   async paperExists(paperId: string): Promise<boolean> {
     try { await fs.stat(paperDir(paperId)); return true; } catch { return false; }
   },
+  async getFolders(): Promise<Folder[]> {
+    try {
+      const filePath = path.join(getConfigDir(), 'folders.json');
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content);
+      return data.folders || [];
+    } catch { return []; }
+  },
+  async saveFolders(folders: Folder[]): Promise<void> {
+    const configDir = getConfigDir();
+    await fs.mkdir(configDir, { recursive: true });
+    const filePath = path.join(configDir, 'folders.json');
+    await fs.writeFile(filePath, JSON.stringify({ folders }, null, 2));
+  },
   async saveSettings(settings: Record<string, unknown>): Promise<void> {
     const configDir = getConfigDir();
     await fs.mkdir(configDir, { recursive: true });
