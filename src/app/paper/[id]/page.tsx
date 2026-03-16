@@ -7,6 +7,8 @@ import { AnalysisPanel } from '@/components/analysis-panel';
 import { ChatButton } from '@/components/chat-button';
 import { ChatDialog } from '@/components/chat-dialog';
 import { NotesPanel } from '@/components/notes-panel';
+import { EditableTitle } from '@/components/editable-title';
+import { PaperDrawer } from '@/components/paper-drawer';
 import { usePaper } from '@/hooks/use-paper';
 import { useSSE } from '@/hooks/use-sse';
 import type { PaperAnalysis, ChatMessage } from '@/types';
@@ -30,6 +32,9 @@ export default function PaperDetailPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isChatStreaming, setIsChatStreaming] = useState(false);
+
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Initialize chat messages when data loads
   useEffect(() => {
@@ -78,6 +83,19 @@ export default function PaperDetailPage() {
     setAnalysisMessage(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
+
+  const handleRename = useCallback(
+    async (newTitle: string) => {
+      const response = await fetch(`/api/paper/${paperId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (!response.ok) throw new Error('Failed to rename');
+      await refetch();
+    },
+    [paperId, refetch]
+  );
 
   const handleSendMessage = useCallback(
     async (message: string) => {
@@ -162,6 +180,23 @@ export default function PaperDetailPage() {
 
   return (
     <>
+      {/* Hamburger menu button - overlays Navbar area */}
+      <button
+        onClick={() => setDrawerOpen((prev) => !prev)}
+        className="fixed top-0 left-0 z-40 h-[52px] w-12 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+        aria-label="Toggle paper navigation"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      <PaperDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        currentPaperId={paperId}
+      />
+
       <div className="flex h-[calc(100vh-52px)]">
         {/* Left: PDF Viewer (55%) */}
         <div className="w-[55%] border-r border-slate-200">
@@ -176,9 +211,9 @@ export default function PaperDetailPage() {
         <div className="w-[45%] flex flex-col bg-white">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
-            <h1 className="text-base font-semibold text-slate-800 truncate mr-3">
-              {data.metadata.title}
-            </h1>
+            <div className="flex-1 min-w-0 mr-3">
+              <EditableTitle value={data.metadata.title} onSave={handleRename} />
+            </div>
             {needsAnalysis && (
               <button
                 onClick={handleAnalyze}
