@@ -42,7 +42,7 @@ describe('PATCH /api/paper/[id]', () => {
       body: JSON.stringify({ folderId: 'f_abc' }),
     });
     const response = await PATCH(request, { params: Promise.resolve({ id: 'test-123' }) });
-    const data = await response.json();
+    await response.json();
     expect(response.status).toBe(200);
     expect(storage.updateMetadata).toHaveBeenCalledWith('test-123', { folderId: 'f_abc' });
   });
