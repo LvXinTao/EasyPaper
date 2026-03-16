@@ -14,7 +14,7 @@ The notes panel lives in the right-side panel as a new top-level tab alongside t
 type NoteTag = 'important' | 'question' | 'todo' | 'idea' | 'summary'
 
 interface Note {
-  id: string           // nanoid generated
+  id: string           // crypto.randomUUID()
   title: string        // Note title
   content: string      // Markdown body
   tags: NoteTag[]      // Fixed tag set, multi-select
@@ -53,30 +53,36 @@ data/papers/{paperId}/
 - `getNotes(paperId: string): Promise<Note[]>` — Read notes list, returns `[]` if file doesn't exist
 - `saveNotes(paperId: string, notes: Note[]): Promise<void>` — Write entire notes array
 
+Note: This is a single-user desktop-style app, so concurrent write conflicts on `notes.json` are not a practical concern. No locking mechanism is needed.
+
 ## API
 
 ### Route: `/api/paper/[id]/notes`
 
+**Route file:** `src/app/api/paper/[id]/notes/route.ts`
+
 | Method | Purpose | Request Body | Response |
 |--------|---------|--------------|----------|
 | `GET` | List all notes | — | `Note[]` |
-| `POST` | Create new note | `Omit<Note, 'id' \| 'createdAt' \| 'updatedAt'>` | `Note` (created) |
-| `PUT` | Update note | `Note` (full object with id) | `Note` (updated) |
+| `POST` | Create new note | `{ title, content, tags, page? }` | `Note` (created, with server-generated id/createdAt/updatedAt) |
+| `PUT` | Update note | `{ id, title, content, tags, page? }` | `Note` (updated, server preserves createdAt, updates updatedAt) |
 | `DELETE` | Delete note | — (query param `noteId`) | `{ success: true }` |
+
+Notes are NOT included in the `PaperData` type or the `/api/paper/[id]` GET response. They are fetched independently via `/api/paper/[id]/notes`.
 
 ## UI Design
 
 ### Panel Tab Structure
 
-The right-side panel header gains a top-level tab bar:
+The right-side panel header gains a top-level tab bar below the existing header (paper title + Analyze button). The header with the Analyze button remains always visible regardless of which tab is selected:
 
 ```
-┌─────────────┬─────────────┐
-│  Analysis   │   Notes     │  ← top-level tab switch
-└─────────────┴─────────────┘
+┌──────────────────────────────┐
+│  Paper Title     [Analyze]   │  ← always visible header
+├──────────────┬───────────────┤
+│  Analysis    │   Notes       │  ← top-level tab switch
+└──────────────┴───────────────┘
 ```
-
-When "Analysis" is selected, the existing analysis content (with its section sub-tabs) displays. When "Notes" is selected, the notes panel displays.
 
 ### Notes List View
 
@@ -127,6 +133,7 @@ page.tsx (Paper Detail)
 | `NotesPanel` | `src/components/notes-panel.tsx` | Container managing list/edit view state and notes data |
 | `NotesList` | `src/components/notes-list.tsx` | Renders note cards with tag pills and page links |
 | `NoteEditor` | `src/components/note-editor.tsx` | Edit form with title, tags, page, Markdown editor/preview |
+| Notes API route | `src/app/api/paper/[id]/notes/route.ts` | GET/POST/PUT/DELETE handlers for notes |
 
 ### Data Flow
 
@@ -171,10 +178,17 @@ Notes are loaded when the Notes tab is first activated (lazy loading), not on pa
 
 No new dependencies required:
 - `react-markdown` — already used for chat message rendering
-- `nanoid` — already available in Next.js environment (use `crypto.randomUUID()` as alternative)
+- `crypto.randomUUID()` — built-in Node.js API, no import needed
 
 ## Error Handling
 
 - API errors display a toast/banner notification (consistent with existing error patterns)
 - Storage read failures return empty array (consistent with existing `getChatHistory` pattern)
-- Unsaved changes: no explicit warning on navigation away (YAGNI — can be added later if needed)
+- No unsaved-changes warning is shown when the user clicks "Back to list", switches tabs, or navigates away from the page. Any unsaved edits are silently discarded. (YAGNI — can be added later if needed)
+
+## Out of Scope (Future Enhancements)
+
+- Search/filter notes by keyword or tag
+- Sorting options (by date, by page, by tag)
+- Note export (Markdown file, PDF annotation merge)
+- Drag-to-reorder notes
