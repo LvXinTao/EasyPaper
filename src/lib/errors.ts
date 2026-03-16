@@ -8,6 +8,7 @@ export type ErrorCode =
   | 'API_KEY_MISSING'
   | 'API_CALL_FAILED'
   | 'PAPER_NOT_FOUND'
+  | 'NOTE_NOT_FOUND'
   | 'VALIDATION_ERROR';
 
 const STATUS_MAP: Record<ErrorCode, number> = {
@@ -18,6 +19,7 @@ const STATUS_MAP: Record<ErrorCode, number> = {
   API_KEY_MISSING: 400,
   API_CALL_FAILED: 502,
   PAPER_NOT_FOUND: 404,
+  NOTE_NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
 };
 

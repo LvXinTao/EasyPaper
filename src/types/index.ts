@@ -74,3 +74,15 @@ export interface PaperData {
   parsedContent: string | null;
   chatHistory: ChatHistory;
 }
+
+export type NoteTag = 'important' | 'question' | 'todo' | 'idea' | 'summary';
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  tags: NoteTag[];
+  page?: number;
+  createdAt: string;
+  updatedAt: string;
+}
