@@ -16,7 +16,7 @@ export function Navbar() {
   return (
     <>
       <nav className="bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg">
-        <div className="px-4 py-3 flex items-center justify-between">
+        <div className="pl-14 pr-4 py-3 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2 text-xl font-bold text-white tracking-tight">
             <span className="bg-white/20 rounded-lg px-2 py-0.5 text-lg">EP</span>
             EasyPaper
