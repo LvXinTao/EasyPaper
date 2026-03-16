@@ -7,6 +7,7 @@ import { AnalysisPanel } from '@/components/analysis-panel';
 import { ChatButton } from '@/components/chat-button';
 import { ChatDialog } from '@/components/chat-dialog';
 import { NotesPanel } from '@/components/notes-panel';
+import { EditableTitle } from '@/components/editable-title';
 import { usePaper } from '@/hooks/use-paper';
 import { useSSE } from '@/hooks/use-sse';
 import type { PaperAnalysis, ChatMessage } from '@/types';
@@ -78,6 +79,19 @@ export default function PaperDetailPage() {
     setAnalysisMessage(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
+
+  const handleRename = useCallback(
+    async (newTitle: string) => {
+      const response = await fetch(`/api/paper/${paperId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (!response.ok) throw new Error('Failed to rename');
+      await refetch();
+    },
+    [paperId, refetch]
+  );
 
   const handleSendMessage = useCallback(
     async (message: string) => {
@@ -176,9 +190,9 @@ export default function PaperDetailPage() {
         <div className="w-[45%] flex flex-col bg-white">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
-            <h1 className="text-base font-semibold text-slate-800 truncate mr-3">
-              {data.metadata.title}
-            </h1>
+            <div className="flex-1 min-w-0 mr-3">
+              <EditableTitle value={data.metadata.title} onSave={handleRename} />
+            </div>
             {needsAnalysis && (
               <button
                 onClick={handleAnalyze}
