@@ -409,9 +409,10 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
         for (let i = 0; i < selection.rangeCount; i++) {
           const range = selection.getRangeAt(i);
 
-          // Walk text nodes in the selection to extract per-node rects.
-          // getClientRects() already returns screen-space coordinates that include
-          // any CSS scaleX transform, so no manual adjustment is needed.
+          // Walk text nodes in the selection to adjust for PDF.js scaleX transform.
+          // PDF.js text layer spans use transform: scaleX(var(--scale-x)) which stretches
+          // text to match PDF advance width, making getClientRects() return oversized widths.
+          // We divide by scaleX to get the natural (canvas-matching) text width.
           const walker = document.createTreeWalker(
             textLayerEl,
             NodeFilter.SHOW_TEXT,
@@ -421,23 +422,38 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
           while (walker.nextNode()) {
             const textNode = walker.currentNode;
 
+            // Find the positioned ancestor span with --scale-x inline style
+            let span: HTMLElement | null = textNode.parentElement;
+            let scaleX = 1;
+            while (span && span !== textLayerEl) {
+              const sx = span.style.getPropertyValue('--scale-x');
+              if (sx) {
+                scaleX = parseFloat(sx) || 1;
+                break;
+              }
+              span = span.parentElement;
+            }
+
             // Create a range for just the selected portion of this text node
             const nodeRange = document.createRange();
             nodeRange.setStart(textNode, textNode === range.startContainer ? range.startOffset : 0);
             nodeRange.setEnd(textNode, textNode === range.endContainer ? range.endOffset : (textNode.textContent?.length || 0));
 
-            // getClientRects() returns screen-space coordinates (already includes
-            // CSS scaleX transform), so use them directly without adjustment.
             const nodeRects = nodeRange.getClientRects();
             for (let j = 0; j < nodeRects.length; j++) {
               const r = nodeRects[j];
               if (r.width > 0 && r.height > 0) {
-                rects.push({
-                  left: r.left - wrapperRect.left,
-                  top: r.top - wrapperRect.top,
-                  width: r.width,
-                  height: r.height,
-                });
+                let left = r.left - wrapperRect.left;
+                let width = r.width;
+
+                // Adjust for scaleX: divide width and adjust left offset from span origin
+                if (span && span !== textLayerEl && scaleX > 0 && scaleX !== 1) {
+                  const spanRect = span.getBoundingClientRect();
+                  left = (spanRect.left - wrapperRect.left) + (r.left - spanRect.left) / scaleX;
+                  width = r.width / scaleX;
+                }
+
+                rects.push({ left, top: r.top - wrapperRect.top, width, height: r.height });
               }
             }
           }
