@@ -30,6 +30,7 @@ interface AnalysisPanelProps {
   isAnalyzing?: boolean;
   analysisStep?: string | null;
   analysisMessage?: string | null;
+  onReAnalyze?: () => void;
 }
 
 function SectionContent({
@@ -120,8 +121,10 @@ export function AnalysisPanel({
   isAnalyzing,
   analysisStep,
   analysisMessage,
+  onReAnalyze,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
+  const [confirmingReAnalyze, setConfirmingReAnalyze] = useState(false);
 
   if (isAnalyzing) {
     return (
@@ -146,6 +149,55 @@ export function AnalysisPanel({
   return (
     <div className="flex flex-col h-full">
       <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
+
+      {onReAnalyze && (
+        <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+          {confirmingReAnalyze ? (
+            <>
+              <span className="text-xs text-slate-500">
+                Re-analyzing will replace the current analysis. Continue?
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmingReAnalyze(false)}
+                  className="px-3 py-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmingReAnalyze(false);
+                    onReAnalyze();
+                  }}
+                  className="px-3 py-1 text-xs font-medium text-white bg-indigo-500 rounded-md hover:bg-indigo-600 transition-colors"
+                >
+                  Continue
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-slate-400">
+                {(() => {
+                  const rel = analysis.generatedAt ? formatRelativeTime(analysis.generatedAt) : null;
+                  return rel ? `Analyzed ${rel}` : null;
+                })()}
+              </span>
+              <button
+                onClick={() => setConfirmingReAnalyze(true)}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-md hover:bg-indigo-50 transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M1 4v6h6" />
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                </svg>
+                Re-analyze
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto p-4">
         <SectionContent
           analysis={analysis}
