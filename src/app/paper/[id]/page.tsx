@@ -158,7 +158,7 @@ export default function PaperDetailPage() {
   }
 
   const displayAnalysis = data.analysis || analysis;
-  const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing;
+  const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing && !displayAnalysis;
 
   return (
     <>
@@ -235,6 +235,7 @@ export default function PaperDetailPage() {
                 isAnalyzing={isAnalyzing}
                 analysisStep={analysisStep}
                 analysisMessage={analysisMessage}
+                onReAnalyze={handleAnalyze}
               />
             ) : (
               <NotesPanel
