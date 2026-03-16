@@ -95,7 +95,10 @@ export function NotesPanel({ paperId, currentPage, onPageChange }: NotesPanelPro
   if (!loaded) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="animate-spin w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full" />
+        <div
+          className="animate-spin w-5 h-5 border-2 border-t-transparent rounded-full"
+          style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+        />
       </div>
     );
   }
@@ -103,7 +106,14 @@ export function NotesPanel({ paperId, currentPage, onPageChange }: NotesPanelPro
   return (
     <div className="flex flex-col h-full">
       {error && (
-        <div className="px-4 py-2 bg-rose-50 border-b border-rose-200 text-rose-700 text-xs">
+        <div
+          className="px-4 py-2 border-b text-xs"
+          style={{
+            background: 'var(--rose-subtle)',
+            borderColor: 'var(--rose)',
+            color: 'var(--rose)',
+          }}
+        >
           {error}
         </div>
       )}

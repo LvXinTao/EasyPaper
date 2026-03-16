@@ -3,11 +3,11 @@
 import type { Note, NoteTag } from '@/types';
 
 const TAG_CONFIG: Record<NoteTag, { label: string; bg: string; text: string }> = {
-  important: { label: '重要', bg: 'bg-red-500/20', text: 'text-red-400' },
-  question: { label: '疑问', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  todo: { label: '待办', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  idea: { label: '灵感', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  summary: { label: '总结', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  important: { label: '重要', bg: 'rgba(239,68,68,0.15)', text: 'rgb(248,113,113)' },
+  question: { label: '疑问', bg: 'rgba(245,158,11,0.15)', text: 'rgb(251,191,36)' },
+  todo: { label: '待办', bg: 'rgba(59,130,246,0.15)', text: 'rgb(96,165,250)' },
+  idea: { label: '灵感', bg: 'rgba(16,185,129,0.15)', text: 'rgb(52,211,153)' },
+  summary: { label: '总结', bg: 'rgba(139,92,246,0.15)', text: 'rgb(167,139,250)' },
 };
 
 interface NotesListProps {
@@ -32,11 +32,20 @@ export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProp
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200">
-        <span className="text-sm text-slate-400">{notes.length} notes</span>
+      <div
+        className="flex items-center justify-between px-4 py-2.5 border-b"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        <span className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
+          {notes.length} notes
+        </span>
         <button
           onClick={onNew}
-          className="px-3 py-1.5 bg-indigo-500 text-white text-xs font-medium rounded-md hover:bg-indigo-600 transition-colors"
+          className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+          style={{
+            background: 'var(--accent)',
+            color: 'var(--bg)',
+          }}
         >
           + New Note
         </button>
@@ -45,8 +54,8 @@ export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProp
       {/* Notes list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {notes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
-            <svg className="w-10 h-10 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex flex-col items-center justify-center h-full py-12" style={{ color: 'var(--text-tertiary)' }}>
+            <svg className="w-10 h-10 mb-3" style={{ color: 'var(--text-tertiary)', opacity: 0.5 }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             <p className="text-sm">No notes yet</p>
@@ -56,23 +65,46 @@ export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProp
             <div
               key={note.id}
               onClick={() => onSelect(note)}
-              className="bg-slate-50 border border-slate-200 rounded-lg p-3 cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
+              className="rounded-lg p-3 cursor-pointer transition-colors"
+              style={{
+                background: 'var(--glass)',
+                border: '1px solid var(--glass-border)',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)';
+              }}
             >
               <div className="flex items-start justify-between mb-1">
-                <h3 className="text-sm font-semibold text-slate-800 truncate flex-1 mr-2">
+                <h3
+                  className="text-sm font-semibold truncate flex-1 mr-2"
+                  style={{ color: 'var(--text-primary)' }}
+                >
                   {note.title || 'Untitled'}
                 </h3>
                 {note.page != null && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onPageClick(note.page!); }}
-                    className="text-xs text-slate-400 hover:text-indigo-500 flex-shrink-0 transition-colors"
+                    className="text-xs flex-shrink-0 transition-colors"
+                    style={{ color: 'var(--text-tertiary)' }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-tertiary)';
+                    }}
                   >
                     p.{note.page}
                   </button>
                 )}
               </div>
               {note.content && (
-                <p className="text-xs text-slate-500 line-clamp-2 mb-2 leading-relaxed">
+                <p
+                  className="text-xs line-clamp-2 mb-2 leading-relaxed"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
                   {stripMarkdown(note.content)}
                 </p>
               )}
@@ -83,7 +115,8 @@ export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProp
                     return (
                       <span
                         key={tag}
-                        className={`${config.bg} ${config.text} px-2 py-0.5 rounded-full text-[11px]`}
+                        className="px-2 py-0.5 rounded-full text-[11px]"
+                        style={{ background: config.bg, color: config.text }}
                       >
                         {config.label}
                       </span>
