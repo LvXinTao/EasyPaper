@@ -6,6 +6,7 @@ import { PdfViewer } from '@/components/pdf-viewer';
 import { AnalysisPanel } from '@/components/analysis-panel';
 import { ChatButton } from '@/components/chat-button';
 import { ChatDialog } from '@/components/chat-dialog';
+import { NotesPanel } from '@/components/notes-panel';
 import { usePaper } from '@/hooks/use-paper';
 import { useSSE } from '@/hooks/use-sse';
 import type { PaperAnalysis, ChatMessage } from '@/types';
@@ -20,6 +21,7 @@ export default function PaperDetailPage() {
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<'analysis' | 'notes'>('analysis');
 
   // Chat state
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -199,14 +201,48 @@ export default function PaperDetailPage() {
             </div>
           )}
 
+          {/* Top-level tab bar */}
+          <div className="flex border-b border-slate-200 bg-white">
+            <button
+              onClick={() => setActivePanel('analysis')}
+              className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
+                activePanel === 'analysis' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Analysis
+              {activePanel === 'analysis' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-t" />
+              )}
+            </button>
+            <button
+              onClick={() => setActivePanel('notes')}
+              className={`px-4 py-2.5 text-sm font-medium transition-all relative ${
+                activePanel === 'notes' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Notes
+              {activePanel === 'notes' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-t" />
+              )}
+            </button>
+          </div>
+
           {/* Panel content */}
           <div className="flex-1 overflow-hidden">
-            <AnalysisPanel
-              analysis={displayAnalysis}
-              isAnalyzing={isAnalyzing}
-              analysisStep={analysisStep}
-              analysisMessage={analysisMessage}
-            />
+            {activePanel === 'analysis' ? (
+              <AnalysisPanel
+                analysis={displayAnalysis}
+                isAnalyzing={isAnalyzing}
+                analysisStep={analysisStep}
+                analysisMessage={analysisMessage}
+              />
+            ) : (
+              <NotesPanel
+                paperId={paperId}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+              />
+            )}
           </div>
         </div>
       </div>
