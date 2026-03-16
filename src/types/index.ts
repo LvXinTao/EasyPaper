@@ -94,3 +94,10 @@ export interface Note {
   createdAt: string;
   updatedAt: string;
 }
+
+export type ThemePreset = 'dark-minimal' | 'light-minimal' | 'deep-blue' | 'warm-dark';
+
+export interface ThemeSettings {
+  preset: ThemePreset;
+  customAccent: string | null;
+}
