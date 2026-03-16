@@ -1,20 +1,21 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { AnalysisPanel } from '@/components/analysis-panel';
-import { ChatButton } from '@/components/chat-button';
-import { ChatDialog } from '@/components/chat-dialog';
 import { NotesPanel } from '@/components/notes-panel';
+import { ChatMessages } from '@/components/chat-messages';
+import { ChatInput } from '@/components/chat-input';
 import { EditableTitle } from '@/components/editable-title';
-import { PaperDrawer } from '@/components/paper-drawer';
+import { ResizableDivider } from '@/components/resizable-divider';
 import { usePaper } from '@/hooks/use-paper';
 import { useSSE } from '@/hooks/use-sse';
 import type { PaperAnalysis, ChatMessage } from '@/types';
 
 export default function PaperDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const paperId = params.id as string;
   const { data, loading, error, refetch } = usePaper(paperId);
   const [currentPage, setCurrentPage] = useState(1);
@@ -23,18 +24,46 @@ export default function PaperDetailPage() {
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [activePanel, setActivePanel] = useState<'analysis' | 'notes'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'notes'>('analysis');
 
   // Chat state
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const chatButtonRef = useRef<HTMLButtonElement>(null);
-  const [buttonPos, setButtonPos] = useState({ bottom: 20, right: 20 });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isChatStreaming, setIsChatStreaming] = useState(false);
+  const [modelName, setModelName] = useState<string>('');
+  const [noteCount, setNoteCount] = useState(0);
 
-  // Drawer state
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Resizable panel state — restored from localStorage per paper
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const [leftWidth, setLeftWidth] = useState<number | null>(null);
+  const [topHeight, setTopHeight] = useState<number | null>(null);
+
+  // Load saved panel ratios from localStorage
+  useEffect(() => {
+    try {
+      const savedLeft = localStorage.getItem(`easypaper-left-${paperId}`);
+      const savedTop = localStorage.getItem(`easypaper-top-${paperId}`);
+      if (savedLeft) setLeftWidth(parseFloat(savedLeft));
+      if (savedTop) setTopHeight(parseFloat(savedTop));
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  // Fetch model name for chat header badge
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(s => { if (s.model) setModelName(s.model); })
+      .catch(() => {});
+  }, []);
+
+  // Fetch note count for tab badge
+  useEffect(() => {
+    fetch(`/api/paper/${paperId}/notes`)
+      .then(r => r.json())
+      .then(d => { if (d.notes) setNoteCount(d.notes.length); })
+      .catch(() => {});
+  }, [paperId]);
 
   // Initialize chat messages when data loads
   useEffect(() => {
@@ -109,7 +138,6 @@ export default function PaperDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paperId, message }),
         });
-
         if (!response.ok) throw new Error('Failed to send message');
 
         const reader = response.body!.getReader();
@@ -141,9 +169,7 @@ export default function PaperDetailPage() {
                 ]);
                 setStreamingContent('');
               }
-            } catch {
-              // Skip malformed lines
-            }
+            } catch { /* skip malformed */ }
           }
         }
       } catch (error) {
@@ -155,21 +181,39 @@ export default function PaperDetailPage() {
     [paperId]
   );
 
+  // Horizontal divider: save left panel width to localStorage
+  const handleLeftWidthChange = useCallback(
+    (newWidth: number) => {
+      setLeftWidth(newWidth);
+      try { localStorage.setItem(`easypaper-left-${paperId}`, String(newWidth)); } catch {}
+    },
+    [paperId]
+  );
+
+  // Vertical divider: save top panel height to localStorage
+  const handleTopHeightChange = useCallback(
+    (newHeight: number) => {
+      setTopHeight(newHeight);
+      try { localStorage.setItem(`easypaper-top-${paperId}`, String(newHeight)); } catch {}
+    },
+    [paperId]
+  );
+
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-52px)] bg-slate-50">
-        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-3" />
-        <div className="text-slate-400 text-sm">Loading paper...</div>
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-44px)]" style={{ background: 'var(--bg)' }}>
+        <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-3" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+        <div className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Loading paper...</div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-52px)] bg-slate-50">
+      <div className="flex items-center justify-center h-[calc(100vh-44px)]" style={{ background: 'var(--bg)' }}>
         <div className="text-center">
-          <div className="text-rose-500 font-medium">{error || 'Paper not found'}</div>
-          <a href="/" className="text-sm text-indigo-500 hover:underline mt-2 inline-block">Back to home</a>
+          <div className="font-medium" style={{ color: 'var(--rose)' }}>{error || 'Paper not found'}</div>
+          <a href="/" className="text-sm hover:underline mt-2 inline-block" style={{ color: 'var(--accent)' }}>Back to home</a>
         </div>
       </div>
     );
@@ -177,29 +221,90 @@ export default function PaperDetailPage() {
 
   const displayAnalysis = data.analysis || analysis;
   const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing && !displayAnalysis;
+  const statusLabel = data.metadata.status === 'analyzed' ? '✓ Analyzed' : data.metadata.status === 'error' ? 'Error' : data.metadata.status;
+  const statusColor = data.metadata.status === 'analyzed' ? 'var(--green)' : data.metadata.status === 'error' ? 'var(--rose)' : 'var(--amber)';
+  const statusBg = data.metadata.status === 'analyzed' ? 'var(--green-subtle)' : data.metadata.status === 'error' ? 'var(--rose-subtle)' : 'var(--amber-subtle)';
+
+  // Compute initial sizes from container if not set (guard for SSR)
+  const safeWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const safeWindowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const containerWidth = containerRef.current?.clientWidth ?? safeWindowWidth;
+  const rightPanelHeight = rightPanelRef.current?.clientHeight ?? (safeWindowHeight - 44 - 48);
+  const effectiveLeftWidth = leftWidth ?? containerWidth * 0.55;
+  const effectiveTopHeight = topHeight ?? rightPanelHeight * 0.55;
 
   return (
-    <>
-      {/* Hamburger menu button - overlays Navbar area */}
-      <button
-        onClick={() => setDrawerOpen((prev) => !prev)}
-        className="fixed top-0 left-0 z-40 h-[52px] w-12 flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-        aria-label="Toggle paper navigation"
+    <div style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
+      {/* Top Bar */}
+      <div
+        className="flex items-center gap-3 px-4"
+        style={{
+          height: '48px',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+        }}
       >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
+        {/* Back button */}
+        <button
+          onClick={() => router.push('/')}
+          className="flex items-center justify-center rounded-lg transition-colors"
+          style={{
+            width: '32px', height: '32px',
+            background: 'var(--glass)', border: '1px solid var(--glass-border)',
+            color: 'var(--text-secondary)',
+          }}
+          aria-label="Back to home"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
 
-      <PaperDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        currentPaperId={paperId}
-      />
+        {/* Paper title (editable) */}
+        <div className="flex-1 min-w-0">
+          <EditableTitle value={data.metadata.title} onSave={handleRename} />
+        </div>
 
-      <div className="flex h-[calc(100vh-52px)]">
-        {/* Left: PDF Viewer (55%) */}
-        <div className="w-[55%] border-r border-slate-200">
+        {/* Status badge */}
+        <span
+          className="text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0"
+          style={{ background: statusBg, color: statusColor }}
+        >
+          {statusLabel}
+        </span>
+
+        {/* Re-analyze button */}
+        {(data.metadata.status === 'analyzed' || needsAnalysis) && (
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+            style={{
+              background: needsAnalysis ? 'var(--text-primary)' : 'var(--glass)',
+              color: needsAnalysis ? 'var(--bg)' : 'var(--text-secondary)',
+              border: needsAnalysis ? 'none' : '1px solid var(--glass-border)',
+              opacity: isAnalyzing ? 0.5 : 1,
+            }}
+          >
+            {isAnalyzing ? 'Analyzing...' : needsAnalysis ? 'Analyze' : 'Re-analyze'}
+          </button>
+        )}
+      </div>
+
+      {/* Analysis error banner */}
+      {analysisError && (
+        <div className="px-4 py-2.5 text-sm flex items-start gap-2" style={{ background: 'var(--rose-subtle)', color: 'var(--rose)', borderBottom: '1px solid var(--border)' }}>
+          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div><strong>Analysis failed:</strong> {analysisError}</div>
+        </div>
+      )}
+
+      {/* Main content: PDF + Right Panel with resizable divider */}
+      <div ref={containerRef} className="flex" style={{ height: analysisError ? 'calc(100vh - 44px - 48px - 37px)' : 'calc(100vh - 44px - 48px)' }}>
+        {/* Left: PDF Viewer */}
+        <div style={{ width: `${effectiveLeftWidth}px`, minWidth: '300px', flexShrink: 0 }}>
           <PdfViewer
             url={`/api/paper/${paperId}/pdf`}
             currentPage={currentPage}
@@ -207,99 +312,117 @@ export default function PaperDetailPage() {
           />
         </div>
 
-        {/* Right: Analysis Panel (45%) */}
-        <div className="w-[45%] flex flex-col bg-white">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
-            <div className="flex-1 min-w-0 mr-3">
-              <EditableTitle value={data.metadata.title} onSave={handleRename} />
-            </div>
-            {needsAnalysis && (
-              <button
-                onClick={handleAnalyze}
-                className="flex-shrink-0 px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors shadow-sm"
-              >
-                Analyze
-              </button>
-            )}
-          </div>
+        {/* Horizontal resizable divider */}
+        <ResizableDivider
+          direction="horizontal"
+          onResize={(delta) => {
+            const newWidth = Math.max(300, Math.min(effectiveLeftWidth + delta, containerWidth - 280));
+            handleLeftWidthChange(newWidth);
+          }}
+        />
 
-          {/* Analysis error banner */}
-          {analysisError && (
-            <div className="px-4 py-3 bg-rose-50 border-b border-rose-200 text-rose-700 text-sm flex items-start gap-2">
-              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <strong>Analysis failed:</strong> {analysisError}
-              </div>
-            </div>
-          )}
-
-          {/* Top-level panel switcher */}
-          <div className="px-4 py-2.5 border-b border-slate-200 bg-white">
-            <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+        {/* Right: Split Panel */}
+        <div ref={rightPanelRef} className="flex-1 flex flex-col" style={{ minWidth: '280px', overflow: 'hidden' }}>
+          {/* Top Zone: Analysis/Notes tabs */}
+          <div style={{ height: `${effectiveTopHeight}px`, minHeight: '150px', flexShrink: 0 }} className="flex flex-col overflow-hidden">
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 px-4" style={{ height: '40px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <button
-                onClick={() => setActivePanel('analysis')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  activePanel === 'analysis'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
+                onClick={() => setActiveTab('analysis')}
+                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                style={{
+                  background: activeTab === 'analysis' ? 'var(--accent-subtle)' : 'transparent',
+                  color: activeTab === 'analysis' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  border: activeTab === 'analysis' ? '1px solid var(--accent)' : '1px solid transparent',
+                }}
               >
                 Analysis
+                {displayAnalysis && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
+                    {Object.keys(displayAnalysis).filter(k => k !== 'generatedAt').length}
+                  </span>
+                )}
               </button>
               <button
-                onClick={() => setActivePanel('notes')}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  activePanel === 'notes'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
+                onClick={() => setActiveTab('notes')}
+                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                style={{
+                  background: activeTab === 'notes' ? 'var(--accent-subtle)' : 'transparent',
+                  color: activeTab === 'notes' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  border: activeTab === 'notes' ? '1px solid var(--accent)' : '1px solid transparent',
+                }}
               >
                 Notes
+                {noteCount > 0 && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
+                    {noteCount}
+                  </span>
+                )}
               </button>
+            </div>
+
+            {/* Tab content */}
+            <div className="flex-1 overflow-hidden">
+              {activeTab === 'analysis' ? (
+                <AnalysisPanel
+                  analysis={displayAnalysis}
+                  isAnalyzing={isAnalyzing}
+                  analysisStep={analysisStep}
+                  analysisMessage={analysisMessage}
+                  onReAnalyze={handleAnalyze}
+                />
+              ) : (
+                <NotesPanel
+                  paperId={paperId}
+                  currentPage={currentPage}
+                  onPageChange={setCurrentPage}
+                />
+              )}
             </div>
           </div>
 
-          {/* Panel content */}
-          <div className="flex-1 overflow-hidden">
-            {activePanel === 'analysis' ? (
-              <AnalysisPanel
-                analysis={displayAnalysis}
-                isAnalyzing={isAnalyzing}
-                analysisStep={analysisStep}
-                analysisMessage={analysisMessage}
-                onReAnalyze={handleAnalyze}
+          {/* Vertical resizable divider */}
+          <ResizableDivider
+            direction="vertical"
+            onResize={(delta) => {
+              const maxTop = (rightPanelRef.current?.clientHeight ?? rightPanelHeight) - 120;
+              const newHeight = Math.max(150, Math.min(effectiveTopHeight + delta, maxTop));
+              handleTopHeightChange(newHeight);
+            }}
+          />
+
+          {/* Bottom Zone: AI Chat */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: '120px' }}>
+            {/* Chat header with model badge */}
+            <div className="flex items-center justify-between px-4" style={{ height: '36px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>AI Chat</span>
+              {modelName && (
+                <span
+                  className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full"
+                  style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-tertiary)' }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--green)' }} />
+                  {modelName}
+                </span>
+              )}
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-auto px-4">
+              <ChatMessages
+                messages={chatMessages}
+                streamingContent={streamingContent}
+                isStreaming={isChatStreaming}
               />
-            ) : (
-              <NotesPanel
-                paperId={paperId}
-                currentPage={currentPage}
-                onPageChange={setCurrentPage}
-              />
-            )}
+            </div>
+
+            {/* Input */}
+            <div className="px-4 pb-3 pt-2">
+              <ChatInput onSend={handleSendMessage} disabled={isChatStreaming} />
+            </div>
           </div>
         </div>
       </div>
-
-      <ChatButton
-        ref={chatButtonRef}
-        isOpen={isChatOpen}
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        position={buttonPos}
-        onPositionChange={setButtonPos}
-      />
-      <ChatDialog
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-        buttonRef={chatButtonRef}
-        messages={chatMessages}
-        streamingContent={streamingContent}
-        isStreaming={isChatStreaming}
-        onSend={handleSendMessage}
-        buttonPosition={buttonPos}
-      />
-    </>
+    </div>
   );
 }
