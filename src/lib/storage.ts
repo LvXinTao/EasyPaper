@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import type { PaperMetadata, PaperAnalysis, ChatHistory, PaperListItem, Note } from '@/types';
+import type { PaperMetadata, PaperAnalysis, ChatHistory, PaperListItem, Note, Folder } from '@/types';
 
 function getDataDir(): string {
   return process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -27,6 +27,13 @@ export const storage = {
     const filePath = path.join(paperDir(paperId), 'metadata.json');
     const content = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(content);
+  },
+  async updateMetadata(paperId: string, updates: Partial<PaperMetadata>): Promise<PaperMetadata> {
+    const current = await this.getMetadata(paperId);
+    const { id: _ignoreId, ...safeUpdates } = updates;
+    const merged = { ...current, ...safeUpdates };
+    await this.saveMetadata(paperId, merged);
+    return merged;
   },
   async savePdf(paperId: string, buffer: Buffer): Promise<void> {
     const filePath = path.join(paperDir(paperId), 'original.pdf');
@@ -86,7 +93,7 @@ export const storage = {
       for (const dir of dirs) {
         try {
           const metadata = await this.getMetadata(dir);
-          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status });
+          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null });
         } catch { /* Skip directories without valid metadata */ }
       }
       return papers;

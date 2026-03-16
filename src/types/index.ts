@@ -7,6 +7,7 @@ export interface PaperMetadata {
   pages: number;
   createdAt: string;
   status: PaperStatus;
+  folderId?: string | null;
 }
 
 export interface AnalysisSection {
@@ -66,6 +67,7 @@ export interface PaperListItem {
   title: string;
   createdAt: string;
   status: PaperStatus;
+  folderId?: string | null;
 }
 
 export interface PaperData {
@@ -73,6 +75,12 @@ export interface PaperData {
   analysis: PaperAnalysis | null;
   parsedContent: string | null;
   chatHistory: ChatHistory;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
 }
 
 export type NoteTag = 'important' | 'question' | 'todo' | 'idea' | 'summary';
