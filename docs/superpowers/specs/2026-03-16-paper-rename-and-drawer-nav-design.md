@@ -19,7 +19,7 @@ Currently:
 
 ### Interaction
 
-In the paper detail page header (currently line 179 of `page.tsx`), the title `<h1>` becomes an inline-editable field:
+In the paper detail page header, the `<h1>` that displays `data.metadata.title` becomes an inline-editable field:
 
 - **Default state**: Title text displayed with `cursor-pointer` and a dashed underline on hover, signaling editability.
 - **Edit state**: Clicking the title replaces it with an `<input>` element. The input is auto-focused with text fully selected.
@@ -62,11 +62,13 @@ async updateMetadata(paperId: string, updates: Partial<PaperMetadata>): Promise<
 
 Reads the current metadata, merges with `updates`, writes back, and returns the merged result. The `id` field in `updates` is ignored (cannot change paper ID).
 
+Note: This is a read-modify-write pattern on a JSON file. Concurrent calls could race (e.g., rename + status change from analyze). This is an accepted limitation for a file-based single-user app. If it becomes an issue, a simple file lock (e.g., `proper-lockfile`) can be added later.
+
 ### Frontend Integration
 
 In `src/app/paper/[id]/page.tsx`:
 - Replace the `<h1>{data.metadata.title}</h1>` with `<EditableTitle value={data.metadata.title} onSave={handleRename} />`.
-- `handleRename` calls `PATCH /api/paper/{paperId}` then calls `refetch()` to refresh paper data.
+- `handleRename` calls `PATCH /api/paper/{paperId}` then calls `refetch()` (from the existing `usePaper` hook) to refresh paper data. The `usePaper` hook already provides `refetch` — no hook changes needed.
 
 ## Feature 2: Folder Navigation Drawer
 
@@ -77,9 +79,9 @@ Create a new file `config/folders.json` to store the folder tree:
 ```json
 {
   "folders": [
-    { "id": "nlp", "name": "NLP", "parentId": null },
-    { "id": "nlp/transformer", "name": "Transformer", "parentId": "nlp" },
-    { "id": "cv", "name": "计算机视觉", "parentId": null }
+    { "id": "f_abc123", "name": "NLP", "parentId": null },
+    { "id": "f_def456", "name": "Transformer", "parentId": "f_abc123" },
+    { "id": "f_ghi789", "name": "计算机视觉", "parentId": null }
   ]
 }
 ```
@@ -94,7 +96,7 @@ interface Folder {
 }
 ```
 
-Folder `id` uses a path-like format: root folders use a slug (e.g., `"nlp"`), nested folders append to the parent (e.g., `"nlp/transformer"`). This makes hierarchy explicit without requiring recursive lookups.
+Folder `id` uses a UUID-style format with a `f_` prefix (e.g., `f_abc123`). This avoids conflicts with Next.js dynamic routing (no slashes in IDs) and ensures uniqueness.
 
 ### Paper-Folder Association
 
@@ -114,12 +116,12 @@ Add `folderId` to `PaperListItem` as well so the drawer can build the tree from 
 Create `src/app/api/folders/route.ts`:
 
 - `GET /api/folders` — Returns `{ folders: Folder[] }` from `config/folders.json`.
-- `POST /api/folders` — Create a folder. Body: `{ name: string, parentId?: string }`. Auto-generates `id` from parent path + slug. Returns `{ folder: Folder }`.
+- `POST /api/folders` — Create a folder. Body: `{ name: string, parentId?: string }`. Generates a unique `id` with `f_` prefix + short UUID. Folder name must be non-empty after trimming, max 100 characters. Duplicate names under the same parent are allowed (distinguished by ID). Returns `{ folder: Folder }`.
 
 Create `src/app/api/folders/[id]/route.ts`:
 
 - `PATCH /api/folders/{id}` — Rename a folder. Body: `{ name: string }`. Returns `{ folder: Folder }`.
-- `DELETE /api/folders/{id}` — Delete a folder. Papers in it move to its parent (or root if top-level). Also deletes all sub-folders, moving their papers up likewise. Returns `{ success: true }`.
+- `DELETE /api/folders/{id}` — Delete a folder and all its descendant sub-folders. All papers in the deleted folder and any descendant folders are moved to the deleted folder's parent (or root if the deleted folder was top-level). Returns `{ success: true }`. Confirmation is handled client-side before calling this endpoint.
 
 ### Moving Papers Between Folders
 
@@ -139,17 +141,25 @@ Update `listPapers()` to include `folderId` in the returned `PaperListItem` obje
 
 ### Drawer Trigger
 
-Add a hamburger menu button (three horizontal lines) to the left side of the Navbar, before the logo. This button only appears on paper detail pages (`/paper/[id]`).
+Currently `Navbar` is rendered in `layout.tsx` (a server component), so the paper detail page cannot pass props to it directly. To solve this, the hamburger button and drawer are rendered **inside the paper detail page** rather than inside Navbar.
 
-The Navbar component gains optional props:
+Add the hamburger button as a fixed-position element that visually appears in the Navbar area but is actually rendered by the paper detail page. It sits at the left edge of the Navbar, using `fixed` positioning with matching Navbar height and styling:
 
-```ts
-interface NavbarProps {
-  onToggleDrawer?: () => void;  // present = show hamburger button
-}
+```tsx
+// Rendered by paper detail page, visually overlays the Navbar's left area
+<button
+  className="fixed top-0 left-0 z-40 h-[52px] px-3 flex items-center"
+  onClick={() => setDrawerOpen(prev => !prev)}
+>
+  {/* hamburger icon */}
+</button>
 ```
 
-When `onToggleDrawer` is not provided (e.g., on the home page), the hamburger button is not rendered.
+To make room for this button, adjust the Navbar's left padding when on a paper detail page. This can be done by adding a CSS class to the `<main>` element or by having the Navbar always include left padding (since it doesn't hurt on the home page — the slight extra padding is negligible).
+
+Alternative: simply render the hamburger button overlapping the Navbar area. Since the Navbar's left side has the "EP EasyPaper" logo with some padding, the hamburger button can be placed to the left of the logo using absolute positioning within the paper detail page.
+
+The `Navbar` component itself is **not modified**. The `layout.tsx` is **not modified**.
 
 ### Drawer Component
 
@@ -164,10 +174,11 @@ interface PaperDrawerProps {
 ```
 
 **Layout:**
-- Overlay: semi-transparent black backdrop, click to close, z-index above main content but below Navbar modals.
-- Panel: slides in from the left, 320px wide, white background, full height below Navbar.
+- Overlay: semi-transparent black backdrop (`bg-black/30`), click to close. Uses `z-30` (below the Settings modal at `z-50` and below the hamburger button at `z-40`).
+- Panel: slides in from the left, 320px wide, white background, full height below Navbar. Uses `z-30` (same layer as overlay, but rendered after it).
 - Animation: CSS transition, 200ms slide in/out.
 - Close: click backdrop, press Escape, or click a paper to navigate.
+- Accessibility: drawer panel has `role="dialog"`, `aria-label="Paper navigation"`. Focus is trapped inside the drawer while open. On close, focus returns to the hamburger button.
 
 **Content (top to bottom):**
 
@@ -182,7 +193,7 @@ interface PaperDrawerProps {
 
 3. **Folder context menu** (⋯ button): New sub-folder, Rename, Delete folder.
 
-4. **Paper context menu** (right-click or long-press): "Move to..." (opens a folder picker), "Delete paper".
+4. **Paper context menu** (right-click or long-press): "Move to..." (opens a folder picker), "Delete paper" (shows confirmation dialog before deleting).
 
 **Move-to picker**: A small modal/popover showing the folder tree with radio-button selection. Includes a "Root (no folder)" option. Selecting a folder and confirming moves the paper.
 
@@ -199,9 +210,11 @@ The drawer open/close state lives in the paper detail page (`page.tsx`):
 const [drawerOpen, setDrawerOpen] = useState(false);
 ```
 
-Passed down:
-- `Navbar` receives `onToggleDrawer={() => setDrawerOpen(prev => !prev)}`
-- `PaperDrawer` receives `open={drawerOpen}` and `onClose={() => setDrawerOpen(false)}`
+The paper detail page renders:
+- The hamburger button (fixed-position overlay on Navbar area)
+- `<PaperDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} currentPaperId={paperId} />`
+
+The Navbar component is not involved in drawer state management.
 
 ### Home Page Integration
 
@@ -211,13 +224,9 @@ Future consideration: the home page could adopt the folder view, but that's out 
 
 ### Upload with Folder Selection
 
-Update the upload flow to optionally specify a target folder:
+Not changed in this iteration. Uploads always go to root (no `folderId`). Users can move papers to folders via the drawer after upload.
 
-- `POST /api/upload` gains an optional `folderId` field in the form data.
-- If provided, the created `metadata.json` includes `folderId`.
-- The `UploadZone` component is not changed in this iteration — uploads always go to root. Users can move papers to folders via the drawer after upload.
-
-Future consideration: add a folder picker to the upload dialog, but that's out of scope for now.
+Future consideration: add a folder picker to the upload dialog.
 
 ## Files Changed
 
@@ -230,13 +239,15 @@ Future consideration: add a folder picker to the upload dialog, but that's out o
 | `src/app/api/folders/[id]/route.ts` | Create | `PATCH` and `DELETE` for folder rename/delete |
 | `src/components/editable-title.tsx` | Create | Inline-editable title component |
 | `src/components/paper-drawer.tsx` | Create | Drawer with folder tree, search, context menus |
-| `src/components/navbar.tsx` | Modify | Add optional hamburger button |
-| `src/app/paper/[id]/page.tsx` | Modify | Integrate EditableTitle, drawer state, pass props to Navbar |
+| `src/app/paper/[id]/page.tsx` | Modify | Integrate EditableTitle, drawer state, hamburger button |
 
 ## Files NOT Changed
 
+- `src/components/navbar.tsx` — Hamburger button is rendered by the paper detail page, not inside Navbar
+- `src/app/layout.tsx` — No changes to the root layout
 - `src/app/page.tsx` — Home page stays as flat list (future scope)
 - `src/components/upload-zone.tsx` — Upload doesn't include folder picker (future scope)
+- `src/app/api/upload/route.ts` — No upload changes (future scope)
 - `src/lib/prompts.ts` — No AI prompt changes
 - Storage layout on disk — Papers stay in `data/papers/{paperId}/`, folder association is metadata-only
 
