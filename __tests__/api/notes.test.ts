@@ -43,7 +43,7 @@ describe('POST /api/paper/[id]/notes', () => {
     });
     const response = await POST(request, makeContext('p1'));
     const data = await response.json();
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect(data.title).toBe('New Note');
     expect(data.content).toBe('# Hi');
     expect(data.tags).toEqual(['important']);
