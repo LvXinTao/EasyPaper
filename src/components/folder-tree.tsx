@@ -5,14 +5,6 @@ import { useRouter } from 'next/navigation';
 import type { Folder, PaperListItem } from '@/types';
 import { formatRelativeTime } from '@/lib/format';
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Pending' },
-  parsing: { bg: 'bg-sky-100', text: 'text-sky-700', label: 'Parsing' },
-  analyzing: { bg: 'bg-violet-100', text: 'text-violet-700', label: 'Analyzing' },
-  analyzed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Analyzed' },
-  error: { bg: 'bg-rose-100', text: 'text-rose-700', label: 'Error' },
-};
-
 interface FolderTreeProps {
   folders: Folder[];
   papers: PaperListItem[];
@@ -24,6 +16,8 @@ interface FolderTreeProps {
   onDeleteFolder: (folderId: string) => Promise<void>;
   onMovePaper: (paperId: string, folderId: string | null) => Promise<void>;
   onDeletePaper: (paperId: string) => Promise<void>;
+  onSelectFolder?: (folderId: string | null) => void;
+  selectedFolderId?: string | null;
 }
 
 function PaperRow({
@@ -44,7 +38,6 @@ function PaperRow({
   folders: Folder[];
 }) {
   const router = useRouter();
-  const status = STATUS_COLORS[paper.status] || STATUS_COLORS.pending;
   const relTime = formatRelativeTime(paper.createdAt);
   const [showMenu, setShowMenu] = useState(false);
   const [showMovePicker, setShowMovePicker] = useState(false);
@@ -58,38 +51,45 @@ function PaperRow({
             onClose();
           }
         }}
-        className={`flex items-start gap-2 px-3 py-2 cursor-pointer text-sm transition-colors ${
-          isCurrent
-            ? 'bg-indigo-50 border-l-2 border-indigo-500'
-            : 'hover:bg-slate-50 border-l-2 border-transparent'
-        }`}
-        style={{ paddingLeft: `${12 + depth * 20}px` }}
+        className="flex items-start gap-2 px-3 py-2 cursor-pointer text-sm transition-colors"
+        style={{
+          paddingLeft: `${12 + depth * 20}px`,
+          background: isCurrent ? 'var(--accent-subtle)' : 'transparent',
+          borderLeft: isCurrent ? '2px solid var(--accent)' : '2px solid transparent',
+        }}
       >
-        <span className="text-slate-400 mt-0.5 flex-shrink-0">📄</span>
+        <span style={{ color: 'var(--text-tertiary)', marginTop: '2px', flexShrink: 0 }}>📄</span>
         <div className="flex-1 min-w-0">
-          <div className={`truncate ${isCurrent ? 'font-semibold text-indigo-700' : 'text-slate-700'}`}>
+          <div
+            className="truncate"
+            style={{
+              color: isCurrent ? 'var(--accent)' : 'var(--text-primary)',
+              fontWeight: isCurrent ? 600 : 400,
+            }}
+          >
             {paper.title}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status.bg} ${status.text}`}>
-              {status.label}
-            </span>
-            {relTime && <span className="text-[11px] text-slate-400">{relTime}</span>}
+            {relTime && <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{relTime}</span>}
           </div>
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          className="text-slate-300 hover:text-slate-500 flex-shrink-0 p-0.5"
+          style={{ color: 'var(--text-tertiary)', flexShrink: 0, padding: '2px' }}
         >
           ⋯
         </button>
       </div>
 
       {showMenu && (
-        <div className="absolute right-2 top-full z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-40">
+        <div
+          className="absolute right-2 top-full z-50 rounded-lg shadow-lg py-1 w-40"
+          style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
+        >
           <button
             onClick={() => { setShowMenu(false); setShowMovePicker(true); }}
-            className="w-full text-left px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            className="w-full text-left px-3 py-1.5 text-sm"
+            style={{ color: 'var(--text-secondary)' }}
           >
             📂 Move to...
           </button>
@@ -100,7 +100,8 @@ function PaperRow({
                 onDeletePaper(paper.id);
               }
             }}
-            className="w-full text-left px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50"
+            className="w-full text-left px-3 py-1.5 text-sm"
+            style={{ color: 'var(--text-secondary)' }}
           >
             🗑️ Delete
           </button>
@@ -139,7 +140,7 @@ function MoveToPicker({
     return (
       <div key={folder.id}>
         <label
-          className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer"
+          className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
           style={{ paddingLeft: `${12 + depth * 16}px` }}
         >
           <input
@@ -147,9 +148,8 @@ function MoveToPicker({
             name="moveTarget"
             checked={selected === folder.id}
             onChange={() => setSelected(folder.id)}
-            className="accent-indigo-500"
           />
-          <span className="text-sm text-slate-700">📁 {folder.name}</span>
+          <span className="text-sm" style={{ color: 'var(--text-primary)' }}>📁 {folder.name}</span>
         </label>
         {children.map((c) => renderFolderOption(c, depth + 1))}
       </div>
@@ -157,24 +157,36 @@ function MoveToPicker({
   }
 
   return (
-    <div className="absolute right-0 top-full z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-56 py-2">
-      <div className="px-3 py-1 text-xs font-medium text-slate-400 uppercase">Move to</div>
-      <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
+    <div
+      className="absolute right-0 top-full z-50 rounded-lg shadow-lg w-56 py-2"
+      style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
+    >
+      <div className="px-3 py-1 text-xs font-medium uppercase" style={{ color: 'var(--text-tertiary)' }}>Move to</div>
+      <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer">
         <input
           type="radio"
           name="moveTarget"
           checked={selected === null}
           onChange={() => setSelected(null)}
-          className="accent-indigo-500"
         />
-        <span className="text-sm text-slate-700">📁 Root (no folder)</span>
+        <span className="text-sm" style={{ color: 'var(--text-primary)' }}>📁 Root (no folder)</span>
       </label>
       {rootFolders.map((f) => renderFolderOption(f, 0))}
-      <div className="flex justify-end gap-2 px-3 pt-2 mt-1 border-t border-slate-100">
-        <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+      <div
+        className="flex justify-end gap-2 px-3 pt-2 mt-1"
+        style={{ borderTop: '1px solid var(--border)' }}
+      >
+        <button
+          onClick={onClose}
+          className="text-xs"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          Cancel
+        </button>
         <button
           onClick={() => onSelect(selected)}
-          className="text-xs text-white bg-indigo-500 px-2.5 py-1 rounded hover:bg-indigo-600"
+          className="text-xs px-2.5 py-1 rounded"
+          style={{ background: 'var(--accent)', color: 'var(--bg)', border: 'none' }}
         >
           Move
         </button>
@@ -196,6 +208,8 @@ function FolderRow({
   onDeleteFolder,
   onMovePaper,
   onDeletePaper,
+  onSelectFolder,
+  selectedFolderId,
 }: {
   folder: Folder;
   depth: number;
@@ -209,6 +223,8 @@ function FolderRow({
   onDeleteFolder: (folderId: string) => Promise<void>;
   onMovePaper: (paperId: string, folderId: string | null) => Promise<void>;
   onDeletePaper: (paperId: string) => Promise<void>;
+  onSelectFolder?: (folderId: string | null) => void;
+  selectedFolderId?: string | null;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -237,6 +253,8 @@ function FolderRow({
   }
   const totalPapers = papers.filter((p) => p.folderId && allDescendantIds.has(p.folderId)).length;
 
+  const isSelected = selectedFolderId === folder.id;
+
   const handleRename = async () => {
     const trimmed = renameValue.trim();
     if (trimmed && trimmed !== folder.name) {
@@ -257,12 +275,23 @@ function FolderRow({
   return (
     <div>
       <div
-        className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-slate-50 cursor-pointer group"
-        style={{ paddingLeft: `${8 + depth * 20}px` }}
+        className="flex items-center gap-1.5 cursor-pointer group transition-colors"
+        style={{
+          paddingLeft: `${8 + depth * 20}px`,
+          paddingTop: '6px',
+          paddingBottom: '6px',
+          paddingRight: '12px',
+          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+        }}
+        onClick={() => {
+          setExpanded(!expanded);
+          onSelectFolder?.(folder.id);
+        }}
       >
         <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-[11px] text-slate-400 w-4 flex-shrink-0"
+          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+          className="text-[11px] w-4 flex-shrink-0"
+          style={{ color: 'var(--text-tertiary)' }}
         >
           {expanded ? '▼' : '▶'}
         </button>
@@ -278,37 +307,49 @@ function FolderRow({
               if (e.key === 'Enter') handleRename();
               if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); }
             }}
-            className="text-sm font-medium border border-indigo-400 rounded px-1 py-0.5 outline-none flex-1 min-w-0"
+            className="text-sm font-medium rounded px-1 py-0.5 outline-none flex-1 min-w-0"
+            style={{
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface)',
+              color: 'var(--text-primary)',
+            }}
             maxLength={100}
+            onClick={(e) => e.stopPropagation()}
           />
         ) : (
           <span
-            onClick={() => setExpanded(!expanded)}
-            className="text-sm font-medium text-slate-800 truncate flex-1"
+            className="text-sm font-medium truncate flex-1"
+            style={{ color: isSelected ? 'var(--accent)' : 'var(--text-primary)' }}
           >
             {folder.name}
           </span>
         )}
 
-        <span className="text-[11px] text-slate-400 flex-shrink-0">{totalPapers}</span>
+        <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>{totalPapers}</span>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-            className="text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+            style={{ color: 'var(--text-tertiary)' }}
           >
             ⋯
           </button>
           {showMenu && (
-            <div className="absolute right-0 top-full z-50 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-44">
+            <div
+              className="absolute right-0 top-full z-50 rounded-lg shadow-lg py-1 w-44"
+              style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
+            >
               <button
                 onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
-                className="w-full text-left px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 📁 New sub-folder
               </button>
               <button
                 onClick={() => { setShowMenu(false); setIsRenaming(true); setRenameValue(folder.name); }}
-                className="w-full text-left px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 ✏️ Rename
               </button>
@@ -319,7 +360,8 @@ function FolderRow({
                     onDeleteFolder(folder.id);
                   }
                 }}
-                className="w-full text-left px-3 py-1.5 text-sm text-rose-600 hover:bg-rose-50"
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 🗑️ Delete folder
               </button>
@@ -329,7 +371,12 @@ function FolderRow({
       </div>
 
       {expanded && (
-        <div className={depth > 0 ? 'border-l border-slate-200' : ''} style={{ marginLeft: `${20 + depth * 20}px` }}>
+        <div
+          style={{
+            marginLeft: `${20 + depth * 20}px`,
+            borderLeft: depth > 0 ? '1px solid var(--border)' : undefined,
+          }}
+        >
           {isCreatingChild && (
             <div className="flex items-center gap-2 px-3 py-1.5">
               <span>📁</span>
@@ -343,7 +390,12 @@ function FolderRow({
                   if (e.key === 'Enter') handleCreateChild();
                   if (e.key === 'Escape') setIsCreatingChild(false);
                 }}
-                className="text-sm border border-indigo-400 rounded px-1 py-0.5 outline-none flex-1"
+                className="text-sm rounded px-1 py-0.5 outline-none flex-1"
+                style={{
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)',
+                }}
                 maxLength={100}
               />
             </div>
@@ -363,6 +415,8 @@ function FolderRow({
               onDeleteFolder={onDeleteFolder}
               onMovePaper={onMovePaper}
               onDeletePaper={onDeletePaper}
+              onSelectFolder={onSelectFolder}
+              selectedFolderId={selectedFolderId}
             />
           ))}
           {folderPapers.map((paper) => (
@@ -384,7 +438,7 @@ function FolderRow({
 }
 
 export function FolderTree(props: FolderTreeProps) {
-  const { folders, papers, currentPaperId, searchQuery, onClose, onCreateFolder, onRenameFolder, onDeleteFolder, onMovePaper, onDeletePaper } = props;
+  const { folders, papers, currentPaperId, searchQuery, onClose, onCreateFolder, onRenameFolder, onDeleteFolder, onMovePaper, onDeletePaper, onSelectFolder, selectedFolderId } = props;
 
   const rootFolders = useMemo(
     () => folders.filter((f) => !f.parentId).sort((a, b) => a.name.localeCompare(b.name)),
@@ -416,6 +470,8 @@ export function FolderTree(props: FolderTreeProps) {
           onDeleteFolder={onDeleteFolder}
           onMovePaper={onMovePaper}
           onDeletePaper={onDeletePaper}
+          onSelectFolder={onSelectFolder}
+          selectedFolderId={selectedFolderId}
         />
       ))}
       {rootPapers.map((paper) => (
