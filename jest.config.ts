@@ -6,6 +6,7 @@ const config: Config = {
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^react-markdown$': '<rootDir>/__mocks__/react-markdown.tsx',
   },
 };
 export default createJestConfig(config);

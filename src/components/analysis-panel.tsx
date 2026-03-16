@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { PaperAnalysis } from '@/types';
 import { SectionTabs } from './section-tabs';
+import { MarkdownContent } from './markdown-content';
 
 export function formatRelativeTime(dateStr: string): string | null {
   const date = new Date(dateStr);
@@ -44,19 +45,12 @@ function SectionContent({
   if (!sectionData || typeof sectionData === 'string') return null;
 
   if (section === 'contributions' && 'items' in sectionData) {
-    return (
-      <ul className="list-disc pl-5 space-y-2">
-        {sectionData.items.map((item, i) => (
-          <li key={i} className="text-slate-700 leading-relaxed">{item}</li>
-        ))}
-      </ul>
-    );
+    const markdown = sectionData.items.map((item) => `- ${item}`).join('\n');
+    return <MarkdownContent content={markdown} />;
   }
 
   if ('content' in sectionData) {
-    return (
-      <div className="text-slate-700 whitespace-pre-wrap leading-relaxed">{sectionData.content}</div>
-    );
+    return <MarkdownContent content={sectionData.content} />;
   }
 
   return null;
