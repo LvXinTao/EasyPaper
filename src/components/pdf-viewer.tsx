@@ -410,9 +410,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
           const range = selection.getRangeAt(i);
 
           // Walk text nodes in the selection to extract highlight rects.
-          // getClientRects() returns screen-space coordinates that already include
-          // CSS scaleX transforms, so we use them directly. Each rect is clamped
-          // to its containing span's visual boundary to prevent overflow.
+          // Uses canvas pixel scanning to find actual text boundaries,
+          // bypassing font mismatch between text layer and PDF canvas.
           const walker = document.createTreeWalker(
             textLayerEl,
             NodeFilter.SHOW_TEXT,
@@ -421,35 +420,76 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
           while (walker.nextNode()) {
             const textNode = walker.currentNode;
+            const spanEl = textNode.parentElement as HTMLElement | null;
+            if (!spanEl || spanEl === textLayerEl) continue;
 
-            // Create a range for just the selected portion of this text node
-            const nodeRange = document.createRange();
-            nodeRange.setStart(textNode, textNode === range.startContainer ? range.startOffset : 0);
-            nodeRange.setEnd(textNode, textNode === range.endContainer ? range.endOffset : (textNode.textContent?.length || 0));
+            const fullText = textNode.textContent || '';
+            const startOff = textNode === range.startContainer ? range.startOffset : 0;
+            let endOff = textNode === range.endContainer ? range.endOffset : fullText.length;
 
-            // getClientRects() returns screen-space coordinates that already include
-            // CSS transforms (scaleX, scale, rotate). Use them directly.
-            // Additionally, clamp each rect's right edge to the containing span's
-            // visual boundary to prevent overflow beyond the text item.
-            let spanRight = Infinity;
-            const spanEl = textNode.parentElement;
-            if (spanEl && spanEl !== textLayerEl) {
-              spanRight = spanEl.getBoundingClientRect().right;
+            // Trim trailing whitespace
+            while (endOff > startOff && /\s/.test(fullText[endOff - 1])) {
+              endOff--;
             }
+            if (endOff <= startOff) continue;
+
+            const nodeRange = document.createRange();
+            nodeRange.setStart(textNode, startOff);
+            nodeRange.setEnd(textNode, endOff);
 
             const nodeRects = nodeRange.getClientRects();
+            const canvas = canvasRef.current;
+            const canvasCtx = canvas?.getContext('2d');
+
             for (let j = 0; j < nodeRects.length; j++) {
               const r = nodeRects[j];
-              if (r.width > 0 && r.height > 0) {
-                const left = r.left - wrapperRect.left;
-                // Clamp right edge to span boundary
-                const clampedRight = Math.min(r.right, spanRight);
-                const width = Math.max(0, clampedRight - r.left);
+              if (r.width <= 0 || r.height <= 0) continue;
 
-                if (width > 0) {
-                  rects.push({ left, top: r.top - wrapperRect.top, width, height: r.height });
+              const left = r.left - wrapperRect.left;
+              let width = r.width;
+
+              // Scan canvas pixels to find the actual right edge of visible text.
+              // The text layer uses browser-substituted fonts while the canvas uses
+              // PDF-embedded fonts, causing per-character width mismatches. Pixel
+              // scanning gives us the ground truth of where text actually ends.
+              if (canvasCtx && canvas) {
+                const scanWidth = Math.min(60, Math.ceil(r.width * 0.15));
+                const scanHeight = Math.max(3, Math.min(7, Math.floor(r.height * 0.4)));
+                const startX = Math.max(0, Math.floor(left + width - scanWidth));
+                const startY = Math.max(0, Math.floor(r.top - wrapperRect.top + (r.height - scanHeight) / 2));
+
+                try {
+                  const imageData = canvasCtx.getImageData(startX, startY, scanWidth, scanHeight);
+                  const pixels = imageData.data;
+
+                  // Find rightmost non-background column
+                  let rightmostCol = -1;
+                  for (let col = scanWidth - 1; col >= 0; col--) {
+                    let found = false;
+                    for (let row = 0; row < scanHeight; row++) {
+                      const idx = (row * scanWidth + col) * 4;
+                      if (pixels[idx] < 220 || pixels[idx + 1] < 220 || pixels[idx + 2] < 220) {
+                        found = true;
+                        break;
+                      }
+                    }
+                    if (found) {
+                      rightmostCol = col;
+                      break;
+                    }
+                  }
+
+                  if (rightmostCol >= 0) {
+                    // +2px padding for anti-aliased edges
+                    const adjustedRight = startX + rightmostCol + 2;
+                    width = Math.max(r.width * 0.8, adjustedRight - left);
+                  }
+                } catch {
+                  // Fallback to getClientRects width (e.g. cross-origin canvas)
                 }
               }
+
+              rects.push({ left, top: r.top - wrapperRect.top, width, height: r.height });
             }
           }
         }
