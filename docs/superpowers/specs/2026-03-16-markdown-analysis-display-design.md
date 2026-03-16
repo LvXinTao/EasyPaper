@@ -16,12 +16,14 @@ The project already has `react-markdown` v10 installed.
 
 Extract the `MarkdownContent` component from `src/components/chat-messages.tsx` into its own file `src/components/markdown-content.tsx`. This component already handles:
 
-- Headings (h1/h2 → h3, h3 → h4, compact sizing)
+- Headings: h1 and h2 both map to h3, h3 maps to h4 (compact sizing). h4+ are not remapped and pass through at native sizes — this is acceptable since the prompt will instruct the AI to use only `##` and `###` headings.
 - Paragraphs with proper spacing
 - Ordered and unordered lists
 - Bold/strong text
 - Inline and block code
 - Blockquotes
+
+The `MarkdownContent` component accepts a `className` prop for context-specific styling. `MarkdownContent` is currently a private function in `chat-messages.tsx` — the extraction step adds the export.
 
 Both `chat-messages.tsx` and `analysis-panel.tsx` will import from the shared component.
 
@@ -34,7 +36,7 @@ In `src/components/analysis-panel.tsx`, the `SectionContent` component currently
 
 Change both to use `MarkdownContent`:
 
-- **contributions**: Join items with `\n` separators, render each as a markdown list item (prefix with `- `), pass to `MarkdownContent`
+- **contributions**: Join items with `\n` separators, prefix each with `- `, pass to `MarkdownContent`. Note: this changes styling from the current `text-slate-700 leading-relaxed` per `<li>` to `MarkdownContent`'s `text-sm` list styling — this is intentional for visual consistency with markdown rendering elsewhere.
 - **other sections**: Pass `content` string directly to `MarkdownContent`
 
 This is backwards-compatible: `react-markdown` renders plain text as paragraphs, so existing analyses without markdown formatting still display correctly (just without rich formatting).
@@ -43,7 +45,7 @@ This is backwards-compatible: `react-markdown` renders plain text as paragraphs,
 
 Modify `ANALYSIS_PROMPT` in `src/lib/prompts.ts` to instruct the AI to use markdown formatting within the JSON content fields:
 
-- Add instruction: "Use Markdown formatting (headings, bullet lists, bold, etc.) within each content field to structure the text clearly"
+- Add instruction: "Use Markdown formatting (headings with ## and ###, bullet lists, bold, etc.) within each content field to structure the text clearly"
 - Keep the JSON structure requirement unchanged
 - Keep the language-matching requirement unchanged
 
