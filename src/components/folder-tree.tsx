@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo, useEffect } from 'react';
 import type { Folder, PaperListItem } from '@/types';
 
 interface FolderTreeProps {
@@ -156,21 +155,6 @@ function FolderRow({
   const [renameValue, setRenameValue] = useState(folder.name);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const menuBtnRef = useRef<HTMLButtonElement>(null);
-
-  const toggleMenu = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (showMenu) {
-      setShowMenu(false);
-      return;
-    }
-    if (menuBtnRef.current) {
-      const rect = menuBtnRef.current.getBoundingClientRect();
-      setMenuPos({ top: rect.bottom + 4, left: rect.right - 176 }); // 176 = w-44 = 11rem
-    }
-    setShowMenu(true);
-  }, [showMenu]);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -228,6 +212,8 @@ function FolderRow({
           paddingBottom: '6px',
           paddingRight: '12px',
           background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+          position: 'relative',
+          zIndex: showMenu ? 10 : undefined,
         }}
         onClick={() => {
           setExpanded(!expanded);
@@ -274,63 +260,56 @@ function FolderRow({
         <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>{totalPapers}</span>
         <div className="relative">
           <button
-            ref={menuBtnRef}
-            onClick={toggleMenu}
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
             style={{ color: 'var(--text-tertiary)' }}
           >
             ⋯
           </button>
-          {showMenu && menuPos && createPortal(
-            <>
-              <div
-                style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
-                onClick={(e) => { e.stopPropagation(); setShowMenu(false); }}
-              />
-              <div
-                style={{
-                  position: 'fixed',
-                  zIndex: 9999,
-                  top: menuPos.top,
-                  left: menuPos.left,
-                  width: '176px',
-                  borderRadius: '8px',
-                  padding: '4px 0',
-                  background: 'var(--surface)',
-                  border: '1px solid var(--glass-border)',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                }}
-                onClick={(e) => e.stopPropagation()}
+          {showMenu && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: '100%',
+                marginTop: '4px',
+                width: '176px',
+                borderRadius: '8px',
+                padding: '4px 0',
+                background: 'var(--bg)',
+                border: '1px solid var(--glass-border)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                zIndex: 50,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
               >
-                <button
-                  onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
-                  className="w-full text-left px-3 py-1.5 text-sm"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  📁 New sub-folder
-                </button>
-                <button
-                  onClick={() => { setShowMenu(false); setIsRenaming(true); setRenameValue(folder.name); }}
-                  className="w-full text-left px-3 py-1.5 text-sm"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  ✏️ Rename
-                </button>
-                <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    if (confirm(`Delete folder "${folder.name}" and all sub-folders? Papers will be moved to the parent.`)) {
-                      onDeleteFolder(folder.id);
-                    }
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  🗑️ Delete folder
-                </button>
-              </div>
-            </>,
-            document.body
+                📁 New sub-folder
+              </button>
+              <button
+                onClick={() => { setShowMenu(false); setIsRenaming(true); setRenameValue(folder.name); }}
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                ✏️ Rename
+              </button>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  if (confirm(`Delete folder "${folder.name}" and all sub-folders? Papers will be moved to the parent.`)) {
+                    onDeleteFolder(folder.id);
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 text-sm"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                🗑️ Delete folder
+              </button>
+            </div>
           )}
         </div>
       </div>
