@@ -6,9 +6,10 @@ interface ResizableDividerProps {
   direction: 'horizontal' | 'vertical';
   onResize: (delta: number) => void;
   onResizeEnd?: () => void;
+  barStyle?: React.CSSProperties;
 }
 
-export function ResizableDivider({ direction, onResize, onResizeEnd }: ResizableDividerProps) {
+export function ResizableDivider({ direction, onResize, onResizeEnd, barStyle }: ResizableDividerProps) {
   const isDragging = useRef(false);
   const lastPos = useRef(0);
   const dividerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +87,7 @@ export function ResizableDivider({ direction, onResize, onResizeEnd }: Resizable
           width: isHorizontal ? '3px' : '32px',
           height: isHorizontal ? '32px' : '3px',
           background: 'var(--border)',
+          ...barStyle,
         }}
       />
     </div>
