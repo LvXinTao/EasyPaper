@@ -396,7 +396,7 @@ export default function PaperDetailPage() {
               handleTopHeightChange(newHeight);
             }}
             barStyle={{
-              background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1)',
+              background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent), white 25%), var(--accent))',
               opacity: 0.6,
               width: '100%',
               borderRadius: 0,
@@ -414,7 +414,7 @@ export default function PaperDetailPage() {
                     width: '24px',
                     height: '24px',
                     borderRadius: '8px',
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                    background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent), white 25%))',
                   }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
