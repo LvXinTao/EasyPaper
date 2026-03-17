@@ -28,6 +28,11 @@ function PaperRow({
   return (
     <div
       className="truncate"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('application/x-paper-id', paper.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       style={{
         paddingLeft: `${10 + depth * 14}px`,
         paddingTop: '3px',
@@ -35,6 +40,7 @@ function PaperRow({
         paddingRight: '12px',
         fontSize: '11px',
         color: 'var(--text-primary)',
+        cursor: 'grab',
       }}
       title={paper.title}
     >

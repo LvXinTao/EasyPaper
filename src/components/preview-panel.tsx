@@ -123,7 +123,7 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
           <div className="relative">
             <button onClick={() => { setMenuOpen(!menuOpen); if (menuOpen) setFolderSubmenuOpen(false); }} className="cursor-pointer rounded-lg" style={{ padding: '5px 8px', fontSize: '11px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>⋯</button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 rounded-lg overflow-hidden z-10" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '140px' }}>
+              <div className="absolute right-0 top-full mt-1 rounded-lg z-10" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '140px' }}>
                 {onRename && (
                   <button
                     onClick={() => {
@@ -138,19 +138,19 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
                   </button>
                 )}
                 {onMovePaper && folders && folders.length > 0 && (
-                  <div className="relative">
+                  <div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setFolderSubmenuOpen(!folderSubmenuOpen); }}
                       className="w-full text-left cursor-pointer block"
                       style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}
                     >
-                      Move to folder {folderSubmenuOpen ? '◂' : '▸'}
+                      Move to folder {folderSubmenuOpen ? '▾' : '▸'}
                     </button>
                     {folderSubmenuOpen && (
-                      <div className="absolute left-full top-0 rounded-lg overflow-hidden" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '120px' }}>
-                        <button onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, null); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>No folder</button>
+                      <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+                        <button onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, null); }} className="w-full text-left cursor-pointer block" style={{ padding: '6px 12px 6px 24px', fontSize: '11px', color: 'var(--text-secondary)' }}>No folder</button>
                         {folders.map(f => (
-                          <button key={f.id} onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, f.id); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>{f.name}</button>
+                          <button key={f.id} onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, f.id); }} className="w-full text-left cursor-pointer block" style={{ padding: '6px 12px 6px 24px', fontSize: '11px', color: 'var(--text-secondary)' }}>{f.name}</button>
                         ))}
                       </div>
                     )}
