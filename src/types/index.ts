@@ -36,6 +36,22 @@ export interface ChatHistory {
   messages: ChatMessage[];
 }
 
+export interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
+}
+
+export interface ChatSessionMeta {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
 export interface AppSettings {
   baseUrl: string;
   apiKeyEncrypted: string;
@@ -60,7 +76,7 @@ export type AnalyzeEvent =
 
 export type ChatEvent =
   | { content: string }
-  | { done: true };
+  | { done: true; sessionId: string };
 
 export interface PaperListItem {
   id: string;
@@ -74,7 +90,7 @@ export interface PaperData {
   metadata: PaperMetadata;
   analysis: PaperAnalysis | null;
   parsedContent: string | null;
-  chatHistory: ChatHistory;
+  chatHistory?: ChatHistory;
 }
 
 export interface Folder {
