@@ -30,8 +30,8 @@ Each session file:
 }
 ```
 
-- **ID generation**: `session_` + timestamp
-- **Title**: First user message, truncated to 30 characters
+- **ID generation**: `session_` + `Date.now()` + `_` + 6-char random suffix (e.g., `session_1710672000000_a3xk2f`) to avoid collision on rapid creation
+- **Title**: Default "New Chat" on creation. Auto-updated to first user message (truncated to 30 characters) when the first message is sent via `/api/chat`
 - **Delete**: Remove the file
 
 ## API Design
@@ -67,16 +67,21 @@ Request body changes from `{ paperId, message }` to `{ paperId, sessionId?, mess
 - If `sessionId` is omitted, a new session is created automatically.
 - SSE `done` event returns `{ done: true, sessionId: "xxx" }` so the frontend can track which session received the message.
 
+### App Router File Paths
+
+- `src/app/api/paper/[id]/chat-sessions/route.ts` — handles GET (list) and POST (create)
+- `src/app/api/paper/[id]/chat-sessions/[sessionId]/route.ts` — handles DELETE
+
 ## Storage Layer
 
 New methods in `src/lib/storage.ts`:
 
-- `listChatSessions(paperId)` — Read `chat-sessions/` directory, return session metadata (no messages), sorted by `updatedAt` descending
+- `listChatSessions(paperId)` — Read `chat-sessions/` directory, return session metadata (no messages), sorted by `updatedAt` descending. **Calls `migrateChatHistory` internally** before reading, so migration is transparent to all callers.
 - `getChatSession(paperId, sessionId)` — Read single session file with full messages
-- `createChatSession(paperId)` — Create empty session file, return new session object
+- `createChatSession(paperId)` — Create empty session file with title "New Chat", return new session object
 - `saveChatSession(paperId, session)` — Write session file, auto-update `updatedAt`
 - `deleteChatSession(paperId, sessionId)` — Delete session file
-- `migrateChatHistory(paperId)` — Check for old `chat-history.json`, migrate to session file if found, then delete old file
+- `migrateChatHistory(paperId)` — Check for old `chat-history.json`, migrate to session file if found, then delete old file. No-op if already migrated.
 
 Existing `saveChatHistory` / `getChatHistory` deprecated.
 
@@ -126,9 +131,10 @@ const [showSessionBar, setShowSessionBar] = useState(true);
 6. **Click "×"** → Show delete confirmation popover
 7. **Confirm delete** → `DELETE` session; if it was active, switch to next available session; if none left, show empty state
 
-## New Types
+## New & Updated Types
 
 ```typescript
+// New types
 interface ChatSession {
   id: string;
   title: string;
@@ -144,11 +150,22 @@ interface ChatSessionMeta {
   updatedAt: string;
   messageCount: number;
 }
+
+// Updated type — add sessionId to done event
+type ChatEvent =
+  | { content: string }
+  | { done: true; sessionId: string };
 ```
+
+`PaperData.chatHistory` field becomes optional and deprecated. New code should use the session APIs instead of relying on `chatHistory` from `usePaper`.
 
 ## Backward Compatibility
 
-- `GET /api/paper/{id}/chat-sessions` checks on first call: if `chat-sessions/` doesn't exist but `chat-history.json` does, auto-migrate
-- Migration: read old file → create one session file (title from first user message, up to 30 chars) → delete old file
+- `listChatSessions` calls `migrateChatHistory` internally, so migration is transparent
+- Migration: read old `chat-history.json` → create one session file (title from first user message up to 30 chars, or "New Chat" if no user messages) → delete old file
 - Migration happens once, transparently
-- `usePaper` hook's `chatHistory` field deprecated; new logic uses session APIs
+- `PaperData.chatHistory` becomes optional; new code uses session APIs
+
+## Known Limitations
+
+- **Concurrent writes**: If the same session is open in multiple browser tabs, simultaneous messages could cause data loss (read-modify-write race). The frontend mitigates this by disabling the send button during streaming, but cross-tab concurrency is not protected. This is a pre-existing limitation inherited from the original single-history design.
