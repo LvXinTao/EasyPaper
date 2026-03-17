@@ -101,7 +101,7 @@ export default function HomePage() {
       {/* Column 1: Folder Sidebar */}
       <div
         className="flex flex-col overflow-y-auto"
-        style={{ width: '200px', padding: '14px 10px', borderRight: '1px solid var(--border)', background: 'rgba(255,255,255,0.012)' }}
+        style={{ width: '15%', minWidth: '180px', padding: '14px 10px', borderRight: '1px solid var(--border)', background: 'rgba(255,255,255,0.012)' }}
       >
         <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', padding: '8px 10px 5px', fontWeight: 600 }}>
           Library
@@ -140,7 +140,7 @@ export default function HomePage() {
       {/* Column 2: Paper List */}
       <div
         className="flex flex-col"
-        style={{ width: '300px', borderRight: '1px solid var(--border)' }}
+        style={{ width: '25%', minWidth: '280px', borderRight: '1px solid var(--border)' }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleCol2Drop}
       >
