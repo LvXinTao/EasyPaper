@@ -53,7 +53,7 @@ function PaperRow({
         }}
         className="flex items-start gap-2 px-3 py-2 cursor-pointer text-sm transition-colors"
         style={{
-          paddingLeft: `${12 + depth * 20}px`,
+          paddingLeft: `${10 + depth * 14}px`,
           background: isCurrent ? 'var(--accent-subtle)' : 'transparent',
           borderLeft: isCurrent ? '2px solid var(--accent)' : '2px solid transparent',
         }}
@@ -61,7 +61,7 @@ function PaperRow({
         <span style={{ color: 'var(--text-tertiary)', marginTop: '2px', flexShrink: 0 }}>📄</span>
         <div className="flex-1 min-w-0">
           <div
-            className="truncate"
+            className="line-clamp-2"
             style={{
               color: isCurrent ? 'var(--accent)' : 'var(--text-primary)',
               fontWeight: isCurrent ? 600 : 400,
@@ -277,7 +277,7 @@ function FolderRow({
       <div
         className="flex items-center gap-1.5 cursor-pointer group transition-colors"
         style={{
-          paddingLeft: `${8 + depth * 20}px`,
+          paddingLeft: `${6 + depth * 14}px`,
           paddingTop: '6px',
           paddingBottom: '6px',
           paddingRight: '12px',
@@ -373,7 +373,7 @@ function FolderRow({
       {expanded && (
         <div
           style={{
-            marginLeft: `${20 + depth * 20}px`,
+            marginLeft: `${14 + depth * 14}px`,
             borderLeft: depth > 0 ? '1px solid var(--border)' : undefined,
           }}
         >

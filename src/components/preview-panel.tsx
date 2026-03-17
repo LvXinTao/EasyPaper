@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PaperListItem, PaperAnalysis, Note } from '@/types';
+import { MarkdownContent } from '@/components/markdown-content';
 
 interface PreviewPanelProps {
   paper: PaperListItem | null;
@@ -113,18 +114,16 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, folders 
         <>
           <div>
             <div className="uppercase" style={{ fontSize: '10px', letterSpacing: '0.8px', color: 'var(--text-tertiary)', fontWeight: 600, marginBottom: '6px' }}>Summary</div>
-            <div className="rounded-lg" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.65, background: 'var(--glass)', border: '1px solid var(--glass-border)', padding: '13px' }}>
-              {analysis.summary?.content || 'No summary available'}
+            <div className="rounded-lg" style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', padding: '13px' }}>
+              <MarkdownContent content={analysis.summary?.content || 'No summary available'} />
             </div>
           </div>
           {analysis.contributions?.items?.length > 0 && (
             <div>
               <div className="uppercase" style={{ fontSize: '10px', letterSpacing: '0.8px', color: 'var(--text-tertiary)', fontWeight: 600, marginBottom: '6px' }}>Key Contributions</div>
-              <div className="rounded-lg" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.65, background: 'var(--glass)', border: '1px solid var(--glass-border)', padding: '13px' }}>
-                {analysis.contributions.items.map((item, i) => (
-                  <div key={i}>• {item}</div>
-                ))}
-              </div>
+              <div className="rounded-lg" style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', padding: '13px' }}>
+              <MarkdownContent content={analysis.contributions.items.map((item: string) => '- ' + item).join('\n')} />
+            </div>
             </div>
           )}
         </>

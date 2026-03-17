@@ -1,9 +1,38 @@
 @import "tailwindcss";
 
 /* ============================================
-   Theme: Dark Minimal (default)
+   Theme: Light Minimal (default)
    ============================================ */
 :root,
+[data-theme="light-minimal"] {
+  --bg: #fafafa;
+  --bg-deep: #f0f0f2;
+  --surface: rgba(0, 0, 0, 0.02);
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.1);
+  --text-primary: #111113;
+  --text-secondary: #555566;
+  --text-tertiary: #888899;
+  --accent: #6b6b82;
+  --accent-subtle: rgba(107, 107, 130, 0.1);
+  --glass: rgba(0, 0, 0, 0.04);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --green: #16a34a;
+  --green-subtle: rgba(22, 163, 74, 0.08);
+  --amber: #d97706;
+  --amber-subtle: rgba(217, 119, 6, 0.08);
+  --blue: #2563eb;
+  --blue-subtle: rgba(37, 99, 235, 0.08);
+  --rose: #dc2626;
+  --rose-subtle: rgba(220, 38, 38, 0.08);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================
+   Theme: Dark Minimal
+   ============================================ */
 [data-theme="dark-minimal"] {
   --bg: #161618;
   --bg-deep: #121214;
@@ -28,35 +57,6 @@
   --rose-subtle: rgba(248, 113, 113, 0.08);
   --scrollbar-thumb: rgba(255, 255, 255, 0.08);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
-}
-
-/* ============================================
-   Theme: Light Minimal
-   ============================================ */
-[data-theme="light-minimal"] {
-  --bg: #fafafa;
-  --bg-deep: #f0f0f2;
-  --surface: rgba(0, 0, 0, 0.02);
-  --surface-hover: rgba(0, 0, 0, 0.04);
-  --border: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.1);
-  --text-primary: #1a1a1e;
-  --text-secondary: #6b6b7a;
-  --text-tertiary: #9b9baa;
-  --accent: #6b6b82;
-  --accent-subtle: rgba(107, 107, 130, 0.1);
-  --glass: rgba(0, 0, 0, 0.04);
-  --glass-border: rgba(0, 0, 0, 0.06);
-  --green: #16a34a;
-  --green-subtle: rgba(22, 163, 74, 0.08);
-  --amber: #d97706;
-  --amber-subtle: rgba(217, 119, 6, 0.08);
-  --blue: #2563eb;
-  --blue-subtle: rgba(37, 99, 235, 0.08);
-  --rose: #dc2626;
-  --rose-subtle: rgba(220, 38, 38, 0.08);
-  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================
