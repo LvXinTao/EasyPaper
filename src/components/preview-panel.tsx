@@ -21,6 +21,7 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
   const [chatCount, setChatCount] = useState(0);
   const [pages, setPages] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [folderSubmenuOpen, setFolderSubmenuOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
 
@@ -120,7 +121,7 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
             <button onClick={() => onAnalyze(paper.id)} className="cursor-pointer rounded-lg" style={{ padding: '5px 11px', fontSize: '11px', fontWeight: 500, background: 'var(--glass)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}>Analyze</button>
           )}
           <div className="relative">
-            <button onClick={() => setMenuOpen(!menuOpen)} className="cursor-pointer rounded-lg" style={{ padding: '5px 8px', fontSize: '11px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>⋯</button>
+            <button onClick={() => { setMenuOpen(!menuOpen); if (menuOpen) setFolderSubmenuOpen(false); }} className="cursor-pointer rounded-lg" style={{ padding: '5px 8px', fontSize: '11px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>⋯</button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 rounded-lg overflow-hidden z-10" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '140px' }}>
                 {onRename && (
@@ -137,14 +138,22 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
                   </button>
                 )}
                 {onMovePaper && folders && folders.length > 0 && (
-                  <div className="relative group">
-                    <button className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>Move to folder</button>
-                    <div className="hidden group-hover:block absolute left-full top-0 rounded-lg overflow-hidden" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '120px' }}>
-                      <button onClick={() => { setMenuOpen(false); onMovePaper(paper.id, null); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>No folder</button>
-                      {folders.map(f => (
-                        <button key={f.id} onClick={() => { setMenuOpen(false); onMovePaper(paper.id, f.id); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>{f.name}</button>
-                      ))}
-                    </div>
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFolderSubmenuOpen(!folderSubmenuOpen); }}
+                      className="w-full text-left cursor-pointer block"
+                      style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}
+                    >
+                      Move to folder {folderSubmenuOpen ? '◂' : '▸'}
+                    </button>
+                    {folderSubmenuOpen && (
+                      <div className="absolute left-full top-0 rounded-lg overflow-hidden" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '120px' }}>
+                        <button onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, null); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>No folder</button>
+                        {folders.map(f => (
+                          <button key={f.id} onClick={() => { setMenuOpen(false); setFolderSubmenuOpen(false); onMovePaper(paper.id, f.id); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>{f.name}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 <button onClick={() => { setMenuOpen(false); if (onDelete) onDelete(paper.id); }} className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--rose)' }}>Delete</button>

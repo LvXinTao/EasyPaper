@@ -124,6 +124,16 @@ export default function HomePage() {
         </div>
         <div
           onClick={() => setSelectedFolderId(null)}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('application/x-paper-id')) {
+              e.preventDefault();
+            }
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const paperId = e.dataTransfer.getData('application/x-paper-id');
+            if (paperId) handleMovePaper(paperId, null);
+          }}
           className="cursor-pointer rounded-lg flex items-center gap-2 transition-colors"
           style={{
             padding: '6px 10px', fontSize: '12px',
@@ -160,6 +170,11 @@ export default function HomePage() {
               {papers.map(paper => (
                 <div
                   key={paper.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/x-paper-id', paper.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                  }}
                   onClick={() => handleCompactPaperClick(paper.id)}
                   className="cursor-pointer rounded transition-colors"
                   style={{

@@ -155,6 +155,7 @@ function FolderRow({
   const [renameValue, setRenameValue] = useState(folder.name);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
+  const [isDragOver, setIsDragOver] = useState(false);
 
   useEffect(() => {
     if (!showMenu) return;
@@ -211,13 +212,37 @@ function FolderRow({
           paddingTop: '6px',
           paddingBottom: '6px',
           paddingRight: '12px',
-          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+          background: isDragOver ? 'var(--accent-subtle)' : isSelected ? 'var(--accent-subtle)' : 'transparent',
+          outline: isDragOver ? '2px solid var(--accent)' : undefined,
+          outlineOffset: '-2px',
+          borderRadius: isDragOver ? '6px' : undefined,
           position: 'relative',
           zIndex: showMenu ? 10 : undefined,
         }}
         onClick={() => {
           setExpanded(!expanded);
           onSelectFolder?.(folder.id);
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/x-paper-id')) {
+            e.preventDefault();
+            setIsDragOver(true);
+          }
+        }}
+        onDragEnter={(e) => {
+          if (e.dataTransfer.types.includes('application/x-paper-id')) {
+            e.preventDefault();
+            setIsDragOver(true);
+          }
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          const paperId = e.dataTransfer.getData('application/x-paper-id');
+          if (paperId) {
+            onMovePaper(paperId, folder.id);
+          }
         }}
       >
         <button
