@@ -11,7 +11,8 @@ import { EditableTitle } from '@/components/editable-title';
 import { ResizableDivider } from '@/components/resizable-divider';
 import { usePaper } from '@/hooks/use-paper';
 import { useSSE } from '@/hooks/use-sse';
-import type { PaperAnalysis, ChatMessage } from '@/types';
+import { ChatSessionBar } from '@/components/chat-session-bar';
+import type { PaperAnalysis, ChatMessage, ChatSessionMeta } from '@/types';
 
 export default function PaperDetailPage() {
   const params = useParams();
@@ -32,6 +33,14 @@ export default function PaperDetailPage() {
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [modelName, setModelName] = useState<string>('');
   const [noteCount, setNoteCount] = useState(0);
+
+  // Session state
+  const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [showSessionBar, setShowSessionBar] = useState(true);
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
   // Resizable panel state — restored from localStorage per paper
   const containerRef = useRef<HTMLDivElement>(null);
@@ -65,12 +74,28 @@ export default function PaperDetailPage() {
       .catch(() => {});
   }, [paperId]);
 
-  // Initialize chat messages when data loads
+  // Fetch sessions on mount and when paper data loads
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/chat-sessions`);
+      if (!res.ok) return;
+      const result = await res.json();
+      setSessions(result.sessions);
+      if (result.sessions.length > 0 && !activeSessionIdRef.current) {
+        const mostRecent = result.sessions[0];
+        setActiveSessionId(mostRecent.id);
+        const sessionRes = await fetch(`/api/paper/${paperId}/chat-sessions/${mostRecent.id}`);
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          setChatMessages(sessionData.messages || []);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [paperId]);
+
   useEffect(() => {
-    if (data?.chatHistory?.messages) {
-      setChatMessages(data.chatHistory.messages);
-    }
-  }, [data?.chatHistory?.messages]);
+    if (data) fetchSessions();
+  }, [data, fetchSessions]);
 
   const { start: startAnalysis } = useSSE('/api/analyze', {
     onMessage: (event) => {
@@ -126,6 +151,53 @@ export default function PaperDetailPage() {
     [paperId, refetch]
   );
 
+  const handleSelectSession = useCallback(async (sessionId: string) => {
+    if (sessionId === activeSessionId) return;
+    setActiveSessionId(sessionId);
+    setChatMessages([]);
+    setStreamingContent('');
+    try {
+      const res = await fetch(`/api/paper/${paperId}/chat-sessions/${sessionId}`);
+      if (res.ok) {
+        const sessionData = await res.json();
+        setChatMessages(sessionData.messages || []);
+      }
+    } catch { /* ignore */ }
+  }, [paperId, activeSessionId]);
+
+  const handleNewSession = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/chat-sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) return;
+      const newSession = await res.json();
+      setSessions(prev => [{ ...newSession, messageCount: 0 }, ...prev]);
+      setActiveSessionId(newSession.id);
+      setChatMessages([]);
+      setStreamingContent('');
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  const handleDeleteSession = useCallback(async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/chat-sessions/${sessionId}`, { method: 'DELETE' });
+      if (!res.ok) return;
+      const remaining = sessions.filter(s => s.id !== sessionId);
+      setSessions(remaining);
+      if (sessionId === activeSessionId) {
+        if (remaining.length > 0) {
+          handleSelectSession(remaining[0].id);
+        } else {
+          setActiveSessionId(null);
+          setChatMessages([]);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [paperId, activeSessionId, sessions, handleSelectSession]);
+
   const handleSendMessage = useCallback(
     async (message: string) => {
       setChatMessages((prev) => [...prev, { role: 'user', content: message }]);
@@ -136,7 +208,7 @@ export default function PaperDetailPage() {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paperId, message }),
+          body: JSON.stringify({ paperId, sessionId: activeSessionId, message }),
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -168,6 +240,10 @@ export default function PaperDetailPage() {
                   { role: 'assistant', content: fullResponse },
                 ]);
                 setStreamingContent('');
+                if (data.sessionId && !activeSessionIdRef.current) {
+                  setActiveSessionId(data.sessionId);
+                }
+                fetchSessions();
               }
             } catch { /* skip malformed */ }
           }
@@ -178,7 +254,7 @@ export default function PaperDetailPage() {
         setIsChatStreaming(false);
       }
     },
-    [paperId]
+    [paperId, activeSessionId, fetchSessions]
   );
 
   // Horizontal divider: save left panel width to localStorage
@@ -406,7 +482,7 @@ export default function PaperDetailPage() {
           {/* Bottom Zone: AI Chat */}
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: '120px' }}>
             {/* Chat header with model badge */}
-            <div className="flex items-center justify-between px-4" style={{ height: '36px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <div className="flex items-center justify-between px-4" style={{ height: '36px', borderBottom: sessions.length > 0 && showSessionBar ? 'none' : '1px solid var(--border)', flexShrink: 0 }}>
               <div className="flex items-center gap-2">
                 <div
                   className="flex items-center justify-center"
@@ -427,16 +503,57 @@ export default function PaperDetailPage() {
                 </div>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>AI Chat</span>
               </div>
-              {modelName && (
-                <span
-                  className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full"
-                  style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-tertiary)' }}
+              <div className="flex items-center gap-1.5">
+                {sessions.length > 0 && (
+                  <button
+                    onClick={() => setShowSessionBar(prev => !prev)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors"
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--text-tertiary)',
+                      background: 'var(--glass)',
+                      border: '1px solid var(--glass-border)',
+                    }}
+                  >
+                    Sessions
+                    <span style={{ fontSize: '8px', transform: showSessionBar ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+                  </button>
+                )}
+                <button
+                  onClick={handleNewSession}
+                  className="flex items-center justify-center rounded-md transition-colors"
+                  style={{
+                    width: '22px',
+                    height: '22px',
+                    background: 'var(--glass)',
+                    border: '1px solid var(--glass-border)',
+                    color: 'var(--text-tertiary)',
+                    fontSize: '14px',
+                    lineHeight: 1,
+                  }}
+                  title="New session"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--green)' }} />
-                  {modelName}
-                </span>
-              )}
+                  +
+                </button>
+                {modelName && (
+                  <span
+                    className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-tertiary)' }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--green)' }} />
+                    {modelName}
+                  </span>
+                )}
+              </div>
             </div>
+            {showSessionBar && (
+              <ChatSessionBar
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSelectSession={handleSelectSession}
+                onDeleteSession={handleDeleteSession}
+              />
+            )}
 
             {/* Messages */}
             <div className="flex-1 overflow-auto px-4">
