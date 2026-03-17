@@ -323,6 +323,12 @@ export default function PaperDetailPage() {
 
         {/* Right: Split Panel */}
         <div ref={rightPanelRef} className="flex-1 flex flex-col" style={{ minWidth: '280px', overflow: 'hidden' }}>
+          {/* Shared card container for Analysis + Chat */}
+          <div className="flex-1 flex flex-col overflow-hidden" style={{
+            borderRadius: '12px',
+            border: '1px solid var(--glass-border)',
+            margin: '4px',
+          }}>
           {/* Top Zone: Analysis/Notes tabs */}
           <div style={{ height: `${effectiveTopHeight}px`, minHeight: '150px', flexShrink: 0 }} className="flex flex-col overflow-hidden">
             {/* Tab bar */}
@@ -389,6 +395,12 @@ export default function PaperDetailPage() {
               const newHeight = Math.max(150, Math.min(effectiveTopHeight + delta, maxTop));
               handleTopHeightChange(newHeight);
             }}
+            barStyle={{
+              background: 'linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1)',
+              opacity: 0.6,
+              width: '100%',
+              borderRadius: 0,
+            }}
           />
 
           {/* Bottom Zone: AI Chat */}
@@ -440,6 +452,7 @@ export default function PaperDetailPage() {
               <ChatInput onSend={handleSendMessage} disabled={isChatStreaming} />
             </div>
           </div>
+          </div>{/* end shared card container */}
         </div>
       </div>
     </div>
