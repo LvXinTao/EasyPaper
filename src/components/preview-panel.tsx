@@ -40,6 +40,11 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
         setChatCount(data.chatHistory?.messages?.filter((m: { role: string }) => m.role === 'user').length || 0);
       } catch { /* ignore */ }
       try {
+        const sessionsRes = await fetch(`/api/paper/${paper.id}/chat-sessions`);
+        const sessionsData = await sessionsRes.json();
+        if (sessionsData.sessions) setChatCount(sessionsData.sessions.length);
+      } catch { /* ignore */ }
+      try {
         const res = await fetch(`/api/paper/${paper.id}/notes`);
         const notes: Note[] = await res.json();
         setNoteCount(notes.length);

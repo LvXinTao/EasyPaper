@@ -105,8 +105,9 @@ export function ChatSessionBar({ sessions, activeSessionId, onSelectSession, onD
             left: `${popoverPos.left}px`,
             transform: 'translateX(-50%)',
             padding: '10px 14px',
-            background: 'var(--surface)',
+            background: 'var(--bg)',
             border: '1px solid var(--border)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             minWidth: '180px',
           }}
         >
