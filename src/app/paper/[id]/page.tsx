@@ -395,7 +395,26 @@ export default function PaperDetailPage() {
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: '120px' }}>
             {/* Chat header with model badge */}
             <div className="flex items-center justify-between px-4" style={{ height: '36px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>AI Chat</span>
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '8px',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <circle cx="12" cy="5" r="2" />
+                    <path d="M12 7v4" />
+                    <line x1="8" y1="16" x2="8" y2="16" />
+                    <line x1="16" y1="16" x2="16" y2="16" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>AI Chat</span>
+              </div>
               {modelName && (
                 <span
                   className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full"
