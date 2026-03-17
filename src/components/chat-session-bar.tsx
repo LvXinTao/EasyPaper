@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { ChatSessionMeta } from '@/types';
 
 interface ChatSessionBarProps {
@@ -12,7 +13,18 @@ interface ChatSessionBarProps {
 
 export function ChatSessionBar({ sessions, activeSessionId, onSelectSession, onDeleteSession }: ChatSessionBarProps) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const deleteButtonRefs = useRef<Map<string, HTMLSpanElement>>(new Map());
+
+  const openDeleteConfirm = useCallback((sessionId: string) => {
+    const btn = deleteButtonRefs.current.get(sessionId);
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      setPopoverPos({ top: rect.bottom + 4, left: rect.left + rect.width / 2 });
+    }
+    setConfirmDeleteId(sessionId);
+  }, []);
 
   // Close popover on click outside
   useEffect(() => {
@@ -63,9 +75,10 @@ export function ChatSessionBar({ sessions, activeSessionId, onSelectSession, onD
               {session.title}
             </span>
             <span
+              ref={(el) => { if (el) deleteButtonRefs.current.set(session.id, el); }}
               onClick={(e) => {
                 e.stopPropagation();
-                setConfirmDeleteId(session.id);
+                openDeleteConfirm(session.id);
               }}
               className="ml-1 rounded hover:bg-[rgba(255,255,255,0.1)] transition-colors"
               style={{
@@ -79,56 +92,57 @@ export function ChatSessionBar({ sessions, activeSessionId, onSelectSession, onD
               ×
             </span>
           </button>
-
-          {/* Delete confirmation popover */}
-          {confirmDeleteId === session.id && (
-            <div
-              ref={popoverRef}
-              className="absolute z-50 rounded-lg shadow-lg"
-              style={{
-                top: 'calc(100% + 4px)',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                padding: '10px 14px',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                minWidth: '180px',
-              }}
-            >
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                删除此会话？此操作不可撤销
-              </p>
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setConfirmDeleteId(null)}
-                  className="px-2.5 py-1 text-xs rounded-md transition-colors"
-                  style={{
-                    background: 'var(--glass)',
-                    border: '1px solid var(--glass-border)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  取消
-                </button>
-                <button
-                  onClick={() => {
-                    onDeleteSession(session.id);
-                    setConfirmDeleteId(null);
-                  }}
-                  className="px-2.5 py-1 text-xs rounded-md transition-colors"
-                  style={{
-                    background: 'var(--rose-subtle)',
-                    border: '1px solid var(--rose)',
-                    color: 'var(--rose)',
-                  }}
-                >
-                  删除
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       ))}
+
+      {/* Delete confirmation popover — rendered via portal to avoid overflow clipping */}
+      {confirmDeleteId && popoverPos && createPortal(
+        <div
+          ref={popoverRef}
+          className="fixed z-50 rounded-lg shadow-lg"
+          style={{
+            top: `${popoverPos.top}px`,
+            left: `${popoverPos.left}px`,
+            transform: 'translateX(-50%)',
+            padding: '10px 14px',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            minWidth: '180px',
+          }}
+        >
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+            删除此会话？此操作不可撤销
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setConfirmDeleteId(null)}
+              className="px-2.5 py-1 text-xs rounded-md transition-colors"
+              style={{
+                background: 'var(--glass)',
+                border: '1px solid var(--glass-border)',
+                color: 'var(--text-secondary)',
+              }}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => {
+                onDeleteSession(confirmDeleteId);
+                setConfirmDeleteId(null);
+              }}
+              className="px-2.5 py-1 text-xs rounded-md transition-colors"
+              style={{
+                background: 'var(--rose-subtle)',
+                border: '1px solid var(--rose)',
+                color: 'var(--rose)',
+              }}
+            >
+              删除
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

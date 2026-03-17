@@ -39,6 +39,7 @@ export default function PaperDetailPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showSessionBar, setShowSessionBar] = useState(true);
   const activeSessionIdRef = useRef<string | null>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
@@ -153,6 +154,12 @@ export default function PaperDetailPage() {
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
+    // Abort any in-flight stream before switching
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+      chatAbortRef.current = null;
+      setIsChatStreaming(false);
+    }
     setActiveSessionId(sessionId);
     setChatMessages([]);
     setStreamingContent('');
@@ -166,6 +173,12 @@ export default function PaperDetailPage() {
   }, [paperId, activeSessionId]);
 
   const handleNewSession = useCallback(async () => {
+    // Abort any in-flight stream before creating new session
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+      chatAbortRef.current = null;
+      setIsChatStreaming(false);
+    }
     try {
       const res = await fetch(`/api/paper/${paperId}/chat-sessions`, {
         method: 'POST',
@@ -204,11 +217,15 @@ export default function PaperDetailPage() {
       setIsChatStreaming(true);
       setStreamingContent('');
 
+      const abortController = new AbortController();
+      chatAbortRef.current = abortController;
+
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paperId, sessionId: activeSessionId, message }),
+          signal: abortController.signal,
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -249,8 +266,13 @@ export default function PaperDetailPage() {
           }
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          // Stream was intentionally aborted (session switch/new session)
+          return;
+        }
         console.error('Chat error:', error);
       } finally {
+        chatAbortRef.current = null;
         setIsChatStreaming(false);
       }
     },
