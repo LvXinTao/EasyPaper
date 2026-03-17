@@ -1,6 +1,7 @@
 'use client';
 
 import type { PaperListItem } from '@/types';
+import { formatRelativeTime } from '@/lib/format';
 
 interface PaperRowProps {
   paper: PaperListItem;
@@ -37,7 +38,7 @@ export function PaperRow({ paper, isActive, onClick, onDoubleClick }: PaperRowPr
         {paper.title}
       </div>
       <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '3px' }}>
-        {new Date(paper.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        {formatRelativeTime(paper.createdAt)}
       </div>
       <div className="flex items-center gap-1 mt-1.5 flex-wrap">
         <span

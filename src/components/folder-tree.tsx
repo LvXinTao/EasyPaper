@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import type { Folder, PaperListItem } from '@/types';
-import { formatRelativeTime } from '@/lib/format';
 
 interface FolderTreeProps {
   folders: Folder[];
@@ -22,100 +20,25 @@ interface FolderTreeProps {
 
 function PaperRow({
   paper,
-  isCurrent,
   depth,
-  onClose,
-  onMovePaper,
-  onDeletePaper,
-  folders,
 }: {
   paper: PaperListItem;
-  isCurrent: boolean;
   depth: number;
-  onClose: () => void;
-  onMovePaper: (paperId: string, folderId: string | null) => Promise<void>;
-  onDeletePaper: (paperId: string) => Promise<void>;
-  folders: Folder[];
 }) {
-  const router = useRouter();
-  const relTime = formatRelativeTime(paper.createdAt);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showMovePicker, setShowMovePicker] = useState(false);
-
   return (
-    <div className="relative">
-      <div
-        onClick={() => {
-          if (!isCurrent) {
-            router.push(`/paper/${paper.id}`);
-            onClose();
-          }
-        }}
-        className="flex items-start gap-2 px-3 py-2 cursor-pointer text-sm transition-colors"
-        style={{
-          paddingLeft: `${10 + depth * 14}px`,
-          background: isCurrent ? 'var(--accent-subtle)' : 'transparent',
-          borderLeft: isCurrent ? '2px solid var(--accent)' : '2px solid transparent',
-        }}
-      >
-        <span style={{ color: 'var(--text-tertiary)', marginTop: '2px', flexShrink: 0 }}>📄</span>
-        <div className="flex-1 min-w-0">
-          <div
-            className="line-clamp-2"
-            style={{
-              color: isCurrent ? 'var(--accent)' : 'var(--text-primary)',
-              fontWeight: isCurrent ? 600 : 400,
-            }}
-          >
-            {paper.title}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {relTime && <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{relTime}</span>}
-          </div>
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
-          style={{ color: 'var(--text-tertiary)', flexShrink: 0, padding: '2px' }}
-        >
-          ⋯
-        </button>
-      </div>
-
-      {showMenu && (
-        <div
-          className="absolute right-2 top-full z-50 rounded-lg shadow-lg py-1 w-40"
-          style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
-        >
-          <button
-            onClick={() => { setShowMenu(false); setShowMovePicker(true); }}
-            className="w-full text-left px-3 py-1.5 text-sm"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            📂 Move to...
-          </button>
-          <button
-            onClick={() => {
-              setShowMenu(false);
-              if (confirm('Delete this paper? This cannot be undone.')) {
-                onDeletePaper(paper.id);
-              }
-            }}
-            className="w-full text-left px-3 py-1.5 text-sm"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            🗑️ Delete
-          </button>
-        </div>
-      )}
-
-      {showMovePicker && (
-        <MoveToPicker
-          folders={folders}
-          currentFolderId={paper.folderId ?? null}
-          onSelect={(folderId) => { setShowMovePicker(false); onMovePaper(paper.id, folderId); }}
-          onClose={() => setShowMovePicker(false)}
-        />
-      )}
+    <div
+      className="truncate"
+      style={{
+        paddingLeft: `${10 + depth * 14}px`,
+        paddingTop: '3px',
+        paddingBottom: '3px',
+        paddingRight: '12px',
+        fontSize: '11px',
+        color: 'var(--text-primary)',
+      }}
+      title={paper.title}
+    >
+      {paper.title}
     </div>
   );
 }
@@ -423,12 +346,7 @@ function FolderRow({
             <PaperRow
               key={paper.id}
               paper={paper}
-              isCurrent={paper.id === currentPaperId}
               depth={depth + 1}
-              onClose={onClose}
-              onMovePaper={onMovePaper}
-              onDeletePaper={onDeletePaper}
-              folders={folders}
             />
           ))}
         </div>
@@ -478,12 +396,7 @@ export function FolderTree(props: FolderTreeProps) {
         <PaperRow
           key={paper.id}
           paper={paper}
-          isCurrent={paper.id === currentPaperId}
           depth={0}
-          onClose={onClose}
-          onMovePaper={onMovePaper}
-          onDeletePaper={onDeletePaper}
-          folders={folders}
         />
       ))}
     </div>

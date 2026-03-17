@@ -69,6 +69,10 @@ export default function HomePage() {
     await fetch(`/api/paper/${paperId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
     await fetchPapers();
   };
+  const handleRename = async (id: string, title: string) => {
+    await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    await fetchPapers();
+  };
 
   // Filter papers
   const filtered = papers.filter(p => {
@@ -267,7 +271,13 @@ export default function HomePage() {
 
       {/* Column 3: Preview Panel */}
       <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'rgba(255,255,255,0.006)' }}>
-        <PreviewPanel paper={selectedPaper} onDelete={handleDelete} />
+        <PreviewPanel
+          paper={selectedPaper}
+          onDelete={handleDelete}
+          onMovePaper={handleMovePaper}
+          onRename={handleRename}
+          folders={folders}
+        />
       </div>
 
       {/* Upload Modal */}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -19,9 +20,20 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
     await storage.createPaperDir(paperId);
     await storage.savePdf(paperId, buffer);
+
+    // Extract page count from PDF
+    let pageCount = 0;
+    try {
+      const uint8 = new Uint8Array(buffer);
+      const pdf = await getDocument({ data: uint8 }).promise;
+      pageCount = pdf.numPages;
+    } catch {
+      // If page extraction fails, default to 0
+    }
+
     await storage.saveMetadata(paperId, {
       id: paperId, title: file.name.replace(/\.pdf$/i, ''), filename: file.name,
-      pages: 0, createdAt: new Date().toISOString(), status: 'pending',
+      pages: pageCount, createdAt: new Date().toISOString(), status: 'pending',
     });
     return NextResponse.json({ id: paperId, status: 'pending' }, { status: 201 });
   } catch (error) {

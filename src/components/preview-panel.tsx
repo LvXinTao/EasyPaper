@@ -10,16 +10,19 @@ interface PreviewPanelProps {
   onDelete?: (id: string) => void;
   onAnalyze?: (id: string) => void;
   onMovePaper?: (paperId: string, folderId: string | null) => void;
+  onRename?: (id: string, title: string) => Promise<void>;
   folders?: { id: string; name: string }[];
 }
 
-export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, folders }: PreviewPanelProps) {
+export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename, folders }: PreviewPanelProps) {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [noteCount, setNoteCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
   const [pages, setPages] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
 
   useEffect(() => {
     if (!paper) return;
@@ -44,6 +47,10 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, folders 
     })();
   }, [paper]);
 
+  useEffect(() => {
+    setIsRenaming(false);
+  }, [paper]);
+
   if (!paper) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
@@ -62,7 +69,42 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, folders 
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4, letterSpacing: '-0.2px' }}>{paper.title}</div>
+          {isRenaming ? (
+            <input
+              autoFocus
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onBlur={async () => {
+                const trimmed = renameValue.trim();
+                if (trimmed && trimmed !== paper.title && onRename) {
+                  await onRename(paper.id, trimmed);
+                }
+                setIsRenaming(false);
+              }}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const trimmed = renameValue.trim();
+                  if (trimmed && trimmed !== paper.title && onRename) {
+                    await onRename(paper.id, trimmed);
+                  }
+                  setIsRenaming(false);
+                } else if (e.key === 'Escape') {
+                  setIsRenaming(false);
+                }
+              }}
+              maxLength={200}
+              className="w-full rounded-md px-2 py-1 outline-none"
+              style={{
+                fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)',
+                background: 'var(--surface)', border: '2px solid var(--accent)',
+                boxShadow: '0 0 0 2px var(--accent-subtle)',
+              }}
+            />
+          ) : (
+            <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4, letterSpacing: '-0.2px' }}>{paper.title}</div>
+          )}
           <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
             Added {new Date(paper.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </div>
@@ -76,6 +118,19 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, folders 
             <button onClick={() => setMenuOpen(!menuOpen)} className="cursor-pointer rounded-lg" style={{ padding: '5px 8px', fontSize: '11px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>⋯</button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 rounded-lg overflow-hidden z-10" style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: '140px' }}>
+                {onRename && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setRenameValue(paper.title);
+                      setIsRenaming(true);
+                    }}
+                    className="w-full text-left cursor-pointer block"
+                    style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}
+                  >
+                    Rename
+                  </button>
+                )}
                 {onMovePaper && folders && folders.length > 0 && (
                   <div className="relative group">
                     <button className="w-full text-left cursor-pointer block" style={{ padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)' }}>Move to folder</button>
