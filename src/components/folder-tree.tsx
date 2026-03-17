@@ -14,6 +14,7 @@ interface FolderTreeProps {
   onDeleteFolder: (folderId: string) => Promise<void>;
   onMovePaper: (paperId: string, folderId: string | null) => Promise<void>;
   onDeletePaper: (paperId: string) => Promise<void>;
+  onReorderPapers?: (orders: { id: string; sortIndex: number }[]) => Promise<void>;
   onSelectFolder?: (folderId: string | null) => void;
   selectedFolderId?: string | null;
 }
@@ -21,30 +22,71 @@ interface FolderTreeProps {
 function PaperRow({
   paper,
   depth,
+  onReorder,
 }: {
   paper: PaperListItem;
   depth: number;
+  onReorder?: (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => void;
 }) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dropIndicator, setDropIndicator] = useState<'before' | 'after' | null>(null);
+
   return (
     <div
-      className="truncate"
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/x-paper-id', paper.id);
-        e.dataTransfer.effectAllowed = 'move';
-      }}
-      style={{
-        paddingLeft: `${10 + depth * 14}px`,
-        paddingTop: '3px',
-        paddingBottom: '3px',
-        paddingRight: '12px',
-        fontSize: '11px',
-        color: 'var(--text-primary)',
-        cursor: 'grab',
-      }}
-      title={paper.title}
+      style={{ position: 'relative' }}
     >
-      <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{paper.title}
+      {dropIndicator === 'before' && (
+        <div style={{ position: 'absolute', top: 0, left: `${10 + depth * 14}px`, right: '12px', height: '2px', background: 'var(--accent)', borderRadius: '1px', zIndex: 5 }} />
+      )}
+      <div
+        className="truncate"
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('application/x-paper-id', paper.id);
+          e.dataTransfer.setData('application/x-paper-reorder', 'true');
+          e.dataTransfer.effectAllowed = 'move';
+          setIsDragging(true);
+        }}
+        onDragEnd={() => setIsDragging(false)}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('application/x-paper-reorder')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+            setDropIndicator(e.clientY < midY ? 'before' : 'after');
+          }
+        }}
+        onDragLeave={() => setDropIndicator(null)}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const draggedId = e.dataTransfer.getData('application/x-paper-id');
+          if (draggedId && draggedId !== paper.id && onReorder && dropIndicator) {
+            onReorder(draggedId, paper.id, dropIndicator);
+          }
+          setDropIndicator(null);
+        }}
+        style={{
+          paddingLeft: `${10 + depth * 14}px`,
+          paddingTop: '3px',
+          paddingBottom: '3px',
+          paddingRight: '12px',
+          fontSize: '11px',
+          color: 'var(--text-primary)',
+          cursor: 'grab',
+          opacity: isDragging ? 0.4 : 1,
+          background: isDragging ? 'var(--accent-subtle)' : 'transparent',
+          borderRadius: '4px',
+          transition: 'background 0.15s, opacity 0.15s',
+        }}
+        title={paper.title}
+      >
+        <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{paper.title}
+      </div>
+      {dropIndicator === 'after' && (
+        <div style={{ position: 'absolute', bottom: 0, left: `${10 + depth * 14}px`, right: '12px', height: '2px', background: 'var(--accent)', borderRadius: '1px', zIndex: 5 }} />
+      )}
     </div>
   );
 }
@@ -137,6 +179,7 @@ function FolderRow({
   onDeleteFolder,
   onMovePaper,
   onDeletePaper,
+  onReorderPapers,
   onSelectFolder,
   selectedFolderId,
 }: {
@@ -152,6 +195,7 @@ function FolderRow({
   onDeleteFolder: (folderId: string) => Promise<void>;
   onMovePaper: (paperId: string, folderId: string | null) => Promise<void>;
   onDeletePaper: (paperId: string) => Promise<void>;
+  onReorderPapers?: (orders: { id: string; sortIndex: number }[]) => Promise<void>;
   onSelectFolder?: (folderId: string | null) => void;
   selectedFolderId?: string | null;
 }) {
@@ -174,7 +218,12 @@ function FolderRow({
   const folderPapers = papers
     .filter((p) => p.folderId === folder.id)
     .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort((a, b) => {
+      if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+      if (a.sortIndex != null) return -1;
+      if (b.sortIndex != null) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   // Count all papers in this folder and descendants
   const allDescendantIds = new Set<string>([folder.id]);
@@ -207,6 +256,20 @@ function FolderRow({
       setNewChildName('');
     }
     setIsCreatingChild(false);
+  };
+
+  const handleReorder = (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => {
+    if (!onReorderPapers) return;
+    const currentOrder = [...folderPapers];
+    const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
+    if (draggedIndex === -1) return;
+    const [dragged] = currentOrder.splice(draggedIndex, 1);
+    const targetIndex = currentOrder.findIndex(p => p.id === targetPaperId);
+    if (targetIndex === -1) return;
+    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+    currentOrder.splice(insertIndex, 0, dragged);
+    const orders = currentOrder.map((p, i) => ({ id: p.id, sortIndex: i }));
+    onReorderPapers(orders);
   };
 
   return (
@@ -390,6 +453,7 @@ function FolderRow({
               onDeleteFolder={onDeleteFolder}
               onMovePaper={onMovePaper}
               onDeletePaper={onDeletePaper}
+              onReorderPapers={onReorderPapers}
               onSelectFolder={onSelectFolder}
               selectedFolderId={selectedFolderId}
             />
@@ -399,6 +463,7 @@ function FolderRow({
               key={paper.id}
               paper={paper}
               depth={depth + 1}
+              onReorder={handleReorder}
             />
           ))}
         </div>
@@ -408,7 +473,7 @@ function FolderRow({
 }
 
 export function FolderTree(props: FolderTreeProps) {
-  const { folders, papers, currentPaperId, searchQuery, onClose, onCreateFolder, onRenameFolder, onDeleteFolder, onMovePaper, onDeletePaper, onSelectFolder, selectedFolderId } = props;
+  const { folders, papers, currentPaperId, searchQuery, onClose, onCreateFolder, onRenameFolder, onDeleteFolder, onMovePaper, onDeletePaper, onReorderPapers, onSelectFolder, selectedFolderId } = props;
 
   const rootFolders = useMemo(
     () => folders.filter((f) => !f.parentId).sort((a, b) => a.name.localeCompare(b.name)),
@@ -419,9 +484,28 @@ export function FolderTree(props: FolderTreeProps) {
     () => papers
       .filter((p) => !p.folderId)
       .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      .sort((a, b) => {
+        if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+        if (a.sortIndex != null) return -1;
+        if (b.sortIndex != null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
     [papers, searchQuery]
   );
+
+  const handleRootReorder = (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => {
+    if (!onReorderPapers) return;
+    const currentOrder = [...rootPapers];
+    const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
+    if (draggedIndex === -1) return;
+    const [dragged] = currentOrder.splice(draggedIndex, 1);
+    const targetIndex = currentOrder.findIndex(p => p.id === targetPaperId);
+    if (targetIndex === -1) return;
+    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+    currentOrder.splice(insertIndex, 0, dragged);
+    const orders = currentOrder.map((p, i) => ({ id: p.id, sortIndex: i }));
+    onReorderPapers(orders);
+  };
 
   return (
     <div>
@@ -440,6 +524,7 @@ export function FolderTree(props: FolderTreeProps) {
           onDeleteFolder={onDeleteFolder}
           onMovePaper={onMovePaper}
           onDeletePaper={onDeletePaper}
+          onReorderPapers={onReorderPapers}
           onSelectFolder={onSelectFolder}
           selectedFolderId={selectedFolderId}
         />
@@ -449,6 +534,7 @@ export function FolderTree(props: FolderTreeProps) {
           key={paper.id}
           paper={paper}
           depth={0}
+          onReorder={handleRootReorder}
         />
       ))}
     </div>

@@ -68,6 +68,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     updates.folderId = body.folderId;
   }
 
+  if (body.sortIndex !== undefined) {
+    if (typeof body.sortIndex !== 'number') {
+      return createErrorResponse('VALIDATION_ERROR', 'sortIndex must be a number');
+    }
+    updates.sortIndex = body.sortIndex;
+  }
+
   if (Object.keys(updates).length === 0) {
     return createErrorResponse('VALIDATION_ERROR', 'No valid fields to update');
   }

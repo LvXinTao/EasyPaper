@@ -8,6 +8,7 @@ export interface PaperMetadata {
   createdAt: string;
   status: PaperStatus;
   folderId?: string | null;
+  sortIndex?: number;
 }
 
 export interface AnalysisSection {
@@ -84,6 +85,7 @@ export interface PaperListItem {
   createdAt: string;
   status: PaperStatus;
   folderId?: string | null;
+  sortIndex?: number;
 }
 
 export interface PaperData {

@@ -69,12 +69,24 @@ export default function HomePage() {
     await fetch(`/api/paper/${paperId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
     await fetchPapers();
   };
+  const handleReorderPapers = async (orders: { id: string; sortIndex: number }[]) => {
+    // Optimistic update
+    setPapers(prev => {
+      const updated = [...prev];
+      for (const order of orders) {
+        const paper = updated.find(p => p.id === order.id);
+        if (paper) paper.sortIndex = order.sortIndex;
+      }
+      return updated;
+    });
+    await fetch('/api/papers/reorder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders }) });
+  };
   const handleRename = async (id: string, title: string) => {
     await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
     await fetchPapers();
   };
 
-  // Filter papers
+  // Filter and sort papers
   const filtered = papers.filter(p => {
     if (selectedFolderId && p.folderId !== selectedFolderId) return false;
     if (filterStatus === 'analyzed' && p.status !== 'analyzed') return false;
@@ -82,6 +94,11 @@ export default function HomePage() {
     if (filterStatus === 'error' && p.status !== 'error') return false;
     if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
+  }).sort((a, b) => {
+    if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+    if (a.sortIndex != null) return -1;
+    if (b.sortIndex != null) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   const selectedPaper = papers.find(p => p.id === selectedPaperId) || null;
@@ -158,6 +175,7 @@ export default function HomePage() {
           onDeleteFolder={handleDeleteFolder}
           onMovePaper={handleMovePaper}
           onDeletePaper={handleDelete}
+          onReorderPapers={handleReorderPapers}
           onSelectFolder={setSelectedFolderId}
           selectedFolderId={selectedFolderId}
         />

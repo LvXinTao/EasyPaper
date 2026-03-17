@@ -190,7 +190,7 @@ export const storage = {
       for (const dir of dirs) {
         try {
           const metadata = await this.getMetadata(dir);
-          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null });
+          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null, sortIndex: metadata.sortIndex });
         } catch { /* Skip directories without valid metadata */ }
       }
       return papers;
