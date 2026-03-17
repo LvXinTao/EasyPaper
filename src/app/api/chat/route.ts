@@ -32,6 +32,13 @@ export async function POST(request: Request) {
     const client = createAIClient({ baseUrl, apiKey, model });
     const encoder = new TextEncoder();
 
+    // Persist user message immediately so it survives stream aborts (e.g. session switching)
+    session.messages.push({ role: 'user', content: message });
+    if (session.title === 'New Chat') {
+      session.title = message.slice(0, 30);
+    }
+    await storage.saveChatSession(paperId, session);
+
     const stream = new ReadableStream({
       async start(controller) {
         const send = (data: Record<string, unknown>) => { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); };
@@ -41,16 +48,7 @@ export async function POST(request: Request) {
             fullResponse += chunk;
             send({ content: chunk });
           }
-          session.messages.push({ role: 'user', content: message }, { role: 'assistant', content: fullResponse });
-
-          // Auto-update title from first user message
-          if (session.title === 'New Chat') {
-            const firstUserMsg = session.messages.find(m => m.role === 'user');
-            if (firstUserMsg) {
-              session.title = firstUserMsg.content.slice(0, 30);
-            }
-          }
-
+          session.messages.push({ role: 'assistant', content: fullResponse });
           await storage.saveChatSession(paperId, session);
           send({ done: true, sessionId: session.id });
         } catch (error) { send({ error: error instanceof Error ? error.message : 'Chat failed' }); }
