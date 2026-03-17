@@ -45,14 +45,19 @@ Remove `[data-theme="deep-blue"]` CSS block. Add `[data-theme="warm-light"]`:
 
 ### Dark Theme Paper Name Fix
 
-In `/paper/[id]` page header, the paper title has insufficient contrast on dark backgrounds. Ensure it uses `color: var(--text-primary)` instead of any hardcoded color.
+The paper title in the header bar uses hardcoded Tailwind classes (`text-slate-800`) in `src/components/editable-title.tsx` — nearly invisible on dark backgrounds. Fix both display state (line ~77: `text-slate-800`) and editing state (line ~68: `text-slate-800 bg-white border-indigo-500 ring-indigo-100`) to use CSS variables (`var(--text-primary)`, `var(--surface)`, `var(--accent)`).
+
+### localStorage Migration
+
+Users who have `deep-blue` saved in `localStorage` (key `easypaper-theme`) will get a broken page since the CSS block no longer exists. Add a migration in the `layout.tsx` theme script: if stored theme is `deep-blue`, remap to `light-minimal` and update localStorage.
 
 ### Files to Modify
 
 - `src/app/globals.css` — replace `deep-blue` block with `warm-light`
-- `src/components/theme-picker.tsx` — update `deep-blue` → `warm-light` in preset list, label, and preview swatch
-- `src/app/layout.tsx` — update theme script if it references `deep-blue` as fallback
-- `src/app/paper/[id]/page.tsx` — fix paper title color to `var(--text-primary)`
+- `src/components/theme-picker.tsx` — update `deep-blue` → `warm-light` in preset list, label, preview swatch; update initial state default to `light-minimal`
+- `src/types/index.ts` — update `ThemePreset` type: change `'deep-blue'` to `'warm-light'`
+- `src/app/layout.tsx` — add `deep-blue` → `light-minimal` migration in theme script
+- `src/components/editable-title.tsx` — replace hardcoded `text-slate-800`/`bg-white` with CSS variable-based styles
 
 ---
 
@@ -85,18 +90,22 @@ Below the existing Library/Folders navigation, add a scrollable list of paper na
 - No timestamps, no status badges
 - Click behavior: select paper → highlight in Column 2 (scroll into view) → show preview in Column 3
 - No navigation to `/paper/[id]` on click
+- Shows ALL papers regardless of folder/search filter. Clicking a paper in Column 1 clears current folder filter and search so Column 2 shows the selected paper.
+- Empty state: hide "Papers" section entirely when `papers.length === 0`
 
 ### Column 2: Interaction Changes
 
-- **Keep**: title, status badge, relative timestamps ("13 hours ago")
-- **Change**: single-click only selects paper (no navigation)
+Current behavior: single-click selects paper and shows preview (no navigation exists today). Changes:
+
+- **Keep**: title, status badge, relative timestamps ("13 hours ago"), single-click selection
 - **Add**: `onDoubleClick` handler to navigate to `/paper/[id]`
 - Scroll sync: when Column 1 paper is clicked, Column 2 scrolls to corresponding row using `scrollIntoView({ behavior: 'smooth', block: 'nearest' })`
+- Scroll sync mechanism: add `data-paper-id={paper.id}` attribute to each `PaperRow` root div, then use `document.querySelector('[data-paper-id="..."]')?.scrollIntoView(...)` from Column 1 click handler
 
 ### Implementation
 
-- `src/app/page.tsx` — add compact paper list section to Column 1, add ref for Column 2 scroll container, implement scroll sync logic
-- `src/components/paper-row.tsx` — remove `onClick` navigation, add `onDoubleClick` prop for navigation, keep `onClick` for selection only
+- `src/app/page.tsx` — add compact paper list section to Column 1, implement scroll sync with `data-paper-id` query, wire up double-click on Column 2 rows
+- `src/components/paper-row.tsx` — add `onDoubleClick` prop and `data-paper-id` attribute
 
 ---
 
@@ -113,7 +122,7 @@ This causes visual inconsistency between Summary (paragraphs) and Key Contributi
 
 ### Solution
 
-Set explicit `text-[13px]` on all body-text components in the custom overrides:
+Remove `prose-sm` from the wrapper (keep only `prose max-w-none`) to avoid specificity conflicts. Set explicit `text-[13px]` on all body-text components in the custom overrides:
 
 - `p` — add `text-[13px]`
 - `li` — change `text-sm` → `text-[13px]`
@@ -129,7 +138,8 @@ Set explicit `text-[13px]` on all body-text components in the custom overrides:
 ## Testing Checklist
 
 - [ ] All 4 themes render correctly (light-minimal, warm-light, dark-minimal, warm-dark)
-- [ ] Paper name readable in dark-minimal and warm-dark on `/paper/[id]` page
+- [ ] Users with `deep-blue` in localStorage are migrated to `light-minimal`
+- [ ] Paper name readable in dark-minimal and warm-dark on `/paper/[id]` page (both display and edit states)
 - [ ] Theme picker shows correct labels and preview swatches
 - [ ] Column 1 shows compact paper names below Folders
 - [ ] Column 1 click selects paper, scrolls Column 2, shows preview
