@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { Folder, PaperListItem } from '@/types';
 
 interface FolderTreeProps {
@@ -38,7 +39,7 @@ function PaperRow({
       }}
       title={paper.title}
     >
-      {paper.title}
+      <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{paper.title}
     </div>
   );
 }
@@ -155,6 +156,28 @@ function FolderRow({
   const [renameValue, setRenameValue] = useState(folder.name);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+
+  const toggleMenu = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (showMenu) {
+      setShowMenu(false);
+      return;
+    }
+    if (menuBtnRef.current) {
+      const rect = menuBtnRef.current.getBoundingClientRect();
+      setMenuPos({ top: rect.bottom + 4, left: rect.right - 176 }); // 176 = w-44 = 11rem
+    }
+    setShowMenu(true);
+  }, [showMenu]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClick = () => setShowMenu(false);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showMenu]);
 
   const childFolders = folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name));
   const folderPapers = papers
@@ -251,16 +274,18 @@ function FolderRow({
         <span className="text-[11px] flex-shrink-0" style={{ color: 'var(--text-tertiary)' }}>{totalPapers}</span>
         <div className="relative">
           <button
-            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            ref={menuBtnRef}
+            onClick={toggleMenu}
             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
             style={{ color: 'var(--text-tertiary)' }}
           >
             ⋯
           </button>
-          {showMenu && (
+          {showMenu && menuPos && createPortal(
             <div
-              className="absolute right-0 top-full z-50 rounded-lg shadow-lg py-1 w-44"
-              style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
+              className="fixed z-[9999] rounded-lg shadow-lg py-1 w-44"
+              style={{ top: menuPos.top, left: menuPos.left, background: 'var(--surface)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
+              onClick={(e) => e.stopPropagation()}
             >
               <button
                 onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
@@ -288,7 +313,8 @@ function FolderRow({
               >
                 🗑️ Delete folder
               </button>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       </div>

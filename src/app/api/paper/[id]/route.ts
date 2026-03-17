@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { readFile } from 'fs/promises';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PaperMetadata } from '@/types';
 
 interface RouteContext { params: Promise<{ id: string }>; }
@@ -12,6 +14,18 @@ export async function GET(_request: Request, context: RouteContext) {
   const [metadata, analysis, parsedContent, chatHistory] = await Promise.all([
     storage.getMetadata(id), storage.getAnalysis(id), storage.getParsedContent(id), storage.getChatHistory(id),
   ]);
+
+  // Backfill page count for papers uploaded before page extraction was added
+  if (metadata && (!metadata.pages || metadata.pages === 0)) {
+    try {
+      const pdfPath = storage.getPdfPath(id);
+      const pdfBuffer = await readFile(pdfPath);
+      const pdf = await getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+      metadata.pages = pdf.numPages;
+      await storage.updateMetadata(id, { pages: pdf.numPages });
+    } catch { /* PDF read failed, keep pages as 0 */ }
+  }
+
   return NextResponse.json({ metadata, analysis, parsedContent, chatHistory });
 }
 
