@@ -17,7 +17,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   }, [message, disabled, onSend]);
 
   return (
-    <div className="flex gap-2 border-t border-slate-200 pt-3 bg-white">
+    <div className="flex gap-2 pt-3" style={{ borderTop: '1px solid var(--glass-border)' }}>
       <input
         type="text"
         value={message}
@@ -25,12 +25,22 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
         placeholder="Ask a question about this paper..."
         disabled={disabled}
-        className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 disabled:opacity-50 bg-slate-50"
+        className="flex-1 px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 disabled:opacity-50"
+        style={{
+          background: 'var(--glass)',
+          border: '1px solid var(--glass-border)',
+          color: 'var(--text-primary)',
+          '--placeholder-color': 'var(--text-tertiary)',
+        } as React.CSSProperties}
       />
       <button
         onClick={handleSend}
         disabled={!message.trim() || disabled}
-        className="px-5 py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-xl hover:bg-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+        className="px-5 py-2.5 text-sm font-medium rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        style={{
+          background: 'var(--text-primary)',
+          color: 'var(--bg)',
+        }}
       >
         {disabled ? 'Sending...' : 'Send'}
       </button>

@@ -507,8 +507,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-100">
-        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full mb-3" />
+      <div className="flex flex-col items-center justify-center h-full" style={{ color: 'var(--text-tertiary)', background: 'var(--bg-deep)' }}>
+        <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-3" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
         <span className="text-sm">Loading PDF...</span>
       </div>
     );
@@ -520,18 +520,21 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       <link rel="stylesheet" href="/pdf_viewer.css" />
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
+      <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => goToPage(page - 1)}
             disabled={page <= 1}
-            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 text-xs rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            style={{ color: 'var(--text-tertiary)', background: 'var(--surface-hover)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <span className="text-xs text-slate-300 tabular-nums px-2">
+          <span className="text-xs tabular-nums px-2" style={{ color: 'var(--text-secondary)' }}>
             {isEditing ? (
               <input
                 type="text"
@@ -542,7 +545,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
                   if (e.key === 'Escape') handlePageInputCancel();
                 }}
                 onBlur={handlePageInputSubmit}
-                className="w-10 bg-slate-600 text-slate-100 text-xs text-center rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-indigo-400"
+                className="w-10 text-xs text-center rounded px-1 py-0.5 outline-none"
+                style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)', border: '1px solid var(--accent)' }}
                 aria-label="Go to page"
                 autoFocus
                 onFocus={(e) => e.target.select()}
@@ -550,7 +554,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
             ) : (
               <span
                 onClick={() => { setEditValue(String(page)); setIsEditing(true); }}
-                className="cursor-pointer hover:text-indigo-300 hover:underline underline-offset-2"
+                className="cursor-pointer hover:underline underline-offset-2"
+                style={{ color: 'var(--text-secondary)' }}
               >
                 {page}
               </span>
@@ -560,7 +565,10 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
           <button
             onClick={() => goToPage(page + 1)}
             disabled={page >= totalPages}
-            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="px-2.5 py-1 text-xs rounded-md disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            style={{ color: 'var(--text-tertiary)', background: 'var(--surface-hover)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -570,18 +578,24 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setScale((s) => Math.max(0.5, s - 0.2))}
-            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors"
+            className="px-2.5 py-1 text-xs rounded-md transition-colors"
+            style={{ color: 'var(--text-tertiary)', background: 'var(--surface-hover)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
             </svg>
           </button>
-          <span className="text-xs text-slate-300 tabular-nums px-1 min-w-[3rem] text-center">
+          <span className="text-xs tabular-nums px-1 min-w-[3rem] text-center" style={{ color: 'var(--text-tertiary)' }}>
             {Math.round(scale * 100)}%
           </span>
           <button
             onClick={() => setScale((s) => Math.min(3, s + 0.2))}
-            className="px-2.5 py-1 text-xs text-slate-300 bg-slate-700 rounded-md hover:bg-slate-600 transition-colors"
+            className="px-2.5 py-1 text-xs rounded-md transition-colors"
+            style={{ color: 'var(--text-tertiary)', background: 'var(--surface-hover)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-tertiary)')}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -591,7 +605,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       </div>
 
       {/* Canvas + TextLayer */}
-      <div className="flex-1 overflow-auto bg-slate-200 p-4">
+      <div className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}>
         <div className="text-center">
           <div
             ref={wrapperRef}
@@ -626,10 +640,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       </div>
 
       {/* Progress Bar */}
-      <div className="bg-slate-100 border-t border-slate-300 px-4 py-2">
+      <div className="px-4 py-2" style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}>
         <div
           ref={progressBarRef}
-          className="relative h-1.5 bg-slate-200 rounded-full cursor-pointer"
+          className="relative h-1.5 rounded-full cursor-pointer"
+          style={{ background: 'var(--surface-hover)' }}
           onClick={handleProgressBarClick}
           onMouseMove={handleProgressBarHover}
           onMouseLeave={handleProgressBarLeave}
@@ -655,21 +670,21 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
                 transform: 'translateX(-50%)',
               }}
             >
-              <div className="bg-white rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.2)] p-1.5 text-center">
+              <div className="rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.2)] p-1.5 text-center" style={{ background: 'var(--surface)' }}>
                 <div
                   ref={thumbnailCanvasRef}
-                  className="rounded overflow-hidden bg-slate-100 flex items-center justify-center"
-                  style={{ minWidth: 60, minHeight: 80 }}
+                  className="rounded overflow-hidden flex items-center justify-center"
+                  style={{ minWidth: 60, minHeight: 80, background: 'var(--bg-deep)' }}
                 >
-                  <span className="text-[10px] text-slate-400">Page {hoveredPage}</span>
+                  <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>Page {hoveredPage}</span>
                 </div>
-                <div className="text-[10px] text-slate-500 font-semibold mt-1">
+                <div className="text-[10px] font-semibold mt-1" style={{ color: 'var(--text-secondary)' }}>
                   Page {hoveredPage}
                 </div>
               </div>
               {/* Arrow */}
               <div className="flex justify-center -mt-px">
-                <div className="w-2.5 h-2.5 bg-white rotate-45 shadow-[2px_2px_4px_rgba(0,0,0,0.1)]" />
+                <div className="w-2.5 h-2.5 rotate-45 shadow-[2px_2px_4px_rgba(0,0,0,0.1)]" style={{ background: 'var(--surface)' }} />
               </div>
             </div>
           )}
@@ -678,15 +693,17 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
             className="absolute top-0 left-0 h-full rounded-full"
             style={{
               width: totalPages > 1 ? `${((page - 1) / (totalPages - 1)) * 100}%` : '100%',
-              background: 'linear-gradient(90deg, #6366f1, #818cf8)',
+              background: 'var(--accent)',
             }}
           />
           {/* Drag indicator */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-indigo-500 border-2 border-white rounded-full shadow cursor-grab active:cursor-grabbing"
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 rounded-full shadow cursor-grab active:cursor-grabbing"
             style={{
               left: totalPages > 1 ? `${((page - 1) / (totalPages - 1)) * 100}%` : '100%',
               transform: 'translate(-50%, -50%)',
+              background: 'var(--accent)',
+              borderColor: 'var(--surface)',
             }}
             onMouseDown={handleBarDragStart}
           />
