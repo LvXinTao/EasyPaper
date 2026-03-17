@@ -185,7 +185,12 @@ export default function HomePage() {
               Papers
             </div>
             <div className="flex-1 overflow-y-auto" style={{ padding: '0 4px' }}>
-              {papers.map(paper => (
+              {[...papers].sort((a, b) => {
+                if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+                if (a.sortIndex != null) return -1;
+                if (b.sortIndex != null) return 1;
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+              }).map(paper => (
                 <div
                   key={paper.id}
                   onClick={() => handleCompactPaperClick(paper.id)}
