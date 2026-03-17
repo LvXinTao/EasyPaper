@@ -1,3 +1,5 @@
+[中文文档](./README_CN.md)
+
 # EasyPaper
 
 Upload academic PDFs, get AI-powered analysis, and chat about the content — all in one place.
