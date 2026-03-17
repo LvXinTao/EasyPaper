@@ -41,7 +41,10 @@ export async function POST(request: Request) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        const send = (data: Record<string, unknown>) => { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); };
+        const send = (data: Record<string, unknown>) => {
+          try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); }
+          catch { /* client disconnected — continue processing so response is saved */ }
+        };
         try {
           let fullResponse = '';
           for await (const chunk of client.streamComplete([{ role: 'user', content: prompt }])) {
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
           await storage.saveChatSession(paperId, session);
           send({ done: true, sessionId: session.id });
         } catch (error) { send({ error: error instanceof Error ? error.message : 'Chat failed' }); }
-        finally { controller.close(); }
+        finally { try { controller.close(); } catch { /* already closed */ } }
       },
     });
     return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' } });

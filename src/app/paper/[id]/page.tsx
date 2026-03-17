@@ -39,7 +39,6 @@ export default function PaperDetailPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showSessionBar, setShowSessionBar] = useState(true);
   const activeSessionIdRef = useRef<string | null>(null);
-  const chatAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
@@ -154,15 +153,12 @@ export default function PaperDetailPage() {
 
   const handleSelectSession = useCallback(async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
-    // Abort any in-flight stream before switching
-    if (chatAbortRef.current) {
-      chatAbortRef.current.abort();
-      chatAbortRef.current = null;
-      setIsChatStreaming(false);
-    }
+    // Don't abort the stream — let it continue in background so the backend
+    // finishes processing and saves the AI response to disk.
+    setIsChatStreaming(false);
+    setStreamingContent('');
     setActiveSessionId(sessionId);
     setChatMessages([]);
-    setStreamingContent('');
     try {
       const res = await fetch(`/api/paper/${paperId}/chat-sessions/${sessionId}`);
       if (res.ok) {
@@ -173,12 +169,9 @@ export default function PaperDetailPage() {
   }, [paperId, activeSessionId]);
 
   const handleNewSession = useCallback(async () => {
-    // Abort any in-flight stream before creating new session
-    if (chatAbortRef.current) {
-      chatAbortRef.current.abort();
-      chatAbortRef.current = null;
-      setIsChatStreaming(false);
-    }
+    // Don't abort the stream — let it finish in background
+    setIsChatStreaming(false);
+    setStreamingContent('');
     try {
       const res = await fetch(`/api/paper/${paperId}/chat-sessions`, {
         method: 'POST',
@@ -213,19 +206,18 @@ export default function PaperDetailPage() {
 
   const handleSendMessage = useCallback(
     async (message: string) => {
+      // Capture the session this message belongs to, so we can guard UI updates
+      // if the user switches sessions while the stream is still running.
+      const sendingSessionId = activeSessionId;
       setChatMessages((prev) => [...prev, { role: 'user', content: message }]);
       setIsChatStreaming(true);
       setStreamingContent('');
-
-      const abortController = new AbortController();
-      chatAbortRef.current = abortController;
 
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paperId, sessionId: activeSessionId, message }),
-          signal: abortController.signal,
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -249,31 +241,35 @@ export default function PaperDetailPage() {
               const data = JSON.parse(trimmed.slice(6));
               if (data.content) {
                 fullResponse += data.content;
-                setStreamingContent(fullResponse);
+                // Only update streaming UI if still on the same session
+                if (activeSessionIdRef.current === sendingSessionId) {
+                  setStreamingContent(fullResponse);
+                }
               }
               if (data.done) {
-                setChatMessages((prev) => [
-                  ...prev,
-                  { role: 'assistant', content: fullResponse },
-                ]);
-                setStreamingContent('');
-                if (data.sessionId && !activeSessionIdRef.current) {
+                if (activeSessionIdRef.current === sendingSessionId) {
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: fullResponse },
+                  ]);
+                  setStreamingContent('');
+                }
+                if (data.sessionId && !sendingSessionId) {
                   setActiveSessionId(data.sessionId);
                 }
+                // Always refresh session list (updates title, message count)
                 fetchSessions();
               }
             } catch { /* skip malformed */ }
           }
         }
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          // Stream was intentionally aborted (session switch/new session)
-          return;
-        }
         console.error('Chat error:', error);
       } finally {
-        chatAbortRef.current = null;
-        setIsChatStreaming(false);
+        // Only clear streaming state if still on the same session
+        if (activeSessionIdRef.current === sendingSessionId) {
+          setIsChatStreaming(false);
+        }
       }
     },
     [paperId, activeSessionId, fetchSessions]
