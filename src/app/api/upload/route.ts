@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -21,12 +20,12 @@ export async function POST(request: Request) {
     await storage.createPaperDir(paperId);
     await storage.savePdf(paperId, buffer);
 
-    // Extract page count from PDF
+    // Extract page count by scanning PDF structure
     let pageCount = 0;
     try {
-      const uint8 = new Uint8Array(buffer);
-      const pdf = await getDocument({ data: uint8 }).promise;
-      pageCount = pdf.numPages;
+      const content = buffer.toString('binary');
+      const matches = content.match(/\/Type\s*\/Page(?!s)/g);
+      pageCount = matches ? matches.length : 0;
     } catch {
       // If page extraction fails, default to 0
     }

@@ -282,38 +282,54 @@ function FolderRow({
             ⋯
           </button>
           {showMenu && menuPos && createPortal(
-            <div
-              className="fixed z-[9999] rounded-lg shadow-lg py-1 w-44"
-              style={{ top: menuPos.top, left: menuPos.left, background: 'var(--surface)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
-                className="w-full text-left px-3 py-1.5 text-sm"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                📁 New sub-folder
-              </button>
-              <button
-                onClick={() => { setShowMenu(false); setIsRenaming(true); setRenameValue(folder.name); }}
-                className="w-full text-left px-3 py-1.5 text-sm"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                ✏️ Rename
-              </button>
-              <button
-                onClick={() => {
-                  setShowMenu(false);
-                  if (confirm(`Delete folder "${folder.name}" and all sub-folders? Papers will be moved to the parent.`)) {
-                    onDeleteFolder(folder.id);
-                  }
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 9998 }}
+                onClick={(e) => { e.stopPropagation(); setShowMenu(false); }}
+              />
+              <div
+                style={{
+                  position: 'fixed',
+                  zIndex: 9999,
+                  top: menuPos.top,
+                  left: menuPos.left,
+                  width: '176px',
+                  borderRadius: '8px',
+                  padding: '4px 0',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--glass-border)',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                 }}
-                className="w-full text-left px-3 py-1.5 text-sm"
-                style={{ color: 'var(--text-secondary)' }}
+                onClick={(e) => e.stopPropagation()}
               >
-                🗑️ Delete folder
-              </button>
-            </div>,
+                <button
+                  onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }}
+                  className="w-full text-left px-3 py-1.5 text-sm"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  📁 New sub-folder
+                </button>
+                <button
+                  onClick={() => { setShowMenu(false); setIsRenaming(true); setRenameValue(folder.name); }}
+                  className="w-full text-left px-3 py-1.5 text-sm"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  ✏️ Rename
+                </button>
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    if (confirm(`Delete folder "${folder.name}" and all sub-folders? Papers will be moved to the parent.`)) {
+                      onDeleteFolder(folder.id);
+                    }
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-sm"
+                  style={{ color: 'var(--text-secondary)' }}
+                >
+                  🗑️ Delete folder
+                </button>
+              </div>
+            </>,
             document.body
           )}
         </div>

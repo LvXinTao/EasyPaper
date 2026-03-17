@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PaperMetadata } from '@/types';
+
+/** Count PDF pages by scanning for /Type /Page entries in the PDF structure */
+async function countPdfPages(filePath: string): Promise<number> {
+  const buffer = await readFile(filePath);
+  const content = buffer.toString('binary');
+  // Match /Type /Page (but not /Type /Pages which is the page tree root)
+  const matches = content.match(/\/Type\s*\/Page(?!s)/g);
+  return matches ? matches.length : 0;
+}
 
 interface RouteContext { params: Promise<{ id: string }>; }
 
@@ -19,10 +27,11 @@ export async function GET(_request: Request, context: RouteContext) {
   if (metadata && (!metadata.pages || metadata.pages === 0)) {
     try {
       const pdfPath = storage.getPdfPath(id);
-      const pdfBuffer = await readFile(pdfPath);
-      const pdf = await getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
-      metadata.pages = pdf.numPages;
-      await storage.updateMetadata(id, { pages: pdf.numPages });
+      const pageCount = await countPdfPages(pdfPath);
+      if (pageCount > 0) {
+        metadata.pages = pageCount;
+        await storage.updateMetadata(id, { pages: pageCount });
+      }
     } catch { /* PDF read failed, keep pages as 0 */ }
   }
 
