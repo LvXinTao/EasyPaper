@@ -244,6 +244,8 @@ export default function PaperDetailPage() {
                 // Only update streaming UI if still on the same session
                 if (activeSessionIdRef.current === sendingSessionId) {
                   setStreamingContent(fullResponse);
+                  // Restore streaming state if user switched back to this session
+                  setIsChatStreaming(true);
                 }
               }
               if (data.done) {
