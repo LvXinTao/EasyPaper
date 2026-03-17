@@ -11,6 +11,10 @@ const themeScript = `
 (function() {
   try {
     var theme = localStorage.getItem('easypaper-theme');
+    if (theme === 'deep-blue') {
+      theme = 'light-minimal';
+      localStorage.setItem('easypaper-theme', theme);
+    }
     if (theme) document.documentElement.setAttribute('data-theme', theme);
     var accent = localStorage.getItem('easypaper-accent');
     if (accent) {

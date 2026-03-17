@@ -4,14 +4,14 @@ import { useState, useEffect } from 'react';
 import type { ThemePreset } from '@/types';
 
 const presets: { id: ThemePreset; name: string; preview: string }[] = [
-  { id: 'dark-minimal', name: 'Dark Minimal', preview: '#161618' },
   { id: 'light-minimal', name: 'Light Minimal', preview: '#fafafa' },
-  { id: 'deep-blue', name: 'Deep Blue', preview: '#0d1117' },
+  { id: 'warm-light', name: 'Warm Light', preview: '#faf8f5' },
+  { id: 'dark-minimal', name: 'Dark Minimal', preview: '#161618' },
   { id: 'warm-dark', name: 'Warm Dark', preview: '#1a1816' },
 ];
 
 export function ThemePicker() {
-  const [current, setCurrent] = useState<ThemePreset>('dark-minimal');
+  const [current, setCurrent] = useState<ThemePreset>('light-minimal');
   const [customAccent, setCustomAccent] = useState<string>('');
   const [saving, setSaving] = useState(false);
 

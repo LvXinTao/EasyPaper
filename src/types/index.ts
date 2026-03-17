@@ -95,7 +95,7 @@ export interface Note {
   updatedAt: string;
 }
 
-export type ThemePreset = 'dark-minimal' | 'light-minimal' | 'deep-blue' | 'warm-dark';
+export type ThemePreset = 'dark-minimal' | 'light-minimal' | 'warm-light' | 'warm-dark';
 
 export interface ThemeSettings {
   preset: ThemePreset;

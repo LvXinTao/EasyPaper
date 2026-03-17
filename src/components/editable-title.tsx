@@ -65,7 +65,8 @@ export function EditableTitle({ value, onSave }: EditableTitleProps) {
         onKeyDown={handleKeyDown}
         disabled={isSaving}
         maxLength={200}
-        className="text-base font-semibold text-slate-800 bg-white border-2 border-indigo-500 rounded-md px-2 py-1 outline-none w-full ring-2 ring-indigo-100 disabled:opacity-50"
+        className="text-base font-semibold rounded-md px-2 py-1 outline-none w-full disabled:opacity-50"
+        style={{ color: 'var(--text-primary)', background: 'var(--surface)', border: '2px solid var(--accent)', boxShadow: '0 0 0 2px var(--accent-subtle)' }}
       />
     );
   }
@@ -73,7 +74,8 @@ export function EditableTitle({ value, onSave }: EditableTitleProps) {
   return (
     <h1
       onClick={() => setIsEditing(true)}
-      className="text-base font-semibold text-slate-800 truncate cursor-pointer hover:border-b hover:border-dashed hover:border-slate-400 transition-colors"
+      className="text-base font-semibold truncate cursor-pointer transition-colors"
+      style={{ color: 'var(--text-primary)' }}
       title="Click to rename"
     >
       {value}

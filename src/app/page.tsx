@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { FolderTree } from '@/components/folder-tree';
 import { PaperRow } from '@/components/paper-row';
 import { PreviewPanel } from '@/components/preview-panel';
@@ -17,6 +18,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const router = useRouter();
 
   const fetchPapers = useCallback(async () => {
     try {
@@ -96,6 +98,16 @@ export default function HomePage() {
     }
   };
 
+  const handleCompactPaperClick = (paperId: string) => {
+    setSelectedFolderId(null);
+    setFilterStatus('all');
+    setSearchQuery('');
+    setSelectedPaperId(paperId);
+    setTimeout(() => {
+      document.querySelector(`[data-paper-id="${paperId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
+  };
+
   return (
     <div className="flex" style={{ height: 'calc(100vh - 44px)' }}>
       {/* Column 1: Folder Sidebar */}
@@ -135,6 +147,35 @@ export default function HomePage() {
           onSelectFolder={setSelectedFolderId}
           selectedFolderId={selectedFolderId}
         />
+        {papers.length > 0 && (
+          <>
+            <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', padding: '12px 10px 5px', fontWeight: 600 }}>
+              Papers
+            </div>
+            <div className="flex-1 overflow-y-auto" style={{ padding: '0 4px' }}>
+              {papers.map(paper => (
+                <div
+                  key={paper.id}
+                  onClick={() => handleCompactPaperClick(paper.id)}
+                  className="cursor-pointer rounded transition-colors"
+                  style={{
+                    padding: '4px 6px',
+                    marginBottom: '1px',
+                    fontSize: '11px',
+                    color: paper.id === selectedPaperId ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    background: paper.id === selectedPaperId ? 'var(--accent-subtle)' : 'transparent',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={paper.title}
+                >
+                  {paper.title}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Column 2: Paper List */}
@@ -218,6 +259,7 @@ export default function HomePage() {
               paper={paper}
               isActive={paper.id === selectedPaperId}
               onClick={() => setSelectedPaperId(paper.id)}
+              onDoubleClick={() => router.push(`/paper/${paper.id}`)}
             />
           ))}
         </div>

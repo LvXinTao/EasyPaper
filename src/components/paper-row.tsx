@@ -6,6 +6,7 @@ interface PaperRowProps {
   paper: PaperListItem;
   isActive: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -16,12 +17,14 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   error: { label: 'Error', className: 'error' },
 };
 
-export function PaperRow({ paper, isActive, onClick }: PaperRowProps) {
+export function PaperRow({ paper, isActive, onClick, onDoubleClick }: PaperRowProps) {
   const status = statusConfig[paper.status] || statusConfig.pending;
 
   return (
     <div
+      data-paper-id={paper.id}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       className="cursor-pointer rounded-lg transition-colors"
       style={{
         padding: '10px',

@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 
 export function MarkdownContent({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={`prose prose-sm max-w-none ${className || ''}`}>
+    <div className={`prose max-w-none ${className || ''}`} style={{ fontSize: '13px', lineHeight: 1.7 }}>
       <ReactMarkdown
         components={{
           h1: ({ children }) => (
@@ -16,10 +16,10 @@ export function MarkdownContent({ content, className }: { content: string; class
           h3: ({ children }) => (
             <h4 className="text-sm font-bold mt-2 mb-1" style={{ color: 'var(--text-primary)' }}>{children}</h4>
           ),
-          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          p: ({ children }) => <p className="mb-2 last:mb-0" style={{ fontSize: '13px' }}>{children}</p>,
           ul: ({ children }) => <ul className="list-disc pl-4 mb-2 space-y-0.5">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5">{children}</ol>,
-          li: ({ children }) => <li className="text-sm">{children}</li>,
+          li: ({ children }) => <li style={{ fontSize: '13px' }}>{children}</li>,
           strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
           a: ({ children, href }) => (
             <a href={href} style={{ color: 'var(--accent)' }} className="underline underline-offset-2">{children}</a>
@@ -49,7 +49,7 @@ export function MarkdownContent({ content, className }: { content: string; class
           blockquote: ({ children }) => (
             <blockquote
               className="border-l-2 pl-3 my-2 italic"
-              style={{ borderColor: 'var(--accent)', color: 'var(--text-secondary)' }}
+              style={{ borderColor: 'var(--accent)', color: 'var(--text-secondary)', fontSize: '13px' }}
             >
               {children}
             </blockquote>
