@@ -1,0 +1,20 @@
+# Exclude .next build cache and dev artifacts (saves ~440MB)
+.next/dev/
+.next/cache/
+.next/trace/
+.next/trace-build/
+.next/diagnostics/
+.next/turbopack/
+.next/types/
+
+# Test files
+__tests__/
+__mocks__/
+
+# Dev config
+.env*
+!.env.example
+data/
+config/
+docs/
+jest.config.ts

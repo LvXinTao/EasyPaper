@@ -8,7 +8,13 @@
     "easypaper": "bin/easypaper.js"
   },
   "files": [
-    ".next/",
+    ".next/server/",
+    ".next/static/",
+    ".next/build/",
+    ".next/*.json",
+    ".next/*.js",
+    ".next/BUILD_ID",
+    ".next/package.json",
     "src/",
     "public/",
     "bin/",
