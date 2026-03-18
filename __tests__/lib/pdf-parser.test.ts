@@ -25,9 +25,15 @@ jest.mock('mupdf', () => {
 
 jest.mock('@/lib/ai-client', () => {
   const mockCompleteVision = jest.fn();
+  // streamCompleteVision is an async generator; wrap mockCompleteVision so tests
+  // can control it with mockResolvedValue / mockRejectedValue as before.
+  const streamCompleteVision = jest.fn().mockImplementation(async function* () {
+    const result = await mockCompleteVision();
+    yield result;
+  });
   return {
-    createAIClient: jest.fn().mockReturnValue({ completeVision: mockCompleteVision }),
-    __mocks: { mockCompleteVision },
+    createAIClient: jest.fn().mockReturnValue({ streamCompleteVision, completeVision: mockCompleteVision }),
+    __mocks: { mockCompleteVision, streamCompleteVision },
   };
 });
 
@@ -44,7 +50,7 @@ const mupdfMocks = require('mupdf').__mocks as {
   mockToStructuredText: jest.Mock;
 };
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { mockCompleteVision } = require('@/lib/ai-client').__mocks as { mockCompleteVision: jest.Mock };
+const { mockCompleteVision, streamCompleteVision } = require('@/lib/ai-client').__mocks as { mockCompleteVision: jest.Mock; streamCompleteVision: jest.Mock };
 
 describe('parsePdfWithVision', () => {
   const config = { baseUrl: 'https://api.test.com/v1', apiKey: 'sk-test', visionModel: 'gpt-4o' };
@@ -66,7 +72,7 @@ describe('parsePdfWithVision', () => {
     const result = await parsePdfWithVision('/test.pdf', config);
 
     expect(result).toBe('# Paper Title\n\nParsed content.');
-    const callArgs = mockCompleteVision.mock.calls[0][0];
+    const callArgs = streamCompleteVision.mock.calls[0][0];
     expect(callArgs[0].content).toHaveLength(3);
     expect(callArgs[0].content[0].type).toBe('text');
     expect(callArgs[0].content[1].type).toBe('image_url');
