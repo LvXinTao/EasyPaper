@@ -32,7 +32,7 @@ Currently, PDF parsing via Vision Model shows only step-based progress ("Parsing
   [pdf-parser] Vision streaming: "# Attention Is All You Need\n## Abstract\nThe domin..."
   [pdf-parser] Vision stream completed (batch 1/1, 3241 tokens, 12.3s)
   ```
-- Log lines are truncated to ~80 chars for readability; logged every N tokens (not every chunk).
+- Log lines are truncated to ~80 chars for readability; logged every N tokens (not every chunk). Token count uses same `Math.ceil(charCount / 4)` approximation as the frontend.
 - **Timeout/retry:** Keep existing 180s `AbortSignal` timeout per batch. On timeout or stream failure, discard partial content and retry once (same as current `callVisionWithRetry` behavior).
 
 **`src/lib/ai-client.ts`:**
@@ -241,7 +241,7 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 | `src/app/prompts/page.tsx` | New prompt configuration page |
 | `src/app/api/chat/route.ts` | Use custom prompt if configured |
 | `src/types/index.ts` | Add PromptSettings types, extend AnalyzeEvent with vision_stream/vision_progress variants |
-| Navigation component (`src/components/nav.tsx` or equivalent) | Add "Prompts" link |
+| Navigation component (`src/components/navbar.tsx`) | Add "Prompts" link |
 
 ## Files NOT Modified
 
@@ -256,6 +256,10 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 - 400: Invalid body (missing required fields, prompt exceeds 10,000 character limit)
 - 200: Success
 - 500: Storage read/write error
+
+**`GET /api/prompts`:**
+- 200: Success (returns current config + presets)
+- 500: Storage read error (e.g., corrupted `settings.json`)
 
 Prompts are sent server-side to the AI API and never rendered as raw HTML, so XSS risk is minimal.
 
