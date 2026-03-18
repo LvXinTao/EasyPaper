@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { PaperAnalysis } from '@/types';
 import { SectionTabs } from './section-tabs';
 import { MarkdownContent } from './markdown-content';
@@ -13,6 +13,8 @@ interface AnalysisPanelProps {
   isAnalyzing?: boolean;
   analysisStep?: string | null;
   analysisMessage?: string | null;
+  visionStreamContent?: string;
+  visionProgress?: { batch: number; totalBatches: number; pages: string; elapsed: number } | null;
   onReAnalyze?: () => void;
 }
 
@@ -101,11 +103,74 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
   );
 }
 
+function VisionStreamBox({
+  content,
+  progress,
+}: {
+  content: string;
+  progress: { batch: number; totalBatches: number; pages: string; elapsed: number } | null;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [content]);
+
+  const tokens = Math.ceil(content.length / 4);
+
+  return (
+    <div className="mx-4 mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--glass-border)' }}>
+      {progress && (
+        <div className="px-3 py-1.5 flex items-center gap-2 text-xs" style={{ background: 'var(--glass)', borderBottom: '1px solid var(--glass-border)' }}>
+          <div
+            className="animate-spin w-3 h-3 border-2 border-t-transparent rounded-full"
+            style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
+          />
+          <span style={{ color: 'var(--accent)' }}>
+            Batch {progress.batch}/{progress.totalBatches}
+          </span>
+          <span style={{ color: 'var(--text-tertiary)' }}>
+            Pages {progress.pages}
+          </span>
+          {progress.elapsed > 0 && (
+            <span style={{ color: 'var(--text-tertiary)' }}>
+              {progress.elapsed.toFixed(1)}s
+            </span>
+          )}
+        </div>
+      )}
+      <div
+        ref={scrollRef}
+        className="overflow-y-auto font-mono text-xs leading-relaxed"
+        style={{
+          height: '200px',
+          padding: '8px 12px',
+          background: 'var(--bg)',
+          color: 'var(--text-secondary)',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}
+      >
+        {content || 'Waiting for Vision Model output...'}
+        <span className="inline-block w-1.5 h-3.5 ml-0.5 animate-pulse" style={{ background: 'var(--accent)' }} />
+      </div>
+      <div className="px-3 py-1 flex justify-between text-xs" style={{ background: 'var(--glass)', borderTop: '1px solid var(--glass-border)', color: 'var(--text-tertiary)' }}>
+        <span>~{tokens.toLocaleString()} tokens</span>
+        {progress && progress.elapsed > 0 && <span>{progress.elapsed.toFixed(1)}s</span>}
+      </div>
+    </div>
+  );
+}
+
 export function AnalysisPanel({
   analysis,
   isAnalyzing,
   analysisStep,
   analysisMessage,
+  visionStreamContent,
+  visionProgress,
   onReAnalyze,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
@@ -116,6 +181,9 @@ export function AnalysisPanel({
       <div className="flex flex-col h-full">
         <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
         <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
+        {analysisStep === 'parsing' && visionStreamContent !== undefined && visionStreamContent.length > 0 && (
+          <VisionStreamBox content={visionStreamContent} progress={visionProgress || null} />
+        )}
       </div>
     );
   }

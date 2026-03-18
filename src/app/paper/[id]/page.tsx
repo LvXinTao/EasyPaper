@@ -23,6 +23,8 @@ export default function PaperDetailPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
+  const [visionStreamContent, setVisionStreamContent] = useState('');
+  const [visionProgress, setVisionProgress] = useState<{ batch: number; totalBatches: number; pages: string; elapsed: number } | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'notes'>('analysis');
@@ -103,6 +105,17 @@ export default function PaperDetailPage() {
         setAnalysisStep(event.step as string);
         setAnalysisMessage((event.message as string) || null);
       }
+      if ('type' in event && event.type === 'vision_stream') {
+        setVisionStreamContent(prev => prev + (event.content as string));
+      }
+      if ('type' in event && event.type === 'vision_progress') {
+        setVisionProgress({
+          batch: event.batch as number,
+          totalBatches: event.totalBatches as number,
+          pages: event.pages as string,
+          elapsed: event.elapsed as number,
+        });
+      }
       if ('section' in event) {
         setAnalysis((prev) => {
           if (!prev) {
@@ -135,6 +148,8 @@ export default function PaperDetailPage() {
     setAnalysisError(null);
     setAnalysisStep(null);
     setAnalysisMessage(null);
+    setVisionStreamContent('');
+    setVisionProgress(null);
     startAnalysis({ paperId });
   }, [paperId, startAnalysis]);
 
@@ -471,6 +486,8 @@ export default function PaperDetailPage() {
                   isAnalyzing={isAnalyzing}
                   analysisStep={analysisStep}
                   analysisMessage={analysisMessage}
+                  visionStreamContent={visionStreamContent}
+                  visionProgress={visionProgress}
                   onReAnalyze={handleAnalyze}
                 />
               ) : (
