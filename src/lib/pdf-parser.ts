@@ -17,8 +17,8 @@ interface ParseOptions {
 const BATCH_SIZE = 15;
 const BATCH_OVERLAP = 2;
 const MAX_TOKENS = 16384;
-const TIMEOUT_MS = 120_000;
-const DPI = 200;
+const TIMEOUT_MS = 180_000;
+const DPI = 150;
 const SCALE = DPI / 72;
 
 /**
