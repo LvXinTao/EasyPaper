@@ -6,34 +6,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green)](https://nodejs.org)
 
-Upload academic PDFs, get AI-powered analysis, and chat about the content — all in one place.
+Upload academic PDFs, get AI-powered analysis, chat about the content, and take notes. Fully customizable API.
 
-<!-- Add your screenshot here -->
-<!-- ![EasyPaper Screenshot](docs/images/screenshot.png) -->
+<img src="docs/images/screenshot.png" alt="EasyPaper Screenshot" width="1000"/>
 
-## Quick Start
 
-No installation needed — just run:
-
-```bash
-npx @lvxintao/easypaper
-```
-
-Open [http://localhost:3000](http://localhost:3000), go to **Settings** to configure your AI provider, and start uploading papers.
-
-> **Prerequisites:** [Node.js](https://nodejs.org) 18+ and Python 3 with [`marker-pdf`](https://github.com/VikParuchuri/marker) installed (`pip install marker-pdf`)
 
 ## Features
 
-- **PDF Upload & Viewing** — Drag-and-drop upload with built-in PDF viewer (zoom, page navigation, text selection)
-- **AI Analysis** — Extract summary, key contributions, methodology, and conclusions with page references
-- **Interactive Chat** — Ask follow-up questions with full paper context
-- **Reference Linking** — Click references to jump to the exact page with text highlighting
-- **Streaming Responses** — Real-time AI output with typewriter effect
-- **Flexible AI Backend** — Works with any OpenAI-compatible API (OpenAI, Ollama, LM Studio, etc.)
-- **Local Storage** — All data on your machine, no external database
+- **PDF Upload & Viewing** — Drag-and-drop upload with built-in PDF viewer (zoom, page navigation, text selection).
+- **AI Analysis** — Automatically extract summary, key contributions, methodology, and conclusions via MLLM (e.g. GPT-4o), with customizable prompts.
+- **Interactive Chat** — Ask follow-up questions with full paper context.
+- **Notes** — Take notes on paper content with Markdown support and tag management.
+- **Flexible AI Backend** — Works with any OpenAI-compatible API (OpenAI, OpenRouter, etc.).
+- **Local Storage** — All data stored locally, no external database needed.
 
-## Installation
+## Quick Start
 
 ### Option 1: npx (no install)
 
@@ -54,9 +42,26 @@ easypaper
 git clone https://github.com/lvxintao/EasyPaper.git
 cd EasyPaper
 npm install
-cp .env.example .env.local   # Edit with your AI provider settings
-npm run dev
 ```
+
+### Option 4: Update existing installation
+
+```bash
+npm update
+npm i -g @lvxintao/easypaper@latest
+```
+
+## Usage
+
+```bash
+# npm install
+easypaper # Default port 3000, optional --port <number>
+-----------
+# From source
+cd EasyPaper
+npm run start
+```
+Open [http://localhost:3000](http://localhost:3000) to get started.
 
 ## Configuration
 
@@ -67,17 +72,16 @@ Configure your AI provider in the app's **Settings** page, or via environment va
 | `AI_BASE_URL` | API endpoint | `https://api.openai.com/v1` |
 | `AI_API_KEY` | Your API key | — |
 | `AI_MODEL` | Chat model | `gpt-4o` |
-| `AI_VISION_MODEL` | Vision model | `gpt-4o` |
+| `AI_VISION_MODEL` | Vision model for PDF parsing | `gpt-4o` |
 
-- **npm install:** place a `.env` file at `~/.easypaper/.env`
-- **From source:** copy `.env.example` to `.env.local`
+- **Environment variables:** Can also be set in `~/.easypaper/.env`, with lower priority than UI settings.
 
-## Usage
+## How to Use
 
-1. **Upload** a PDF on the home page (drag-and-drop or click to browse)
-2. **Open** the paper — PDF on the left, analysis panel on the right
-3. **Analyze** to get a structured breakdown with page references
-4. **Chat** to ask specific questions about the paper
+1. **Upload** — Upload a PDF on the home page (drag-and-drop or click to browse)
+2. **Open** — Enter the paper detail page with PDF viewer on the left and analysis panel on the right
+3. **Analyze** — Get a structured analysis with page-referenced insights
+4. **Chat** — Ask specific questions about the paper content
 
 ## CLI Options
 
@@ -89,15 +93,14 @@ easypaper [options]
   -v, --version        Show version
 ```
 
-Data is stored in `~/.easypaper/`.
+All data is stored locally in `~/.easypaper/`.
 
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) 16 (App Router) + React 19 + TypeScript
 - [Tailwind CSS](https://tailwindcss.com) 4
-- [pdfjs-dist](https://github.com/nicedoc/pdfjs-dist) for PDF rendering
-- [marker-pdf](https://github.com/VikParuchuri/marker) for PDF-to-Markdown parsing
+- [mupdf](https://github.com/ArtifexSoftware/mupdf) for PDF rendering
 
 ## License
 
-MIT
+MIT License
