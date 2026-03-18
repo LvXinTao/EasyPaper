@@ -1,5 +1,5 @@
 import { storage } from '@/lib/storage';
-import { parsePdfWithMarker } from '@/lib/marker';
+import { parsePdfWithVision } from '@/lib/pdf-parser';
 import { createAIClient } from '@/lib/ai-client';
 import { createErrorResponse } from '@/lib/errors';
 import { ANALYSIS_PROMPT } from '@/lib/prompts';
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!paperId) return createErrorResponse('PAPER_NOT_FOUND', 'paperId is required');
     const exists = await storage.paperExists(paperId);
     if (!exists) return createErrorResponse('PAPER_NOT_FOUND', 'Paper not found');
-    const { apiKey, baseUrl, model } = await getAIConfig();
+    const { apiKey, baseUrl, model, visionModel } = await getAIConfig();
     if (!apiKey) return createErrorResponse('API_KEY_MISSING', 'API key is not configured');
 
     const encoder = new TextEncoder();
@@ -27,11 +27,11 @@ export async function POST(request: Request) {
             send({ step: 'parsing', message: 'Using cached parsed content...' });
           } else {
             console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
-            send({ step: 'parsing', message: 'Parsing PDF with Marker...' });
             await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
             const pdfPath = storage.getPdfPath(paperId);
-            const paperDir = pdfPath.replace('/original.pdf', '');
-            markdown = await parsePdfWithMarker(pdfPath, paperDir);
+            markdown = await parsePdfWithVision(pdfPath, { baseUrl, apiKey, visionModel }, {
+              onProgress: (message) => send({ step: 'parsing', message }),
+            });
             await storage.saveParsedContent(paperId, markdown);
             console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
           }

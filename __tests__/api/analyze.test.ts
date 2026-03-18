@@ -4,7 +4,7 @@ import { storage } from '@/lib/storage';
 jest.mock('@/lib/storage', () => ({
   storage: { paperExists: jest.fn(), getMetadata: jest.fn(), saveMetadata: jest.fn(), getPdfPath: jest.fn(), saveParsedContent: jest.fn(), saveAnalysis: jest.fn(), getSettings: jest.fn().mockResolvedValue(null) },
 }));
-jest.mock('@/lib/marker', () => ({ parsePdfWithMarker: jest.fn() }));
+jest.mock('@/lib/pdf-parser', () => ({ parsePdfWithVision: jest.fn() }));
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
