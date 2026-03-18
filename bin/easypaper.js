@@ -51,10 +51,6 @@ const pkgDir = path.resolve(__dirname, '..');
 const dataDir = path.join(os.homedir(), '.easypaper', 'data');
 const configDir = path.join(os.homedir(), '.easypaper', 'config');
 
-// Ensure data directories exist
-fs.mkdirSync(dataDir, { recursive: true });
-fs.mkdirSync(configDir, { recursive: true });
-
 // Set environment variables
 const env = {
   ...process.env,
@@ -64,11 +60,15 @@ const env = {
   EASYPAPER_PKG_DIR: pkgDir,
 };
 
+// Ensure data directories exist (use resolved paths)
+fs.mkdirSync(env.DATA_DIR, { recursive: true });
+fs.mkdirSync(env.CONFIG_DIR, { recursive: true });
+
 // Resolve next binary from the package's own node_modules
 const nextBin = path.join(pkgDir, 'node_modules', '.bin', 'next');
 
 console.log(`EasyPaper v${pkg.version}`);
-console.log(`Starting on http://localhost:${port}`);
+console.log(`EasyPaper is running at http://localhost:${port}`);
 console.log(`Data directory: ${env.DATA_DIR}`);
 console.log();
 
