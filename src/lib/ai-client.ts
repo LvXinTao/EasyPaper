@@ -97,7 +97,45 @@ export function createAIClient(config: AIClientConfig) {
     return data.choices[0].message.content;
   }
 
-  return { complete, streamComplete, completeVision };
+  async function* streamCompleteVision(
+    messages: VisionMessage[],
+    maxTokens: number = 16384,
+    signal?: AbortSignal,
+  ): AsyncGenerator<string> {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, stream: true }),
+      signal,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(parseAPIError(response.status, errorText, `${baseUrl}/chat/completions`, model));
+    }
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') return;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) yield content;
+        } catch { /* Skip malformed lines */ }
+      }
+    }
+  }
+
+  return { complete, streamComplete, completeVision, streamCompleteVision };
 }
 
 export type { ContentPart, TextContentPart, ImageContentPart, VisionMessage };
