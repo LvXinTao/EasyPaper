@@ -29,10 +29,13 @@ export async function POST(request: Request) {
             console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
             await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
             const pdfPath = storage.getPdfPath(paperId);
+            const promptSettings = await storage.getPromptSettings();
+            const customVisionPrompt = promptSettings?.vision?.custom;
             markdown = await parsePdfWithVision(pdfPath, { baseUrl, apiKey, visionModel }, {
               onProgress: (message) => send({ step: 'parsing', message }),
               onVisionChunk: (content) => send({ type: 'vision_stream', content }),
               onVisionProgress: (info) => send({ type: 'vision_progress', ...info }),
+              customVisionPrompt,
             });
             await storage.saveParsedContent(paperId, markdown);
             console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);

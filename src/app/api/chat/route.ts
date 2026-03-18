@@ -28,7 +28,9 @@ export async function POST(request: Request) {
 
     const parsedContent = await storage.getParsedContent(paperId);
     const historyStr = session.messages.map((m) => `${m.role}: ${m.content}`).join('\n');
-    const prompt = CHAT_PROMPT.replace('{content}', parsedContent || '').replace('{history}', historyStr).replace('{question}', message);
+    const promptSettings = await storage.getPromptSettings();
+    const chatPromptTemplate = promptSettings?.chat?.custom || CHAT_PROMPT;
+    const prompt = chatPromptTemplate.replaceAll('{content}', parsedContent || '').replaceAll('{history}', historyStr).replaceAll('{question}', message);
     const client = createAIClient({ baseUrl, apiKey, model });
     const encoder = new TextEncoder();
 

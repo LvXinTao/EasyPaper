@@ -14,6 +14,7 @@ interface ParseOptions {
   onProgress?: (message: string) => void;
   onVisionChunk?: (chunk: string) => void;
   onVisionProgress?: (info: { batch: number; totalBatches: number; pages: string; elapsed: number }) => void;
+  customVisionPrompt?: string;
 }
 
 const BATCH_SIZE = 15;
@@ -48,7 +49,7 @@ export async function parsePdfWithVision(
   config: ParseConfig,
   options: ParseOptions = {},
 ): Promise<string> {
-  const { onProgress = () => {}, onVisionChunk, onVisionProgress } = options;
+  const { onProgress = () => {}, onVisionChunk, onVisionProgress, customVisionPrompt } = options;
 
   // 1. Load PDF with mupdf
   const fileBuffer = await fs.readFile(pdfPath);
@@ -93,7 +94,7 @@ export async function parsePdfWithVision(
       if (onVisionProgress) onVisionProgress({ batch: 1, totalBatches: 1, pages, elapsed: 0 });
       console.log(`[pdf-parser] Vision stream started (batch 1/1, pages ${pages})`);
       const startTime = Date.now();
-      result = await callVisionWithRetryStreaming(client, validImages, PDF_PARSE_PROMPT, onVisionChunk);
+      result = await callVisionWithRetryStreaming(client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, onVisionChunk);
       const elapsed = (Date.now() - startTime) / 1000;
       const tokens = Math.ceil(result.length / 4);
       console.log(`[pdf-parser] Vision stream completed (batch 1/1, ${tokens} tokens, ${elapsed.toFixed(1)}s)`);
@@ -116,7 +117,7 @@ export async function parsePdfWithVision(
         const startTime = Date.now();
 
         const prompt = start === 0
-          ? PDF_PARSE_PROMPT
+          ? (customVisionPrompt || PDF_PARSE_PROMPT)
           : PDF_PARSE_BATCH_PROMPT
               .replace('{startPage}', String(start + 1))
               .replace('{endPage}', String(end))
