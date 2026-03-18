@@ -20,6 +20,9 @@ export async function POST(request: Request) {
       async start(controller) {
         const send = (data: Record<string, unknown>) => { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); };
         try {
+          // Load prompt settings once for both vision and analysis
+          const promptSettings = await storage.getPromptSettings();
+
           // Step 1: Parse PDF with Marker (skip if cached)
           let markdown = await storage.getParsedContent(paperId);
           if (markdown) {
@@ -29,7 +32,6 @@ export async function POST(request: Request) {
             console.log(`[analyze] Paper ${paperId}: Starting PDF parsing...`);
             await storage.saveMetadata(paperId, { ...(await storage.getMetadata(paperId)), status: 'parsing' });
             const pdfPath = storage.getPdfPath(paperId);
-            const promptSettings = await storage.getPromptSettings();
             const customVisionPrompt = promptSettings?.vision?.custom;
             markdown = await parsePdfWithVision(pdfPath, { baseUrl, apiKey, visionModel }, {
               onProgress: (message) => send({ step: 'parsing', message }),
@@ -42,7 +44,8 @@ export async function POST(request: Request) {
           }
 
           // Step 2: Send to AI for analysis
-          const prompt = ANALYSIS_PROMPT.replace('{content}', markdown);
+          const analysisPromptTemplate = promptSettings?.analysis?.custom || ANALYSIS_PROMPT;
+          const prompt = analysisPromptTemplate.replaceAll('{content}', markdown);
           const promptLength = prompt.length;
           const estimatedTokens = Math.ceil(promptLength / 4);
           console.log(`[analyze] Paper ${paperId}: Sending to AI for analysis`);

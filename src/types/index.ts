@@ -133,5 +133,6 @@ export interface PromptConfig {
 
 export interface PromptSettings {
   vision: PromptConfig;
+  analysis: PromptConfig;
   chat: PromptConfig;
 }

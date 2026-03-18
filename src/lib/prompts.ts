@@ -28,6 +28,36 @@ Use Markdown formatting within each "content" field to structure the text clearl
 
 IMPORTANT: Return ONLY valid JSON. No markdown code blocks, no extra text.`;
 
+export const ANALYSIS_PROMPT_ZH = `你是一位学术论文分析师。根据下面提供的Markdown格式论文内容，给出结构化分析。
+
+使用与论文内容相同的语言回复。如果论文是中文，请用中文回复。如果是英文，请用英文回复。
+
+论文内容：
+{content}
+
+请按以下JSON格式输出分析：
+{
+  "summary": {
+    "content": "论文核心思想与创新点概述"
+  },
+  "contributions": {
+    "items": ["贡献1", "贡献2"]
+  },
+  "methodology": {
+    "content": "研究方法与技术路线概述"
+  },
+  "experiments": {
+    "content": "实验设置、数据集、指标和关键结果描述"
+  },
+  "conclusions": {
+    "content": "主要发现与结论"
+  }
+}
+
+在每个"content"字段中使用Markdown格式来清晰地组织文本。使用##和###作为标题，项目列表，**加粗**强调，以及其他适当的Markdown语法。不要在"items"数组中使用Markdown——每一项应为一句话。
+
+重要：仅返回有效的JSON。不要使用markdown代码块，不要添加额外文本。`;
+
 export const CHAT_PROMPT = `You are an academic paper assistant. Answer the user's question based on the paper content provided.
 
 Respond in the SAME LANGUAGE as the user's question.
@@ -114,6 +144,10 @@ export const PROMPT_PRESETS = {
   vision: {
     en: { label: 'English', content: PDF_PARSE_PROMPT },
     zh: { label: '中文', content: PDF_PARSE_PROMPT_ZH },
+  },
+  analysis: {
+    en: { label: 'English', content: ANALYSIS_PROMPT },
+    zh: { label: '中文', content: ANALYSIS_PROMPT_ZH },
   },
   chat: {
     en: { label: 'English', content: CHAT_PROMPT },

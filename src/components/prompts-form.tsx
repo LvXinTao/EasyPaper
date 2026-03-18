@@ -13,9 +13,10 @@ interface PromptConfig {
 }
 
 interface PromptsData {
-  current: { vision: PromptConfig; chat: PromptConfig } | null;
+  current: { vision: PromptConfig; analysis: PromptConfig; chat: PromptConfig } | null;
   presets: {
     vision: Record<string, PresetOption>;
+    analysis: Record<string, PresetOption>;
     chat: Record<string, PresetOption>;
   };
 }
@@ -28,7 +29,7 @@ function PromptEditor({
   onChange,
 }: {
   title: string;
-  type: 'vision' | 'chat';
+  type: 'vision' | 'analysis' | 'chat';
   config: PromptConfig;
   presets: Record<string, PresetOption>;
   onChange: (config: PromptConfig) => void;
@@ -64,7 +65,7 @@ function PromptEditor({
     setShowRestoreConfirm(false);
   };
 
-  const requiredPlaceholders = type === 'chat' ? ['{content}', '{history}', '{question}'] : [];
+  const requiredPlaceholders = type === 'chat' ? ['{content}', '{history}', '{question}'] : type === 'analysis' ? ['{content}'] : [];
   const missingPlaceholders = requiredPlaceholders.filter(p => !config.custom.includes(p));
 
   return (
@@ -75,6 +76,11 @@ function PromptEditor({
           {type === 'chat' && (
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)', fontSize: '10px' }}>
               Required: {'{content}'}, {'{history}'}, {'{question}'}
+            </p>
+          )}
+          {type === 'analysis' && (
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)', fontSize: '10px' }}>
+              Required: {'{content}'} &middot; Must return valid JSON
             </p>
           )}
         </div>
@@ -150,13 +156,16 @@ function PromptEditor({
 export function PromptsForm() {
   const [data, setData] = useState<PromptsData | null>(null);
   const [vision, setVision] = useState<PromptConfig | null>(null);
+  const [analysis, setAnalysis] = useState<PromptConfig | null>(null);
   const [chat, setChat] = useState<PromptConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savedVision, setSavedVision] = useState<PromptConfig | null>(null);
+  const [savedAnalysis, setSavedAnalysis] = useState<PromptConfig | null>(null);
   const [savedChat, setSavedChat] = useState<PromptConfig | null>(null);
 
   const hasUnsavedChanges = (vision && savedVision && (vision.custom !== savedVision.custom || vision.preset !== savedVision.preset))
+    || (analysis && savedAnalysis && (analysis.custom !== savedAnalysis.custom || analysis.preset !== savedAnalysis.preset))
     || (chat && savedChat && (chat.custom !== savedChat.custom || chat.preset !== savedChat.preset));
 
   useEffect(() => {
@@ -165,23 +174,26 @@ export function PromptsForm() {
       .then((d: PromptsData) => {
         setData(d);
         const v = d.current?.vision || { preset: 'en', custom: d.presets.vision.en.content };
+        const a = d.current?.analysis || { preset: 'en', custom: d.presets.analysis.en.content };
         const c = d.current?.chat || { preset: 'en', custom: d.presets.chat.en.content };
         setVision(v);
+        setAnalysis(a);
         setChat(c);
         setSavedVision(v);
+        setSavedAnalysis(a);
         setSavedChat(c);
       });
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!vision || !chat) return;
+    if (!vision || !analysis || !chat) return;
     setSaving(true);
     setMessage(null);
     try {
       const res = await fetch('/api/prompts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vision, chat }),
+        body: JSON.stringify({ vision, analysis, chat }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -189,15 +201,16 @@ export function PromptsForm() {
       }
       setMessage({ type: 'success', text: 'Prompts saved successfully' });
       setSavedVision({ ...vision });
+      setSavedAnalysis({ ...analysis });
       setSavedChat({ ...chat });
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Save failed' });
     } finally {
       setSaving(false);
     }
-  }, [vision, chat]);
+  }, [vision, analysis, chat]);
 
-  if (!data || !vision || !chat) {
+  if (!data || !vision || !analysis || !chat) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin w-5 h-5 border-2 border-t-transparent rounded-full" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
@@ -213,6 +226,13 @@ export function PromptsForm() {
         config={vision}
         presets={data.presets.vision}
         onChange={setVision}
+      />
+      <PromptEditor
+        title="Analysis Prompt"
+        type="analysis"
+        config={analysis}
+        presets={data.presets.analysis}
+        onChange={setAnalysis}
       />
       <PromptEditor
         title="Chat Prompt"

@@ -24,6 +24,7 @@ export async function POST(request: Request) {
 
     const merged: PromptSettings = existing || {
       vision: { preset: 'en', custom: PROMPT_PRESETS.vision.en.content },
+      analysis: { preset: 'en', custom: PROMPT_PRESETS.analysis.en.content },
       chat: { preset: 'en', custom: PROMPT_PRESETS.chat.en.content },
     };
 
@@ -34,6 +35,16 @@ export async function POST(request: Request) {
       merged.vision = {
         preset: (body.vision.preset as PromptPresetKey) || merged.vision.preset,
         custom: body.vision.custom ?? merged.vision.custom,
+      };
+    }
+
+    if (body.analysis) {
+      if (body.analysis.custom && body.analysis.custom.length > MAX_PROMPT_LENGTH) {
+        return NextResponse.json({ error: 'Analysis prompt exceeds maximum length' }, { status: 400 });
+      }
+      merged.analysis = {
+        preset: (body.analysis.preset as PromptPresetKey) || merged.analysis.preset,
+        custom: body.analysis.custom ?? merged.analysis.custom,
       };
     }
 
