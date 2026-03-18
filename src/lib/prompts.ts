@@ -41,3 +41,30 @@ Previous conversation:
 User question: {question}
 
 Provide a clear, accurate answer based on the paper content.`;
+
+export const PDF_PARSE_PROMPT = `You are a precise academic document converter. Convert the provided PDF page images into well-structured Markdown.
+
+Rules:
+1. Preserve the document's heading hierarchy using # ## ### etc.
+2. Render mathematical formulas as LaTeX: inline formulas with $...$ and display formulas with $$...$$
+3. Render tables as Markdown tables with proper alignment
+4. For figures/charts: describe them as ![Figure N: description](figure) with a concise alt text
+5. Preserve the original reading order across pages
+6. Do NOT add any commentary, summary, or interpretation — only convert what you see
+7. Output ONLY the Markdown content, no code fences or wrapper
+
+Respond in the SAME LANGUAGE as the document content.`;
+
+export const PDF_PARSE_BATCH_PROMPT = `You are continuing to convert a multi-part academic PDF into Markdown.
+This is pages {startPage}-{endPage} of a {totalPages}-page document.
+Continue from where the previous section ended. Do NOT repeat content from earlier pages.
+
+Rules:
+1. Preserve the document's heading hierarchy using # ## ### etc.
+2. Render mathematical formulas as LaTeX: inline with $...$ and display with $$...$$
+3. Render tables as Markdown tables with proper alignment
+4. For figures/charts: describe them as ![Figure N: description](figure)
+5. Preserve the original reading order
+6. Output ONLY the Markdown content, no code fences or wrapper
+
+Respond in the SAME LANGUAGE as the document content.`;
