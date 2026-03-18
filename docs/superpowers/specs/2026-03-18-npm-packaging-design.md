@@ -14,13 +14,16 @@ easypaper --help       # shows usage
 easypaper --version    # shows version
 ```
 
-First run triggers an automatic `next build` (~30-60 seconds). Subsequent runs start instantly.
+Starts instantly — the npm package ships with pre-built assets.
 
 ## Approach
 
-**Next.js + CLI Wrapper** — keep the existing Next.js architecture unchanged. Add a CLI entry point that configures environment variables and delegates to `next start`.
+**Pre-built Next.js + CLI Wrapper** — keep the existing Next.js architecture unchanged. Pre-build before publishing so the npm package includes `.next/` build output. Add a CLI entry point that configures environment variables and delegates to `next start`.
 
-Chosen over alternatives (pre-built publish, standalone mode) for minimal risk and smallest diff.
+Pre-building solves three problems at once:
+- No devDependencies needed at install time (global install only provides `dependencies`)
+- No write-permission issues in global `node_modules/` directories
+- No first-run build delay for users
 
 ## Components
 
@@ -39,10 +42,9 @@ A Node.js script registered as the `easypaper` command via the `bin` field in `p
    - `CONFIG_DIR` → `~/.easypaper/config`
    - `PORT` → specified port
 3. Create `~/.easypaper/data/` and `~/.easypaper/config/` if they don't exist
-4. Check if `.next/` exists in the package install directory; if not, run `next build`
-5. Detect version mismatch (compare `package.json` version with a stored build version) to trigger rebuild after upgrades
-6. Spawn `next start -p <port>` as a child process, forwarding stdio
-7. Print startup message: `EasyPaper is running at http://localhost:<port>`
+4. Resolve the package install directory via `path.resolve(__dirname, '..')` to ensure correct working directory
+5. Spawn `next start -p <port>` as a child process with `cwd` set to the package install directory, forwarding stdio
+6. Print startup message: `EasyPaper is running at http://localhost:<port>`
 
 ### 2. Storage Path Changes (`src/lib/storage.ts`)
 
@@ -70,7 +72,28 @@ function getConfigDir(): string {
 
 Environment variable overrides are preserved for backward compatibility and development flexibility.
 
-### 3. Data Directory Structure
+### 3. Script Path Fix (`src/lib/marker.ts`)
+
+The `marker.ts` module uses `process.cwd()` to locate `scripts/parse-pdf.py`. When installed globally, `process.cwd()` is the user's shell directory, not the package directory.
+
+**Fix:** Resolve `parse-pdf.py` relative to the module's own location using `__dirname`:
+
+```typescript
+// Before:
+const scriptPath = path.join(process.cwd(), 'scripts', 'parse-pdf.py');
+
+// After:
+const scriptPath = path.join(__dirname, '..', '..', 'scripts', 'parse-pdf.py');
+```
+
+Note: The CLI entry point also sets `EASYPAPER_PKG_DIR` as a fallback:
+```typescript
+const scriptPath = process.env.EASYPAPER_PKG_DIR
+  ? path.join(process.env.EASYPAPER_PKG_DIR, 'scripts', 'parse-pdf.py')
+  : path.join(__dirname, '..', '..', 'scripts', 'parse-pdf.py');
+```
+
+### 4. Data Directory Structure
 
 ```
 ~/.easypaper/
@@ -88,7 +111,7 @@ Environment variable overrides are preserved for backward compatibility and deve
     └── folders.json       # Folder hierarchy
 ```
 
-### 4. package.json Changes
+### 5. package.json Changes
 
 ```json
 {
@@ -101,14 +124,15 @@ Environment variable overrides are preserved for backward compatibility and deve
     "easypaper": "bin/easypaper.js"
   },
   "files": [
+    ".next/",
     "src/",
     "public/",
     "bin/",
     "scripts/",
     "next.config.ts",
+    "next-env.d.ts",
     "tsconfig.json",
-    "postcss.config.mjs",
-    "package.json"
+    "postcss.config.mjs"
   ],
   "engines": {
     "node": ">=18.0.0"
@@ -120,35 +144,35 @@ Environment variable overrides are preserved for backward compatibility and deve
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "prepublishOnly": "npm run lint && npm test"
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   }
 }
 ```
 
-### 5. Build & Startup Flow
+Key changes from original spec:
+- `.next/` added to `files` — ships pre-built assets
+- `next-env.d.ts` added to `files`
+- `prepublishOnly` now includes `npm run build` — ensures build before every publish
+
+### 6. Startup Flow
 
 ```
 easypaper [--port N]
     │
     ├─ Set DATA_DIR=~/.easypaper/data
     ├─ Set CONFIG_DIR=~/.easypaper/config
-    ├─ Ensure directories exist
+    ├─ Set EASYPAPER_PKG_DIR=<package install dir>
+    ├─ Ensure ~/.easypaper/data/ and ~/.easypaper/config/ exist
     │
-    ├─ .next/ exists and version matches?
-    │   ├─ YES → skip build
-    │   └─ NO  → "First run: building EasyPaper..."
-    │           → next build (in package install dir)
-    │           → save version marker
-    │
-    └─ next start -p <port>
+    └─ next start -p <port> (cwd = package install dir)
        → "EasyPaper is running at http://localhost:<port>"
 ```
 
-### 6. Version Upgrade Handling
+### 7. Version Upgrade Handling
 
 After `npm update -g easypaper`:
-- npm replaces the package directory, removing the old `.next/`
-- CLI detects missing `.next/` or version mismatch → triggers rebuild
+- npm replaces the package directory with the new version (which includes fresh `.next/` build)
+- No rebuild needed — new version ships pre-built
 - User data in `~/.easypaper/` is untouched
 
 ## Files to Create/Modify
@@ -157,7 +181,8 @@ After `npm update -g easypaper`:
 |------|--------|-------------|
 | `bin/easypaper.js` | Create | CLI entry point |
 | `src/lib/storage.ts` | Modify | Change default paths to `~/.easypaper/` |
-| `package.json` | Modify | Add `bin`, `files`, `engines`; set `private: false` |
+| `src/lib/marker.ts` | Modify | Fix `process.cwd()` → `__dirname` for script path |
+| `package.json` | Modify | Add `bin`, `files`, `engines`; set `private: false`; add build to prepublishOnly |
 
 ## System Requirements
 
@@ -166,7 +191,6 @@ After `npm update -g easypaper`:
 
 ## Out of Scope
 
-- Pre-building before publish (future optimization)
 - Docker packaging
 - Auto-update mechanism
-- Data migration from old `./data` paths
+- Data migration from old `./data` paths (users who previously ran via `npm run dev` will need to manually copy `./data` to `~/.easypaper/data`)
