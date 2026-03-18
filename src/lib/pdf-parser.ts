@@ -12,6 +12,8 @@ interface ParseConfig {
 
 interface ParseOptions {
   onProgress?: (message: string) => void;
+  onVisionChunk?: (chunk: string) => void;
+  onVisionProgress?: (info: { batch: number; totalBatches: number; pages: string; elapsed: number }) => void;
 }
 
 const BATCH_SIZE = 15;
@@ -46,7 +48,7 @@ export async function parsePdfWithVision(
   config: ParseConfig,
   options: ParseOptions = {},
 ): Promise<string> {
-  const { onProgress = () => {} } = options;
+  const { onProgress = () => {}, onVisionChunk, onVisionProgress } = options;
 
   // 1. Load PDF with mupdf
   const fileBuffer = await fs.readFile(pdfPath);
@@ -86,8 +88,16 @@ export async function parsePdfWithVision(
 
     if (validImages.length <= BATCH_SIZE) {
       // Single batch
+      const pages = `1-${validImages.length}`;
       onProgress(`Parsing with Vision AI (${validImages.length} pages)...`);
-      result = await callVisionWithRetry(client, validImages, PDF_PARSE_PROMPT);
+      if (onVisionProgress) onVisionProgress({ batch: 1, totalBatches: 1, pages, elapsed: 0 });
+      console.log(`[pdf-parser] Vision stream started (batch 1/1, pages ${pages})`);
+      const startTime = Date.now();
+      result = await callVisionWithRetryStreaming(client, validImages, PDF_PARSE_PROMPT, onVisionChunk);
+      const elapsed = (Date.now() - startTime) / 1000;
+      const tokens = Math.ceil(result.length / 4);
+      console.log(`[pdf-parser] Vision stream completed (batch 1/1, ${tokens} tokens, ${elapsed.toFixed(1)}s)`);
+      if (onVisionProgress) onVisionProgress({ batch: 1, totalBatches: 1, pages, elapsed });
     } else {
       // Multi-batch with overlap
       const results: string[] = [];
@@ -99,8 +109,11 @@ export async function parsePdfWithVision(
         const end = Math.min(start + BATCH_SIZE, validImages.length);
         const batchImages = validImages.slice(start, end);
         batchNum++;
-
-        onProgress(`Parsing with Vision AI (batch ${batchNum}/${totalBatches}, pages ${start + 1}-${end})...`);
+        const pages = `${start + 1}-${end}`;
+        onProgress(`Parsing with Vision AI (batch ${batchNum}/${totalBatches}, pages ${pages})...`);
+        if (onVisionProgress) onVisionProgress({ batch: batchNum, totalBatches, pages, elapsed: 0 });
+        console.log(`[pdf-parser] Vision stream started (batch ${batchNum}/${totalBatches}, pages ${pages})`);
+        const startTime = Date.now();
 
         const prompt = start === 0
           ? PDF_PARSE_PROMPT
@@ -109,7 +122,11 @@ export async function parsePdfWithVision(
               .replace('{endPage}', String(end))
               .replace('{totalPages}', String(validImages.length));
 
-        const batchResult = await callVisionWithRetry(client, batchImages, prompt);
+        const batchResult = await callVisionWithRetryStreaming(client, batchImages, prompt, onVisionChunk);
+        const elapsed = (Date.now() - startTime) / 1000;
+        const tokens = Math.ceil(batchResult.length / 4);
+        console.log(`[pdf-parser] Vision stream completed (batch ${batchNum}/${totalBatches}, ${tokens} tokens, ${elapsed.toFixed(1)}s)`);
+        if (onVisionProgress) onVisionProgress({ batch: batchNum, totalBatches, pages, elapsed });
         results.push(batchResult);
 
         // Advance with overlap (except on last batch)
@@ -152,12 +169,13 @@ function extractTextFallback(
 }
 
 /**
- * Call Vision API with a single retry on timeout/abort.
+ * Call Vision API with streaming and a single retry on timeout/abort.
  */
-async function callVisionWithRetry(
+async function callVisionWithRetryStreaming(
   client: ReturnType<typeof createAIClient>,
   pageImages: string[],
   prompt: string,
+  onChunk?: (chunk: string) => void,
 ): Promise<string> {
   const content: ContentPart[] = [
     { type: 'text', text: prompt },
@@ -171,15 +189,30 @@ async function callVisionWithRetry(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      const result = await client.completeVision(
+      let result = '';
+      let charsSinceLog = 0;
+      for await (const chunk of client.streamCompleteVision(
         [{ role: 'user', content }],
         MAX_TOKENS,
         controller.signal,
-      );
+      )) {
+        result += chunk;
+        charsSinceLog += chunk.length;
+        if (onChunk) onChunk(chunk);
+        // Log every ~500 chars
+        if (charsSinceLog >= 500) {
+          const preview = result.slice(-80).replace(/\n/g, '\\n');
+          console.log(`[pdf-parser] Vision streaming: "...${preview}"`);
+          charsSinceLog = 0;
+        }
+      }
       return result;
     } catch (err) {
-      if (attempt === 0 && err instanceof DOMException && err.name === 'AbortError') {
-        console.warn('[pdf-parser] Vision API timed out, retrying...');
+      if (attempt === 0 && (
+        (err instanceof DOMException && err.name === 'AbortError') ||
+        (err instanceof TypeError && err.message.includes('fetch'))
+      )) {
+        console.warn('[pdf-parser] Vision API failed, retrying...', err instanceof Error ? err.message : err);
         continue;
       }
       throw err;
