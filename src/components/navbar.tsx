@@ -2,18 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { SettingsForm } from './settings-form';
+import { PromptsForm } from './prompts-form';
 import { UploadModal } from './upload-modal';
 
 export function Navbar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPromptsOpen, setIsPromptsOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   useEffect(() => {
-    if (isSettingsOpen) {
+    if (isSettingsOpen || isPromptsOpen) {
       document.body.style.overflow = 'hidden';
       return () => { document.body.style.overflow = ''; };
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, isPromptsOpen]);
 
   return (
     <>
@@ -52,6 +54,23 @@ export function Navbar() {
             + Upload
           </button>
           <button
+            onClick={() => setIsPromptsOpen(true)}
+            className="cursor-pointer rounded-lg transition-colors flex items-center gap-1.5"
+            style={{
+              padding: '5px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              background: 'var(--glass)',
+              border: '1px solid var(--glass-border)',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Prompts
+          </button>
+          <button
             onClick={() => setIsSettingsOpen(true)}
             className="cursor-pointer rounded-lg transition-colors flex items-center gap-1.5"
             style={{
@@ -69,26 +88,46 @@ export function Navbar() {
             </svg>
             Settings
           </button>
-          <a
-            href="/prompts"
-            className="rounded-lg transition-colors flex items-center gap-1.5"
-            style={{
-              padding: '5px 12px',
-              fontSize: '12px',
-              fontWeight: 500,
-              background: 'var(--glass)',
-              border: '1px solid var(--glass-border)',
-              color: 'var(--text-secondary)',
-              textDecoration: 'none',
-            }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Prompts
-          </a>
         </div>
       </nav>
+
+      {/* Prompts modal */}
+      {isPromptsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)', animation: 'fadeIn 150ms ease-out' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setIsPromptsOpen(false); }}
+        >
+          <div
+            className="max-w-2xl w-full mx-4 rounded-2xl"
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border-strong)',
+              boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
+              padding: '24px',
+              animation: 'fadeIn 150ms ease-out, scaleIn 150ms ease-out',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>Prompts</h2>
+                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>Customize the AI prompts used for PDF parsing and chat.</p>
+              </div>
+              <button
+                onClick={() => setIsPromptsOpen(false)}
+                className="cursor-pointer"
+                style={{ color: 'var(--text-tertiary)', fontSize: '18px' }}
+                aria-label="Close prompts"
+              >
+                ×
+              </button>
+            </div>
+            <PromptsForm />
+          </div>
+        </div>
+      )}
 
       {/* Settings modal */}
       {isSettingsOpen && (
