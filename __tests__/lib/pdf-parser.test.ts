@@ -35,6 +35,7 @@ jest.mock('fs/promises', () => ({
   readFile: jest.fn().mockResolvedValue(Buffer.from('fake-pdf-bytes')),
 }));
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const mupdfMocks = require('mupdf').__mocks as {
   mockCountPages: jest.Mock;
   mockLoadPage: jest.Mock;
@@ -42,6 +43,7 @@ const mupdfMocks = require('mupdf').__mocks as {
   mockAsPNG: jest.Mock;
   mockToStructuredText: jest.Mock;
 };
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { mockCompleteVision } = require('@/lib/ai-client').__mocks as { mockCompleteVision: jest.Mock };
 
 describe('parsePdfWithVision', () => {

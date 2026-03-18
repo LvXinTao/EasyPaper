@@ -27,6 +27,7 @@ describe('getAIConfig', () => {
   });
 
   it('prefers settings visionModel over env var', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { storage } = require('@/lib/storage');
     (storage.getSettings as jest.Mock).mockResolvedValue({
       visionModel: 'from-settings',
