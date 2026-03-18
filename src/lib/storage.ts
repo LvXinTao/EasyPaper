@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder } from '@/types';
+import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder, PromptSettings } from '@/types';
 
 function getDataDir(): string {
   return process.env.DATA_DIR || path.join(os.homedir(), '.easypaper', 'data');
@@ -230,5 +230,15 @@ export const storage = {
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content);
     } catch { return null; }
+  },
+  async getPromptSettings(): Promise<PromptSettings | null> {
+    const settings = await this.getSettings();
+    if (!settings || !settings.prompts) return null;
+    return settings.prompts as PromptSettings;
+  },
+  async savePromptSettings(prompts: PromptSettings): Promise<void> {
+    const existing = (await this.getSettings()) || {};
+    existing.prompts = prompts;
+    await this.saveSettings(existing);
   },
 };
