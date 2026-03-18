@@ -70,10 +70,14 @@ export interface ApiError {
 }
 
 export type AnalyzeEvent =
-  | { step: 'parsing' }
-  | { step: 'analyzing' }
+  | { step: 'parsing'; message?: string }
+  | { step: 'analyzing'; message?: string }
+  | { step: 'saving'; message?: string }
+  | { type: 'vision_stream'; content: string }
+  | { type: 'vision_progress'; batch: number; totalBatches: number; pages: string; elapsed: number }
   | { section: string; content: string }
-  | { done: true };
+  | { done: true }
+  | { error: string };
 
 export type ChatEvent =
   | { content: string }
@@ -118,4 +122,16 @@ export type ThemePreset = 'dark-minimal' | 'light-minimal' | 'warm-light' | 'war
 export interface ThemeSettings {
   preset: ThemePreset;
   customAccent: string | null;
+}
+
+export type PromptPresetKey = 'zh' | 'en';
+
+export interface PromptConfig {
+  preset: PromptPresetKey;
+  custom: string;
+}
+
+export interface PromptSettings {
+  vision: PromptConfig;
+  chat: PromptConfig;
 }
