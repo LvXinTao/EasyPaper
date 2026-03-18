@@ -37,6 +37,7 @@ Options:
   -v, --version        Show version number
 
 Data is stored in ~/.easypaper/
+Environment variables can be set in ~/.easypaper/.env
 `);
   process.exit(0);
 }
@@ -48,8 +49,27 @@ if (values.version) {
 
 const port = values.port;
 const pkgDir = path.resolve(__dirname, '..');
-const dataDir = path.join(os.homedir(), '.easypaper', 'data');
-const configDir = path.join(os.homedir(), '.easypaper', 'config');
+const easypeperDir = path.join(os.homedir(), '.easypaper');
+const dataDir = path.join(easypeperDir, 'data');
+const configDir = path.join(easypeperDir, 'config');
+
+// Load ~/.easypaper/.env (low priority, does not override existing env vars)
+const dotenvPath = path.join(easypeperDir, '.env');
+try {
+  const dotenvContent = fs.readFileSync(dotenvPath, 'utf-8');
+  for (const line of dotenvContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIndex = trimmed.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = trimmed.slice(0, eqIndex).trim();
+    const value = trimmed.slice(eqIndex + 1).trim();
+    // Only set if not already defined in the environment
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+} catch { /* .env file doesn't exist, that's fine */ }
 
 // Set environment variables
 const env = {
