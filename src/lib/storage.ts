@@ -1,13 +1,14 @@
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder } from '@/types';
 
 function getDataDir(): string {
-  return process.env.DATA_DIR || path.join(process.cwd(), 'data');
+  return process.env.DATA_DIR || path.join(os.homedir(), '.easypaper', 'data');
 }
 
 function getConfigDir(): string {
-  return process.env.CONFIG_DIR || path.join(process.cwd(), 'config');
+  return process.env.CONFIG_DIR || path.join(os.homedir(), '.easypaper', 'config');
 }
 
 function paperDir(paperId: string): string {

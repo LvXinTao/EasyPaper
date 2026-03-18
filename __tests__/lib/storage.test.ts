@@ -127,3 +127,26 @@ describe('storage', () => {
     });
   });
 });
+
+describe('default data directory', () => {
+  let originalDataDir: string | undefined;
+
+  beforeEach(() => {
+    originalDataDir = process.env.DATA_DIR;
+    delete process.env.DATA_DIR;
+  });
+
+  afterEach(() => {
+    if (originalDataDir !== undefined) {
+      process.env.DATA_DIR = originalDataDir;
+    } else {
+      delete process.env.DATA_DIR;
+    }
+  });
+
+  it('uses ~/.easypaper/data when DATA_DIR is not set', () => {
+    const expectedBase = path.join(os.homedir(), '.easypaper', 'data');
+    const pdfPath = storage.getPdfPath('test-id');
+    expect(pdfPath).toBe(path.join(expectedBase, 'papers', 'test-id', 'original.pdf'));
+  });
+});
