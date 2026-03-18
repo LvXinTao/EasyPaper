@@ -371,11 +371,11 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
           break;
         case 'PageUp':
           e.preventDefault();
-          scrollContainerRef.current?.scrollBy({ top: -(scrollContainerRef.current?.clientHeight ?? 400) * 0.8, behavior: 'smooth' });
+          goToPage(pageRef.current - 1);
           break;
         case 'PageDown':
           e.preventDefault();
-          scrollContainerRef.current?.scrollBy({ top: (scrollContainerRef.current?.clientHeight ?? 400) * 0.8, behavior: 'smooth' });
+          goToPage(pageRef.current + 1);
           break;
         case 'Home':
           e.preventDefault();
