@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"npx jest __tests__/lib/pdf-parser.test.ts --verbose 2>&1\",\"timeout\":30000,\"description\":\"Run pdf-parser tests\"}",
+  "error": "Exit code 1\n  console.warn\n    [pdf-parser] Vision LLM failed, falling back to text extraction: API error 400: model does not support images\n\n      154 | /**\n      155 |  * Call Vision API with a single retry on timeout/abort.\n    > 156 |  */\n          |    ^\n      157 | async function callVisionWithRetry(\n      158 |   client: ReturnType<typeof createAIClient>,\n      159 |   pageImages: string[],\n\n      at parsePdfWithVision (src/lib/pdf-parser.ts:156:17)\n      at async Object.<anonymous> (__te...",
+  "timestamp": "2026-03-18T11:21:13.570Z",
+  "retry_count": 1
+}
