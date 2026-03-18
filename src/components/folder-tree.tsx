@@ -475,6 +475,18 @@ function FolderRow({
 export function FolderTree(props: FolderTreeProps) {
   const { folders, papers, currentPaperId, searchQuery, onClose, onCreateFolder, onRenameFolder, onDeleteFolder, onMovePaper, onDeletePaper, onReorderPapers, onSelectFolder, selectedFolderId } = props;
 
+  const [isCreatingRoot, setIsCreatingRoot] = useState(false);
+  const [newRootName, setNewRootName] = useState('');
+
+  const handleCreateRoot = async () => {
+    const trimmed = newRootName.trim();
+    if (trimmed) {
+      await onCreateFolder(trimmed, null);
+      setNewRootName('');
+    }
+    setIsCreatingRoot(false);
+  };
+
   const rootFolders = useMemo(
     () => folders.filter((f) => !f.parentId).sort((a, b) => a.name.localeCompare(b.name)),
     [folders]
@@ -509,6 +521,43 @@ export function FolderTree(props: FolderTreeProps) {
 
   return (
     <div>
+      <div
+        className="flex items-center justify-between"
+        style={{ padding: '6px 12px 4px 10px' }}
+      >
+        <span className="text-xs font-medium uppercase" style={{ color: 'var(--text-tertiary)' }}>Folders</span>
+        <button
+          onClick={() => { setIsCreatingRoot(true); setNewRootName(''); }}
+          className="text-sm leading-none"
+          style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
+          title="New folder"
+        >
+          +
+        </button>
+      </div>
+      {isCreatingRoot && (
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <span>📁</span>
+          <input
+            autoFocus
+            placeholder="Folder name"
+            value={newRootName}
+            onChange={(e) => setNewRootName(e.target.value)}
+            onBlur={handleCreateRoot}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreateRoot();
+              if (e.key === 'Escape') setIsCreatingRoot(false);
+            }}
+            className="text-sm rounded px-1 py-0.5 outline-none flex-1"
+            style={{
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface)',
+              color: 'var(--text-primary)',
+            }}
+            maxLength={100}
+          />
+        </div>
+      )}
       {rootFolders.map((folder) => (
         <FolderRow
           key={folder.id}
