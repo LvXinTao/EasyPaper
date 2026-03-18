@@ -59,6 +59,7 @@ describe('easypaper CLI', () => {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       fail('Should have thrown');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       expect(err.status).not.toBe(0);
     }

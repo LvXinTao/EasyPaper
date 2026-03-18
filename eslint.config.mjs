@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // CLI entry point is CommonJS, not TypeScript
+    "bin/**",
+    // Vendored minified files
+    "public/pdf.worker.min.mjs",
   ]),
 ]);
 
