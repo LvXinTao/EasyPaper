@@ -42,6 +42,20 @@ User question: {question}
 
 Provide a clear, accurate answer based on the paper content.`;
 
+export const CHAT_PROMPT_ZH = `你是一个学术论文助手。根据提供的论文内容回答用户的问题。
+
+使用与用户问题相同的语言回复。
+
+论文内容：
+{content}
+
+之前的对话：
+{history}
+
+用户问题：{question}
+
+根据论文内容提供清晰、准确的回答。`;
+
 export const PDF_PARSE_PROMPT = `You are a precise academic document converter. Convert the provided PDF page images into well-structured Markdown.
 
 Rules:
@@ -54,6 +68,19 @@ Rules:
 7. Output ONLY the Markdown content, no code fences or wrapper
 
 Respond in the SAME LANGUAGE as the document content.`;
+
+export const PDF_PARSE_PROMPT_ZH = `你是一个精确的学术文档转换器。将提供的PDF页面图片转换为结构良好的Markdown。
+
+规则：
+1. 使用 # ## ### 等保留文档的标题层级
+2. 数学公式使用LaTeX：行内公式用 $...$，独立公式用 $$...$$
+3. 表格渲染为Markdown表格，注意对齐
+4. 图表描述为 ![图N: 描述](figure)，配以简洁的替代文本
+5. 保持原始的阅读顺序
+6. 不要添加任何评论、总结或解读——只转换你看到的内容
+7. 仅输出Markdown内容，不要代码围栏或包装
+
+使用与文档内容相同的语言回复。`;
 
 export const PDF_PARSE_BATCH_PROMPT = `You are continuing to convert a multi-part academic PDF into Markdown.
 This is pages {startPage}-{endPage} of a {totalPages}-page document.
@@ -68,3 +95,28 @@ Rules:
 6. Output ONLY the Markdown content, no code fences or wrapper
 
 Respond in the SAME LANGUAGE as the document content.`;
+
+export const PDF_PARSE_BATCH_PROMPT_ZH = `你正在继续将多部分学术PDF转换为Markdown。
+这是{totalPages}页文档的第{startPage}-{endPage}页。
+从上一节结束的地方继续。不要重复之前页面的内容。
+
+规则：
+1. 使用 # ## ### 等保留文档的标题层级
+2. 数学公式使用LaTeX：行内用 $...$，独立用 $$...$$
+3. 表格渲染为Markdown表格，注意对齐
+4. 图表描述为 ![图N: 描述](figure)
+5. 保持原始的阅读顺序
+6. 仅输出Markdown内容，不要代码围栏或包装
+
+使用与文档内容相同的语言回复。`;
+
+export const PROMPT_PRESETS = {
+  vision: {
+    en: { label: 'English', content: PDF_PARSE_PROMPT },
+    zh: { label: '中文', content: PDF_PARSE_PROMPT_ZH },
+  },
+  chat: {
+    en: { label: 'English', content: CHAT_PROMPT },
+    zh: { label: '中文', content: CHAT_PROMPT_ZH },
+  },
+};
