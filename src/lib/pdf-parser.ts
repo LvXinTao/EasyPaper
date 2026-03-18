@@ -1,8 +1,12 @@
 import fs from 'fs/promises';
-import * as mupdf from 'mupdf';
 import { createAIClient } from '@/lib/ai-client';
 import { PDF_PARSE_PROMPT, PDF_PARSE_BATCH_PROMPT } from '@/lib/prompts';
 import type { ContentPart } from '@/lib/ai-client';
+
+// Dynamic import to avoid Turbopack rewriting the ESM+WASM package name
+async function loadMupdf() {
+  return await import('mupdf');
+}
 
 interface ParseConfig {
   baseUrl: string;
@@ -48,7 +52,8 @@ export async function parsePdfWithVision(
 ): Promise<string> {
   const { onProgress = () => {} } = options;
 
-  // 1. Load PDF with mupdf
+  // 1. Load PDF with mupdf (dynamic import to avoid Turbopack ESM/WASM issues)
+  const mupdf = await loadMupdf();
   const fileBuffer = await fs.readFile(pdfPath);
   const doc = mupdf.Document.openDocument(fileBuffer, 'application/pdf');
   const pageCount = doc.countPages();
@@ -135,7 +140,7 @@ export async function parsePdfWithVision(
 }
 
 function extractTextFallback(
-  doc: InstanceType<typeof mupdf.Document>,
+  doc: { loadPage(i: number): { toStructuredText(): { asText(): string } } },
   pageCount: number,
 ): string {
   const textPages: string[] = [];
