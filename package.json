@@ -1,5 +1,5 @@
 {
-  "name": "easypaper",
+  "name": "@lvxintao/easypaper",
   "version": "0.1.0",
   "private": false,
   "description": "Upload academic PDFs, analyze them with AI, and chat about their content",
