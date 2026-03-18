@@ -1,7 +1,5 @@
 export const ANALYSIS_PROMPT = `You are an academic paper analyst. Given the following paper content in Markdown format, provide a structured analysis.
 
-Respond in the SAME LANGUAGE as the paper content. If the paper is in Chinese, respond in Chinese. If in English, respond in English.
-
 Paper content:
 {content}
 
@@ -29,8 +27,6 @@ Use Markdown formatting within each "content" field to structure the text clearl
 IMPORTANT: Return ONLY valid JSON. No markdown code blocks, no extra text.`;
 
 export const ANALYSIS_PROMPT_ZH = `你是一位学术论文分析师。根据下面提供的Markdown格式论文内容，给出结构化分析。
-
-使用与论文内容相同的语言回复。如果论文是中文，请用中文回复。如果是英文，请用英文回复。
 
 论文内容：
 {content}
