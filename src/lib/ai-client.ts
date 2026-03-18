@@ -1,5 +1,10 @@
+type TextContentPart = { type: 'text'; text: string };
+type ImageContentPart = { type: 'image_url'; image_url: { url: string; detail?: 'high' | 'low' | 'auto' } };
+type ContentPart = TextContentPart | ImageContentPart;
+
 interface AIClientConfig { baseUrl: string; apiKey: string; model: string; }
 interface Message { role: 'system' | 'user' | 'assistant'; content: string; }
+interface VisionMessage { role: 'system' | 'user' | 'assistant'; content: string | ContentPart[]; }
 
 function parseAPIError(status: number, errorText: string, url: string, model: string): string {
   let detail = '';
@@ -73,5 +78,26 @@ export function createAIClient(config: AIClientConfig) {
     }
   }
 
-  return { complete, streamComplete };
+  async function completeVision(
+    messages: VisionMessage[],
+    maxTokens: number = 16384,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, max_tokens: maxTokens, stream: false }),
+      signal,
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(parseAPIError(response.status, errorText, `${baseUrl}/chat/completions`, model));
+    }
+    const data = await response.json();
+    return data.choices[0].message.content;
+  }
+
+  return { complete, streamComplete, completeVision };
 }
+
+export type { ContentPart, TextContentPart, ImageContentPart, VisionMessage };

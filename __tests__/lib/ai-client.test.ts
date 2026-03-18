@@ -28,6 +28,51 @@ describe('createAIClient', () => {
     });
   });
 
+  describe('completeVision', () => {
+    it('sends vision messages with image_url content and max_tokens', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '# Paper Title\n\nContent here' } }] }),
+      });
+      const result = await client.completeVision([{
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Parse this PDF' },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,abc123', detail: 'high' } },
+        ],
+      }]);
+      expect(result).toBe('# Paper Title\n\nContent here');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.max_tokens).toBe(16384);
+      expect(body.messages[0].content).toEqual([
+        { type: 'text', text: 'Parse this PDF' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,abc123', detail: 'high' } },
+      ]);
+    });
+
+    it('throws on API error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false, status: 400, statusText: 'Bad Request',
+        text: async () => '{"error":{"message":"Invalid image"}}',
+      });
+      await expect(client.completeVision([{
+        role: 'user',
+        content: [{ type: 'text', text: 'test' }],
+      }])).rejects.toThrow('API error 400');
+    });
+
+    it('supports AbortSignal for timeout', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      mockFetch.mockRejectedValue(new DOMException('The operation was aborted', 'AbortError'));
+      await expect(client.completeVision(
+        [{ role: 'user', content: [{ type: 'text', text: 'test' }] }],
+        16384,
+        controller.signal,
+      )).rejects.toThrow();
+    });
+  });
+
   describe('streamComplete', () => {
     it('yields chunks from SSE stream', async () => {
       const encoder = new TextEncoder();
