@@ -46,6 +46,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const [highlightRects, setHighlightRects] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number>(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Load PDF document
   useEffect(() => {
@@ -353,14 +354,28 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
       switch (e.key) {
         case 'ArrowLeft':
-        case 'PageUp':
           e.preventDefault();
           goToPage(pageRef.current - 1);
           break;
         case 'ArrowRight':
-        case 'PageDown':
           e.preventDefault();
           goToPage(pageRef.current + 1);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          scrollContainerRef.current?.scrollBy({ top: -100, behavior: 'smooth' });
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          scrollContainerRef.current?.scrollBy({ top: 100, behavior: 'smooth' });
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          scrollContainerRef.current?.scrollBy({ top: -(scrollContainerRef.current?.clientHeight ?? 400) * 0.8, behavior: 'smooth' });
+          break;
+        case 'PageDown':
+          e.preventDefault();
+          scrollContainerRef.current?.scrollBy({ top: (scrollContainerRef.current?.clientHeight ?? 400) * 0.8, behavior: 'smooth' });
           break;
         case 'Home':
           e.preventDefault();
@@ -605,7 +620,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       </div>
 
       {/* Canvas + TextLayer */}
-      <div className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}>
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}>
         <div className="text-center">
           <div
             ref={wrapperRef}
