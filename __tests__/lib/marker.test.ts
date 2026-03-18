@@ -36,4 +36,27 @@ describe('parsePdfWithMarker', () => {
     closeCallback(1);
     await expect(promise).rejects.toThrow('PDF parsing failed');
   });
+
+  it('resolves parse-pdf.py relative to module location, not cwd', async () => {
+    const originalCwd = process.cwd;
+    process.cwd = jest.fn().mockReturnValue('/tmp/fake-user-dir') as any;
+
+    const mockProcess = { stdout: { on: jest.fn() }, stderr: { on: jest.fn() }, on: jest.fn() };
+    mockSpawn.mockReturnValue(mockProcess as any);
+
+    parsePdfWithMarker('/test.pdf', '/output');
+
+    const spawnArgs = mockSpawn.mock.calls[0];
+    const scriptPath = spawnArgs[1][0]; // first arg after python binary
+    // Should NOT use the fake cwd
+    expect(scriptPath).not.toContain('/tmp/fake-user-dir');
+    // Should end with scripts/parse-pdf.py
+    expect(scriptPath).toMatch(/scripts[/\\]parse-pdf\.py$/);
+
+    process.cwd = originalCwd;
+
+    // Clean up the promise
+    const closeCallback = mockProcess.on.mock.calls.find((c: any[]) => c[0] === 'close')![1];
+    closeCallback(0);
+  });
 });

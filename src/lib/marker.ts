@@ -42,7 +42,9 @@ export async function parsePdfWithMarker(pdfPath: string, outputDir: string): Pr
   const pythonBin = findPythonWithMarker();
 
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(process.cwd(), 'scripts', 'parse-pdf.py');
+    const scriptPath = process.env.EASYPAPER_PKG_DIR
+      ? path.join(process.env.EASYPAPER_PKG_DIR, 'scripts', 'parse-pdf.py')
+      : path.join(__dirname, '..', '..', 'scripts', 'parse-pdf.py');
     const proc = spawn(pythonBin, [scriptPath, pdfPath, outputDir], {
       shell: true,
       env: { ...process.env },
