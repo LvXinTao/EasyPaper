@@ -1,14 +1,34 @@
 {
   "name": "easypaper",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Upload academic PDFs, analyze them with AI, and chat about their content",
+  "license": "MIT",
+  "bin": {
+    "easypaper": "bin/easypaper.js"
+  },
+  "files": [
+    ".next/",
+    "src/",
+    "public/",
+    "bin/",
+    "scripts/",
+    "next.config.ts",
+    "next-env.d.ts",
+    "tsconfig.json",
+    "postcss.config.mjs"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "next": "16.1.6",
