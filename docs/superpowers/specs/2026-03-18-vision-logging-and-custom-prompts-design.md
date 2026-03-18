@@ -24,7 +24,7 @@ Currently, PDF parsing via Vision Model shows only step-based progress ("Parsing
 
 **`src/lib/pdf-parser.ts`:**
 
-- Replace `client.complete()` with `client.streamComplete()` for Vision Model calls.
+- Replace `client.completeVision()` with `client.streamCompleteVision()` for Vision Model calls.
 - Accept a `onChunk` callback parameter that receives each streamed text chunk.
 - Emit console logs matching Chat's pattern:
   ```
@@ -33,6 +33,19 @@ Currently, PDF parsing via Vision Model shows only step-based progress ("Parsing
   [pdf-parser] Vision stream completed (batch 1/1, 3241 tokens, 12.3s)
   ```
 - Log lines are truncated to ~80 chars for readability; logged every N tokens (not every chunk).
+- **Timeout/retry:** Keep existing 180s `AbortSignal` timeout per batch. On timeout or stream failure, discard partial content and retry once (same as current `callVisionWithRetry` behavior).
+
+**`src/lib/ai-client.ts`:**
+
+- Add new `streamCompleteVision()` method that accepts `VisionMessage[]`, `maxTokens`, and `AbortSignal`.
+- Sets `stream: true` on the API call and returns `AsyncGenerator<string>` (same pattern as existing `streamComplete()`).
+- Supports image content parts (`ContentPart[]`) in message format.
+
+**Multi-batch streaming behavior:**
+
+- For multi-page PDFs with multiple batches, the streaming box appends content across batches with a visual separator (`--- Batch N ---`).
+- Each batch's streamed chunks are accumulated into a complete string before passing to the existing `deduplicateAndJoin` logic.
+- `vision_progress` events: sent once at batch start (`elapsed: 0`) and once at batch end (with final elapsed time).
 
 **`src/app/api/analyze/route.ts`:**
 
@@ -45,12 +58,12 @@ Currently, PDF parsing via Vision Model shows only step-based progress ("Parsing
 
 **`src/components/analysis-panel.tsx`:**
 
-During Step 2 ("AI Analysis"), when `vision_stream` events arrive:
+During Step 1 ("Parsing PDF"), when `vision_stream` events arrive:
 
 - **Top bar:** Compact single-line showing: spinning icon + "Parsing with Vision AI" + batch info + page range + elapsed time.
 - **Progress bar:** Thin bar showing batch completion percentage.
 - **Streaming box:** Fixed-height container (~200px) with `overflow-y: auto`, auto-scrolling to bottom. Displays raw Markdown text as it arrives. Uses monospace font.
-- **Footer line:** Token count (left) + estimated remaining time (right).
+- **Footer line:** Approximate token count via `Math.ceil(charCount / 4)` (left) + elapsed time (right). Not all OpenAI-compatible providers support `stream_options`, so we approximate rather than request usage data.
 
 When parsing completes, the streaming box disappears and Step 3 begins.
 
@@ -115,10 +128,14 @@ Existing prompts become English presets. New Chinese presets added:
 
 | Key | Role | Language |
 |-----|------|----------|
-| `PDF_PARSE_PROMPT` | Vision PDF parsing | English (existing) |
-| `PDF_PARSE_PROMPT_ZH` | Vision PDF parsing | Chinese (new) |
+| `PDF_PARSE_PROMPT` | Vision PDF parsing (single/first batch) | English (existing) |
+| `PDF_PARSE_PROMPT_ZH` | Vision PDF parsing (single/first batch) | Chinese (new) |
+| `PDF_PARSE_BATCH_PROMPT` | Vision PDF parsing (continuation batches) | English (existing) |
+| `PDF_PARSE_BATCH_PROMPT_ZH` | Vision PDF parsing (continuation batches) | Chinese (new) |
 | `CHAT_PROMPT` | Chat system prompt | English (existing) |
 | `CHAT_PROMPT_ZH` | Chat system prompt | Chinese (new) |
+
+Note: `PDF_PARSE_BATCH_PROMPT` contains `{startPage}`, `{endPage}`, `{totalPages}` placeholders. When a user customizes the vision prompt, only the first-batch prompt is customizable. The batch continuation prompt is auto-derived by appending continuation instructions to the custom prompt.
 
 Export a `PROMPT_PRESETS` object:
 
@@ -178,6 +195,10 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
    - Switching preset: if current `custom` text differs from the previously selected preset, show confirmation dialog ("Switching preset will replace your customizations. Continue?").
    - On confirm: replace `custom` with new preset content.
 3. **Text editor** — multi-line textarea showing `custom` content. User can freely edit.
+   - **Placeholder guidance:** Display a note above the textarea listing required placeholders:
+     - Chat prompt: `{content}`, `{history}`, `{question}` (all three required)
+     - Vision prompt: no placeholders required
+   - On save, warn (but don't block) if required placeholders are missing from Chat prompt.
 4. **Action bar:**
    - "Restore Preset" button — resets `custom` to the currently selected preset's original content. Requires confirmation.
    - "Save" button — persists to settings via `POST /api/prompts`.
@@ -196,7 +217,7 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 **`src/app/api/chat/route.ts`:**
 
 - Before building messages, check `settings.prompts.chat.custom`.
-- If present, use it as the system prompt instead of hardcoded `CHAT_PROMPT`.
+- If present, use it as the prompt template instead of hardcoded `CHAT_PROMPT`. Note: `CHAT_PROMPT` is a template with `{content}`, `{history}`, `{question}` placeholders that gets interpolated and sent as a user message (not a system message).
 - Fallback chain: `settings.prompts.chat.custom` → `CHAT_PROMPT` (default English).
 
 **`src/lib/storage.ts`:**
@@ -209,6 +230,7 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 
 | File | Changes |
 |------|---------|
+| `src/lib/ai-client.ts` | Add `streamCompleteVision()` method for streaming with image content |
 | `src/lib/pdf-parser.ts` | Stream Vision Model, add onChunk callback, console logs |
 | `src/app/api/analyze/route.ts` | Forward vision_stream/vision_progress SSE events |
 | `src/components/analysis-panel.tsx` | Add streaming box UI with fixed height |
@@ -218,8 +240,8 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 | `src/app/api/prompts/route.ts` | New API endpoint (GET/POST) |
 | `src/app/prompts/page.tsx` | New prompt configuration page |
 | `src/app/api/chat/route.ts` | Use custom prompt if configured |
-| `src/types/index.ts` | Add PromptSettings types |
-| Navigation component | Add "Prompts" link |
+| `src/types/index.ts` | Add PromptSettings types, extend AnalyzeEvent with vision_stream/vision_progress variants |
+| Navigation component (`src/components/nav.tsx` or equivalent) | Add "Prompts" link |
 
 ## Files NOT Modified
 
@@ -227,7 +249,15 @@ Merges into `settings.json` under the `prompts` key. Partial updates supported (
 |------|--------|
 | `src/hooks/use-sse.ts` | Existing onMessage pattern handles new event types |
 | `src/lib/crypto.ts` | Prompts don't need encryption |
-| `src/lib/ai-client.ts` | Already supports streaming; no changes needed |
+
+## API Error Handling
+
+**`POST /api/prompts`:**
+- 400: Invalid body (missing required fields, prompt exceeds 10,000 character limit)
+- 200: Success
+- 500: Storage read/write error
+
+Prompts are sent server-side to the AI API and never rendered as raw HTML, so XSS risk is minimal.
 
 ## Out of Scope
 
