@@ -31,6 +31,8 @@ export async function POST(request: Request) {
             const pdfPath = storage.getPdfPath(paperId);
             markdown = await parsePdfWithVision(pdfPath, { baseUrl, apiKey, visionModel }, {
               onProgress: (message) => send({ step: 'parsing', message }),
+              onVisionChunk: (content) => send({ type: 'vision_stream', content }),
+              onVisionProgress: (info) => send({ type: 'vision_progress', ...info }),
             });
             await storage.saveParsedContent(paperId, markdown);
             console.log(`[analyze] Paper ${paperId}: PDF parsed successfully (${markdown.length} chars)`);
