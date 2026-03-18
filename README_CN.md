@@ -47,7 +47,6 @@ npm install
 ### 方式四：已安装，需要更新
 
 ```bash
-npm update
 npm i -g @lvxintao/easypaper@latest
 ```
 

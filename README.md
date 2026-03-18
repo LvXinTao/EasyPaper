@@ -47,7 +47,6 @@ npm install
 ### Option 4: Update existing installation
 
 ```bash
-npm update
 npm i -g @lvxintao/easypaper@latest
 ```
 
