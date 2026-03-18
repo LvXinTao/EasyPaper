@@ -29,6 +29,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const animationGenRef = useRef(0);
   const skipAnimationRef = useRef(false);
   const [isDraggingBar, setIsDraggingBar] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [hoveredPage, setHoveredPage] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
@@ -385,6 +386,16 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
           e.preventDefault();
           goToPage(totalPages);
           break;
+        case '+':
+        case '=':
+          e.preventDefault();
+          setScale((s) => Math.min(3, s + 0.2));
+          break;
+        case '-':
+        case '_':
+          e.preventDefault();
+          setScale((s) => Math.max(0.5, s - 0.2));
+          break;
       }
     };
 
@@ -616,6 +627,40 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
+        </div>
+        <div className="relative">
+          <button
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            className="px-2 py-1 text-xs rounded-md transition-colors"
+            style={{ color: showShortcuts ? 'var(--text-primary)' : 'var(--text-tertiary)', background: showShortcuts ? 'var(--surface-hover)' : 'transparent' }}
+            onMouseEnter={(e) => { if (!showShortcuts) e.currentTarget.style.color = 'var(--text-secondary)'; }}
+            onMouseLeave={(e) => { if (!showShortcuts) e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+            title="Keyboard shortcuts"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
+            </svg>
+          </button>
+          {showShortcuts && (
+            <div
+              className="absolute right-0 top-full mt-1 rounded-lg z-20"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', padding: '10px 14px', minWidth: '200px' }}
+            >
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>Keyboard Shortcuts</div>
+              {[
+                ['Arrow Left / Right', 'Prev / Next page'],
+                ['PageUp / PageDown', 'Prev / Next page'],
+                ['Arrow Up / Down', 'Scroll content'],
+                ['+ / -', 'Zoom in / out'],
+                ['Home / End', 'First / Last page'],
+              ].map(([key, desc]) => (
+                <div key={key} className="flex justify-between gap-4" style={{ fontSize: '10px', padding: '3px 0' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{key}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{desc}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
