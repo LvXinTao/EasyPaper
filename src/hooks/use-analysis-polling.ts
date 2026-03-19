@@ -109,11 +109,15 @@ export function useAnalysisPolling(paperId: string, initialStatus: PaperStatus |
     intervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
   }, [poll]);
 
-  // Auto-start polling if initial status indicates analysis is in progress
+  // Auto-start polling when status indicates analysis is in progress
   useEffect(() => {
-    if (initialStatus === 'parsing' || initialStatus === 'analyzing') {
+    if ((initialStatus === 'parsing' || initialStatus === 'analyzing') && !activeRef.current) {
       startPolling();
     }
+  }, [initialStatus, startPolling]);
+
+  // Cleanup on unmount
+  useEffect(() => {
     return () => {
       activeRef.current = false;
       if (intervalRef.current) {
@@ -121,7 +125,7 @@ export function useAnalysisPolling(paperId: string, initialStatus: PaperStatus |
         intervalRef.current = null;
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     isPolling: state.isPolling,
