@@ -10,7 +10,7 @@ import { ChatInput } from '@/components/chat-input';
 import { EditableTitle } from '@/components/editable-title';
 import { ResizableDivider } from '@/components/resizable-divider';
 import { usePaper } from '@/hooks/use-paper';
-import { useSSE } from '@/hooks/use-sse';
+import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
 import type { PaperAnalysis, ChatMessage, ChatSessionMeta } from '@/types';
 
@@ -20,9 +20,10 @@ export default function PaperDetailPage() {
   const paperId = params.id as string;
   const { data, loading, error, refetch } = usePaper(paperId);
   const [currentPage, setCurrentPage] = useState(1);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisStep, setAnalysisStep] = useState<string | null>(null);
-  const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
+  // SSE streaming state (active during first-trigger analyze)
+  const [isSSEStreaming, setIsSSEStreaming] = useState(false);
+  const [sseStep, setSSEStep] = useState<string | null>(null);
+  const [sseMessage, setSSEMessage] = useState<string | null>(null);
   const [visionStreamContent, setVisionStreamContent] = useState('');
   const [visionProgress, setVisionProgress] = useState<{ batch: number; totalBatches: number; pages: string; elapsed: number } | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
@@ -43,6 +44,22 @@ export default function PaperDetailPage() {
   const activeSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  // Analysis polling (auto-starts if status is parsing/analyzing on mount)
+  const {
+    isPolling, analysisStep: pollingStep, analysisMessage: pollingMessage,
+    isStale, completedStatus, startPolling,
+  } = useAnalysisPolling(paperId, data?.metadata.status ?? null);
+
+  // When polling detects completion, reload full paper data
+  useEffect(() => {
+    if (completedStatus) refetch();
+  }, [completedStatus, refetch]);
+
+  // Merged state: SSE takes priority when active, polling as fallback
+  const effectiveIsAnalyzing = isSSEStreaming || isPolling;
+  const effectiveStep = isSSEStreaming ? sseStep : pollingStep;
+  const effectiveMessage = isSSEStreaming ? sseMessage : pollingMessage;
 
   // Resizable panel state — restored from localStorage per paper
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,59 +116,93 @@ export default function PaperDetailPage() {
     if (data) fetchSessions();
   }, [data, fetchSessions]);
 
-  const { start: startAnalysis } = useSSE('/api/analyze', {
-    onMessage: (event) => {
-      if ('step' in event) {
-        setAnalysisStep(event.step as string);
-        setAnalysisMessage((event.message as string) || null);
-      }
-      if ('type' in event && event.type === 'vision_stream') {
-        setVisionStreamContent(prev => prev + (event.content as string));
-      }
-      if ('type' in event && event.type === 'vision_progress') {
-        setVisionProgress({
-          batch: event.batch as number,
-          totalBatches: event.totalBatches as number,
-          pages: event.pages as string,
-          elapsed: event.elapsed as number,
-        });
-      }
-      if ('section' in event) {
-        setAnalysis((prev) => {
-          if (!prev) {
-            return {
-              summary: { content: '' },
-              contributions: { items: [] },
-              methodology: { content: '' },
-              experiments: { content: '' },
-              conclusions: { content: '' },
-              generatedAt: new Date().toISOString(),
-            };
-          }
-          return prev;
-        });
-      }
-    },
-    onDone: () => {
-      setIsAnalyzing(false);
-      refetch();
-    },
-    onError: (err) => {
-      setIsAnalyzing(false);
-      setAnalysisError(err.message);
-      refetch();
-    },
-  });
-
-  const handleAnalyze = useCallback(() => {
-    setIsAnalyzing(true);
+  const handleAnalyze = useCallback(async () => {
     setAnalysisError(null);
-    setAnalysisStep(null);
-    setAnalysisMessage(null);
+    setSSEStep(null);
+    setSSEMessage(null);
     setVisionStreamContent('');
     setVisionProgress(null);
-    startAnalysis({ paperId });
-  }, [paperId, startAnalysis]);
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setAnalysisError(errorData.error?.message || 'Analysis failed');
+        return;
+      }
+
+      const contentType = response.headers.get('Content-Type') || '';
+
+      // Already running → switch to polling mode
+      if (contentType.includes('application/json')) {
+        startPolling();
+        return;
+      }
+
+      // SSE stream → read inline for real-time progress
+      setIsSSEStreaming(true);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(trimmed.slice(6));
+              if (event.done) {
+                refetch();
+                return;
+              }
+              if (event.error) {
+                setAnalysisError(event.error);
+                refetch();
+                return;
+              }
+              if ('step' in event) {
+                setSSEStep(event.step);
+                setSSEMessage(event.message || null);
+              }
+              if (event.type === 'vision_stream') {
+                setVisionStreamContent(prev => prev + event.content);
+              }
+              if (event.type === 'vision_progress') {
+                setVisionProgress({
+                  batch: event.batch, totalBatches: event.totalBatches,
+                  pages: event.pages, elapsed: event.elapsed,
+                });
+              }
+              if ('section' in event) {
+                setAnalysis(prev => prev || {
+                  summary: { content: '' }, contributions: { items: [] },
+                  methodology: { content: '' }, experiments: { content: '' },
+                  conclusions: { content: '' }, generatedAt: new Date().toISOString(),
+                });
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
+      } finally {
+        setIsSSEStreaming(false);
+      }
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : 'Analysis failed');
+    }
+  }, [paperId, refetch, startPolling]);
 
   const handleRename = useCallback(
     async (newTitle: string) => {
@@ -331,7 +382,7 @@ export default function PaperDetailPage() {
   }
 
   const displayAnalysis = data.analysis || analysis;
-  const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !isAnalyzing && !displayAnalysis;
+  const needsAnalysis = (data.metadata.status === 'pending' || data.metadata.status === 'error') && !effectiveIsAnalyzing && !displayAnalysis;
   const statusLabel = data.metadata.status === 'analyzed' ? '✓ Analyzed' : data.metadata.status === 'error' ? 'Error' : data.metadata.status;
   const statusColor = data.metadata.status === 'analyzed' ? 'var(--green)' : data.metadata.status === 'error' ? 'var(--rose)' : 'var(--amber)';
   const statusBg = data.metadata.status === 'analyzed' ? 'var(--green-subtle)' : data.metadata.status === 'error' ? 'var(--rose-subtle)' : 'var(--amber-subtle)';
@@ -388,32 +439,50 @@ export default function PaperDetailPage() {
         {(data.metadata.status === 'analyzed' || needsAnalysis) && (
           <button
             onClick={handleAnalyze}
-            disabled={isAnalyzing}
+            disabled={effectiveIsAnalyzing}
             className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
             style={{
               background: needsAnalysis ? 'var(--text-primary)' : 'var(--glass)',
               color: needsAnalysis ? 'var(--bg)' : 'var(--text-secondary)',
               border: needsAnalysis ? 'none' : '1px solid var(--glass-border)',
-              opacity: isAnalyzing ? 0.5 : 1,
+              opacity: effectiveIsAnalyzing ? 0.5 : 1,
             }}
           >
-            {isAnalyzing ? 'Analyzing...' : needsAnalysis ? 'Analyze' : 'Re-analyze'}
+            {effectiveIsAnalyzing ? 'Analyzing...' : needsAnalysis ? 'Analyze' : 'Re-analyze'}
           </button>
         )}
       </div>
 
       {/* Analysis error banner */}
-      {analysisError && (
-        <div className="px-4 py-2.5 text-sm flex items-start gap-2" style={{ background: 'var(--rose-subtle)', color: 'var(--rose)', borderBottom: '1px solid var(--border)' }}>
-          <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {(analysisError || isStale) && (
+        <div className="px-4 py-2.5 text-sm flex items-center gap-2" style={{ background: 'var(--rose-subtle)', color: 'var(--rose)', borderBottom: '1px solid var(--border)' }}>
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <div><strong>Analysis failed:</strong> {analysisError}</div>
+          <div className="flex-1">
+            <strong>{isStale ? 'Analysis stuck:' : 'Analysis failed:'}</strong>{' '}
+            {isStale ? 'Analysis appears to be stuck. Try re-analyzing.' : analysisError}
+          </div>
+          {isStale && (
+            <button
+              onClick={() => {
+                fetch('/api/analyze', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ paperId, force: true }),
+                }).then(() => { startPolling(); });
+              }}
+              className="px-3 py-1 text-xs font-medium rounded-md flex-shrink-0"
+              style={{ background: 'var(--rose)', color: 'var(--bg)' }}
+            >
+              Re-analyze
+            </button>
+          )}
         </div>
       )}
 
       {/* Main content: PDF + Right Panel with resizable divider */}
-      <div ref={containerRef} className="flex" style={{ height: analysisError ? 'calc(100vh - 44px - 48px - 37px)' : 'calc(100vh - 44px - 48px)' }}>
+      <div ref={containerRef} className="flex" style={{ height: (analysisError || isStale) ? 'calc(100vh - 44px - 48px - 37px)' : 'calc(100vh - 44px - 48px)' }}>
         {/* Left: PDF Viewer */}
         <div style={{ width: `${effectiveLeftWidth}px`, minWidth: '300px', flexShrink: 0 }}>
           <PdfViewer
@@ -483,9 +552,9 @@ export default function PaperDetailPage() {
               {activeTab === 'analysis' ? (
                 <AnalysisPanel
                   analysis={displayAnalysis}
-                  isAnalyzing={isAnalyzing}
-                  analysisStep={analysisStep}
-                  analysisMessage={analysisMessage}
+                  isAnalyzing={effectiveIsAnalyzing}
+                  analysisStep={effectiveStep}
+                  analysisMessage={effectiveMessage}
                   visionStreamContent={visionStreamContent}
                   visionProgress={visionProgress}
                   onReAnalyze={handleAnalyze}
