@@ -111,7 +111,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
       if (cancelled || gen !== animationGenRef.current) return;
 
-      await pdfPage.render({ canvasContext: context, viewport, canvas }).promise;
+      await pdfPage.render({ canvasContext: context, viewport }).promise;
 
       if (cancelled || gen !== animationGenRef.current) return;
 
@@ -262,7 +262,7 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
 
       if (renderToken.cancel) return null;
 
-      await pdfPage.render({ canvasContext: ctx, viewport, canvas }).promise;
+      await pdfPage.render({ canvasContext: ctx, viewport }).promise;
 
       if (renderToken.cancel) return null;
 
