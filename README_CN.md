@@ -95,6 +95,13 @@ easypaper [选项]
 
 数据完全存储在本地，位于 `~/.easypaper/` 目录。
 
+## 路线图
+
+- [ ] 支持划句向AI提问
+- [ ] 支持更多文件格式（目前仅支持PDF）
+- [ ] 支持更多pdf解析方式（目前仅支持MLLM）
+- [ ] 支持共享读论文
+
 ## 技术栈
 
 - [Next.js](https://nextjs.org) 16 (App Router) + React 19 + TypeScript

@@ -94,6 +94,12 @@ easypaper [options]
 
 All data is stored locally in `~/.easypaper/`.
 
+## Roadmap
+- [ ] Support more file formats (currently only PDF)
+- [ ] Support asking AI questions about specific sentences
+- [ ] Support more PDF parsing methods (currently only MLLM)
+- [ ] Support shared reading of papers
+
 ## Tech Stack
 
 - [Next.js](https://nextjs.org) 16 (App Router) + React 19 + TypeScript
