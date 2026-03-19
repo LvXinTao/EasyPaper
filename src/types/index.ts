@@ -9,6 +9,11 @@ export interface PaperMetadata {
   status: PaperStatus;
   folderId?: string | null;
   sortIndex?: number;
+  analysisProgress?: {
+    step: 'parsing' | 'analyzing' | 'saving';
+    message: string;
+    updatedAt: string;
+  };
 }
 
 export interface AnalysisSection {
