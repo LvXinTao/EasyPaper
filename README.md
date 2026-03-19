@@ -99,6 +99,7 @@ All data is stored locally in `~/.easypaper/`.
 - [ ] Support asking AI questions about specific sentences
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers
+- [ ] Support asking AI questions about screenshots
 
 ## Tech Stack
 
