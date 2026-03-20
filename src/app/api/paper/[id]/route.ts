@@ -75,6 +75,13 @@ export async function PATCH(request: Request, context: RouteContext) {
     updates.sortIndex = body.sortIndex;
   }
 
+  if (body.starred !== undefined) {
+    if (typeof body.starred !== 'boolean') {
+      return createErrorResponse('VALIDATION_ERROR', 'starred must be a boolean');
+    }
+    updates.starred = body.starred;
+  }
+
   if (Object.keys(updates).length === 0) {
     return createErrorResponse('VALIDATION_ERROR', 'No valid fields to update');
   }
