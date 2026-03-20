@@ -9,6 +9,7 @@ export interface PaperMetadata {
   status: PaperStatus;
   folderId?: string | null;
   sortIndex?: number;
+  starred?: boolean;
   analysisProgress?: {
     step: 'parsing' | 'analyzing' | 'saving';
     message: string;
@@ -95,6 +96,7 @@ export interface PaperListItem {
   status: PaperStatus;
   folderId?: string | null;
   sortIndex?: number;
+  starred?: boolean;
 }
 
 export interface PaperData {
@@ -120,6 +122,13 @@ export interface Note {
   page?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Bookmark {
+  id: string;
+  page: number;
+  label?: string;
+  createdAt: string;
 }
 
 export type ThemePreset = 'dark-minimal' | 'light-minimal' | 'warm-light' | 'warm-dark';
