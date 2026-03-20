@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { AnalysisPanel } from '@/components/analysis-panel';
 import { NotesPanel } from '@/components/notes-panel';
+import { BookmarksPanel } from '@/components/bookmarks-panel';
 import { ChatMessages } from '@/components/chat-messages';
 import { ChatInput } from '@/components/chat-input';
 import { EditableTitle } from '@/components/editable-title';
@@ -12,7 +13,7 @@ import { ResizableDivider } from '@/components/resizable-divider';
 import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
-import type { PaperAnalysis, ChatMessage, ChatSessionMeta } from '@/types';
+import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark } from '@/types';
 
 export default function PaperDetailPage() {
   const params = useParams();
@@ -28,7 +29,7 @@ export default function PaperDetailPage() {
   const [visionProgress, setVisionProgress] = useState<{ batch: number; totalBatches: number; pages: string; elapsed: number } | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'analysis' | 'notes'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'notes' | 'bookmarks'>('analysis');
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -36,6 +37,7 @@ export default function PaperDetailPage() {
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [modelName, setModelName] = useState<string>('');
   const [noteCount, setNoteCount] = useState(0);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
@@ -92,6 +94,45 @@ export default function PaperDetailPage() {
       .then(d => { if (d.notes) setNoteCount(d.notes.length); })
       .catch(() => {});
   }, [paperId]);
+
+  // Fetch bookmarks
+  const fetchBookmarks = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/bookmarks`);
+      if (res.ok) {
+        const data: Bookmark[] = await res.json();
+        setBookmarks(data);
+      }
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  useEffect(() => {
+    fetchBookmarks();
+  }, [fetchBookmarks]);
+
+  const handleAddBookmark = useCallback(async (page: number, label?: string) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/bookmarks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ page, label }),
+      });
+      if (res.ok) {
+        fetchBookmarks();
+      }
+    } catch { /* ignore */ }
+  }, [paperId, fetchBookmarks]);
+
+  const handleRemoveBookmark = useCallback(async (bookmarkId: string) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/bookmarks?bookmarkId=${bookmarkId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchBookmarks();
+      }
+    } catch { /* ignore */ }
+  }, [paperId, fetchBookmarks]);
 
   // Fetch sessions on mount and when paper data loads
   const fetchSessions = useCallback(async () => {
@@ -489,6 +530,10 @@ export default function PaperDetailPage() {
             url={`/api/paper/${paperId}/pdf`}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
+            bookmarks={bookmarks}
+            onAddBookmark={handleAddBookmark}
+            onRemoveBookmark={handleRemoveBookmark}
+            onBookmarksChange={() => setActiveTab('bookmarks')}
           />
         </div>
 
@@ -545,6 +590,22 @@ export default function PaperDetailPage() {
                   </span>
                 )}
               </button>
+              <button
+                onClick={() => setActiveTab('bookmarks')}
+                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
+                style={{
+                  background: activeTab === 'bookmarks' ? 'var(--amber-subtle)' : 'transparent',
+                  color: activeTab === 'bookmarks' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                  border: activeTab === 'bookmarks' ? '1px solid var(--amber)' : '1px solid transparent',
+                }}
+              >
+                Bookmarks
+                {bookmarks.length > 0 && (
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
+                    {bookmarks.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Tab content */}
@@ -559,11 +620,18 @@ export default function PaperDetailPage() {
                   visionProgress={visionProgress}
                   onReAnalyze={handleAnalyze}
                 />
-              ) : (
+              ) : activeTab === 'notes' ? (
                 <NotesPanel
                   paperId={paperId}
                   currentPage={currentPage}
                   onPageChange={setCurrentPage}
+                />
+              ) : (
+                <BookmarksPanel
+                  paperId={paperId}
+                  currentPage={currentPage}
+                  onPageChange={setCurrentPage}
+                  onBookmarksChange={fetchBookmarks}
                 />
               )}
             </div>
