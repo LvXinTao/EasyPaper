@@ -11,10 +11,11 @@ interface PreviewPanelProps {
   onAnalyze?: (id: string) => void;
   onMovePaper?: (paperId: string, folderId: string | null) => void;
   onRename?: (id: string, title: string) => Promise<void>;
+  onToggleStar?: (id: string) => void;
   folders?: { id: string; name: string }[];
 }
 
-export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename, folders }: PreviewPanelProps) {
+export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename, onToggleStar, folders }: PreviewPanelProps) {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -74,45 +75,57 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
     <div className="flex-1 flex flex-col gap-3.5 overflow-y-auto" style={{ padding: '20px' }}>
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {isRenaming ? (
-            <input
-              autoFocus
-              type="text"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={async () => {
-                const trimmed = renameValue.trim();
-                if (trimmed && trimmed !== paper.title && onRename) {
-                  await onRename(paper.id, trimmed);
-                }
-                setIsRenaming(false);
-              }}
-              onKeyDown={async (e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+        <div className="min-w-0 flex items-start gap-2">
+          {onToggleStar && (
+            <button
+              onClick={() => onToggleStar(paper.id)}
+              className="cursor-pointer flex-shrink-0 mt-0.5"
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: '18px', lineHeight: 1, color: paper.starred ? 'var(--amber)' : 'var(--text-tertiary)', opacity: paper.starred ? 1 : 0.4 }}
+              title={paper.starred ? 'Unstar' : 'Star'}
+            >
+              {paper.starred ? '★' : '☆'}
+            </button>
+          )}
+          <div className="min-w-0">
+            {isRenaming ? (
+              <input
+                autoFocus
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={async () => {
                   const trimmed = renameValue.trim();
                   if (trimmed && trimmed !== paper.title && onRename) {
                     await onRename(paper.id, trimmed);
                   }
                   setIsRenaming(false);
-                } else if (e.key === 'Escape') {
-                  setIsRenaming(false);
-                }
-              }}
-              maxLength={200}
-              className="w-full rounded-md px-2 py-1 outline-none"
-              style={{
-                fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)',
-                background: 'var(--surface)', border: '2px solid var(--accent)',
-                boxShadow: '0 0 0 2px var(--accent-subtle)',
-              }}
-            />
-          ) : (
-            <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4, letterSpacing: '-0.2px' }}>{paper.title}</div>
-          )}
-          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-            Added {new Date(paper.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const trimmed = renameValue.trim();
+                    if (trimmed && trimmed !== paper.title && onRename) {
+                      await onRename(paper.id, trimmed);
+                    }
+                    setIsRenaming(false);
+                  } else if (e.key === 'Escape') {
+                    setIsRenaming(false);
+                  }
+                }}
+                maxLength={200}
+                className="w-full rounded-md px-2 py-1 outline-none"
+                style={{
+                  fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)',
+                  background: 'var(--surface)', border: '2px solid var(--accent)',
+                  boxShadow: '0 0 0 2px var(--accent-subtle)',
+                }}
+              />
+            ) : (
+              <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4, letterSpacing: '-0.2px' }}>{paper.title}</div>
+            )}
+            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+              Added {new Date(paper.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
           </div>
         </div>
         <div className="flex gap-1.5 flex-shrink-0">

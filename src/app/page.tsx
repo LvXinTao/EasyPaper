@@ -337,6 +337,7 @@ export default function HomePage() {
           onDelete={handleDelete}
           onMovePaper={handleMovePaper}
           onRename={handleRename}
+          onToggleStar={handleToggleStar}
           folders={folders}
         />
       </div>
