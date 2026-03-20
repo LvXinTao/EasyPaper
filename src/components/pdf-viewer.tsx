@@ -45,6 +45,7 @@ export function PdfViewer({
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showBookmarkPopover, setShowBookmarkPopover] = useState(false);
   const [bookmarkLabel, setBookmarkLabel] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; page: number } | null>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [hoveredPage, setHoveredPage] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
@@ -373,6 +374,44 @@ export function PdfViewer({
       handleCancelBookmark();
     }
   }, [handleAddBookmark, handleCancelBookmark]);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, page });
+  }, [page]);
+
+  const handleContextMenuClose = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleContextMenuAddBookmark = useCallback(() => {
+    if (contextMenu) {
+      setShowBookmarkPopover(true);
+      setBookmarkLabel('');
+    }
+    setContextMenu(null);
+  }, [contextMenu]);
+
+  const handleContextMenuEditBookmark = useCallback(() => {
+    onBookmarksChange?.();
+    setContextMenu(null);
+  }, [onBookmarksChange]);
+
+  const handleContextMenuRemoveBookmark = useCallback(() => {
+    if (currentPageBookmark && currentPageBookmark.id) {
+      onRemoveBookmark?.(currentPageBookmark.id);
+    }
+    setContextMenu(null);
+  }, [currentPageBookmark, onRemoveBookmark]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = () => setContextMenu(null);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [contextMenu]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -768,7 +807,9 @@ export function PdfViewer({
       </div>
 
       {/* Canvas + TextLayer */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}>
+      <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}
+        onContextMenu={handleContextMenu}
+      >
         <div className="text-center">
           <div
             ref={wrapperRef}
@@ -895,6 +936,56 @@ export function PdfViewer({
           })}
         </div>
       </div>
+
+      {/* Context Menu for Bookmarks */}
+      {contextMenu && (
+        <div
+          className="fixed rounded-lg z-50"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+            background: 'var(--bg)',
+            border: '1px solid var(--border-strong)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+            minWidth: '160px',
+            padding: '4px 0',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {currentPageBookmark ? (
+            <>
+              <button
+                onClick={handleContextMenuEditBookmark}
+                className="w-full text-left cursor-pointer"
+                style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                Edit Bookmark
+              </button>
+              <button
+                onClick={handleContextMenuRemoveBookmark}
+                className="w-full text-left cursor-pointer"
+                style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--rose)' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                Remove Bookmark
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleContextMenuAddBookmark}
+              className="w-full text-left cursor-pointer"
+              style={{ padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--surface-hover)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+              Add Bookmark
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
