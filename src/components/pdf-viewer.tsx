@@ -870,6 +870,29 @@ export function PdfViewer({
             }}
             onMouseDown={handleBarDragStart}
           />
+          {/* Bookmark markers on progress bar */}
+          {bookmarks.map((bookmark) => {
+            const position = totalPages > 1 ? ((bookmark.page - 1) / (totalPages - 1)) * 100 : 0;
+            return (
+              <div
+                key={bookmark.id}
+                className="absolute top-1/2 -translate-y-1/2 cursor-pointer"
+                style={{
+                  left: `${position}%`,
+                  width: '3px',
+                  height: '12px',
+                  background: 'var(--amber)',
+                  borderRadius: '2px',
+                  zIndex: 5,
+                }}
+                title={`P${bookmark.page}${bookmark.label ? `: ${bookmark.label}` : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goToPage(bookmark.page);
+                }}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
