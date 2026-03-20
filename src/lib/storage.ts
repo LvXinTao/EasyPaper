@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder, PromptSettings } from '@/types';
+import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder, PromptSettings, Bookmark } from '@/types';
 
 function getDataDir(): string {
   return process.env.DATA_DIR || path.join(os.homedir(), '.easypaper', 'data');
@@ -183,6 +183,17 @@ export const storage = {
     const filePath = path.join(paperDir(paperId), 'notes.json');
     await fs.writeFile(filePath, JSON.stringify(notes, null, 2));
   },
+  async getBookmarks(paperId: string): Promise<Bookmark[]> {
+    try {
+      const filePath = path.join(paperDir(paperId), 'bookmarks.json');
+      const content = await fs.readFile(filePath, 'utf-8');
+      return JSON.parse(content);
+    } catch { return []; }
+  },
+  async saveBookmarks(paperId: string, bookmarks: Bookmark[]): Promise<void> {
+    const filePath = path.join(paperDir(paperId), 'bookmarks.json');
+    await fs.writeFile(filePath, JSON.stringify(bookmarks, null, 2));
+  },
   async listPapers(): Promise<PaperListItem[]> {
     const papersDir = path.join(getDataDir(), 'papers');
     try {
@@ -191,7 +202,7 @@ export const storage = {
       for (const dir of dirs) {
         try {
           const metadata = await this.getMetadata(dir);
-          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null, sortIndex: metadata.sortIndex });
+          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null, sortIndex: metadata.sortIndex, starred: metadata.starred });
         } catch { /* Skip directories without valid metadata */ }
       }
       return papers;
