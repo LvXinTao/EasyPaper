@@ -15,6 +15,7 @@ export default function HomePage() {
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStarred, setFilterStarred] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFile, setDroppedFile] = useState<File | null>(null);
@@ -86,12 +87,26 @@ export default function HomePage() {
     await fetchPapers();
   };
 
+  const handleToggleStar = async (paperId: string) => {
+    const paper = papers.find(p => p.id === paperId);
+    if (!paper) return;
+    const newStarred = !paper.starred;
+    // Optimistic update
+    setPapers(prev => prev.map(p => p.id === paperId ? { ...p, starred: newStarred } : p));
+    await fetch(`/api/paper/${paperId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starred: newStarred }),
+    });
+  };
+
   // Filter and sort papers
   const filtered = papers.filter(p => {
     if (selectedFolderId && p.folderId !== selectedFolderId) return false;
     if (filterStatus === 'analyzed' && p.status !== 'analyzed') return false;
     if (filterStatus === 'pending' && !['pending', 'parsing', 'analyzing'].includes(p.status)) return false;
     if (filterStatus === 'error' && p.status !== 'error') return false;
+    if (filterStarred && !p.starred) return false;
     if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   }).sort((a, b) => {
@@ -258,6 +273,18 @@ export default function HomePage() {
               {f.label}
             </button>
           ))}
+          <button
+            onClick={() => setFilterStarred(!filterStarred)}
+            className="cursor-pointer rounded-full"
+            style={{
+              padding: '3px 9px', fontSize: '10px',
+              background: filterStarred ? 'var(--amber-subtle)' : 'var(--glass)',
+              color: filterStarred ? 'var(--amber)' : 'var(--text-tertiary)',
+              border: filterStarred ? '1px solid var(--amber)' : '1px solid var(--glass-border)',
+            }}
+          >
+            ★ Starred
+          </button>
         </div>
 
         {/* Paper list or empty state */}
@@ -297,6 +324,7 @@ export default function HomePage() {
               isActive={paper.id === selectedPaperId}
               onClick={() => setSelectedPaperId(paper.id)}
               onDoubleClick={() => router.push(`/paper/${paper.id}`)}
+              onToggleStar={() => handleToggleStar(paper.id)}
             />
           ))}
         </div>
