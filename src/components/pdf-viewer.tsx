@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { Bookmark } from '@/types';
 
 const THUMBNAIL_MAX_WIDTH = 80;
 const THUMBNAIL_MAX_HEIGHT = 120;
@@ -11,9 +12,21 @@ interface PdfViewerProps {
   url: string;
   currentPage?: number;
   onPageChange?: (page: number) => void;
+  bookmarks?: Bookmark[];
+  onAddBookmark?: (page: number, label?: string) => void;
+  onRemoveBookmark?: (bookmarkId: string) => void;
+  onBookmarksChange?: () => void;
 }
 
-export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps) {
+export function PdfViewer({
+  url,
+  currentPage = 1,
+  onPageChange,
+  bookmarks = [],
+  onAddBookmark,
+  onRemoveBookmark,
+  onBookmarksChange,
+}: PdfViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textLayerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -30,6 +43,8 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
   const skipAnimationRef = useRef(false);
   const [isDraggingBar, setIsDraggingBar] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showBookmarkPopover, setShowBookmarkPopover] = useState(false);
+  const [bookmarkLabel, setBookmarkLabel] = useState('');
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [hoveredPage, setHoveredPage] = useState<number | null>(null);
   const [hoverX, setHoverX] = useState(0);
@@ -324,6 +339,40 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
       throttleTimerRef.current = null;
     }
   }, []);
+
+  // Bookmark handlers
+  const currentPageBookmark = bookmarks.find((b) => b.page === page);
+
+  const handleBookmarkClick = useCallback(() => {
+    if (currentPageBookmark) {
+      // If bookmark exists, highlight/navigate to it - callback will be handled by parent
+      onBookmarksChange?.();
+    } else {
+      // Open popover to add bookmark
+      setBookmarkLabel('');
+      setShowBookmarkPopover(true);
+    }
+  }, [currentPageBookmark, onBookmarksChange]);
+
+  const handleAddBookmark = useCallback(() => {
+    onAddBookmark?.(page, bookmarkLabel || undefined);
+    setShowBookmarkPopover(false);
+    setBookmarkLabel('');
+  }, [page, bookmarkLabel, onAddBookmark]);
+
+  const handleCancelBookmark = useCallback(() => {
+    setShowBookmarkPopover(false);
+    setBookmarkLabel('');
+  }, []);
+
+  // Handle keyboard in bookmark popover
+  const handleBookmarkKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleAddBookmark();
+    } else if (e.key === 'Escape') {
+      handleCancelBookmark();
+    }
+  }, [handleAddBookmark, handleCancelBookmark]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -627,6 +676,60 @@ export function PdfViewer({ url, currentPage = 1, onPageChange }: PdfViewerProps
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {/* Bookmark button */}
+          <button
+            onClick={handleBookmarkClick}
+            className="px-2 py-1 text-xs rounded-md transition-colors"
+            style={{
+              color: currentPageBookmark ? 'var(--amber)' : 'var(--text-tertiary)',
+              background: currentPageBookmark ? 'var(--amber-subtle)' : 'var(--surface-hover)',
+              border: currentPageBookmark ? '1px solid var(--amber)' : '1px solid transparent',
+            }}
+            title={currentPageBookmark ? 'Bookmarked' : 'Add bookmark'}
+          >
+            <svg className="w-3.5 h-3.5" fill={currentPageBookmark ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
+          {/* Bookmark popover */}
+          {showBookmarkPopover && (
+            <div
+              className="absolute right-0 top-full mt-1 rounded-lg z-20"
+              style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', padding: '12px', minWidth: '220px' }}
+            >
+              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                Add Bookmark for Page {page}
+              </div>
+              <input
+                type="text"
+                value={bookmarkLabel}
+                onChange={(e) => setBookmarkLabel(e.target.value)}
+                onKeyDown={handleBookmarkKeyDown}
+                placeholder="Label (optional)"
+                className="w-full text-xs rounded px-2 py-1.5 outline-none mb-2"
+                style={{ background: 'var(--surface-hover)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={handleCancelBookmark}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ color: 'var(--text-tertiary)', background: 'var(--surface-hover)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddBookmark}
+                  className="text-xs px-2 py-1 rounded"
+                  style={{ color: 'var(--bg)', background: 'var(--accent)' }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="relative">
           <button
