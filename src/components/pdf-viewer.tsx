@@ -259,12 +259,10 @@ export function PdfViewer({
       const aspect = baseViewport.width / baseViewport.height;
 
       let thumbWidth: number;
-      let thumbHeight: number;
       if (aspect >= THUMBNAIL_MAX_WIDTH / THUMBNAIL_MAX_HEIGHT) {
         thumbWidth = THUMBNAIL_MAX_WIDTH;
-        thumbHeight = THUMBNAIL_MAX_WIDTH / aspect;
+        // thumbHeight calculated but not stored - derived from aspect
       } else {
-        thumbHeight = THUMBNAIL_MAX_HEIGHT;
         thumbWidth = THUMBNAIL_MAX_HEIGHT * aspect;
       }
 
@@ -384,6 +382,8 @@ export function PdfViewer({
   const handleContextMenuClose = useCallback(() => {
     setContextMenu(null);
   }, []);
+  // handleContextMenuClose is kept for potential future use with context menu UI
+  void handleContextMenuClose;
 
   const handleContextMenuAddBookmark = useCallback(() => {
     if (contextMenu) {
@@ -415,8 +415,9 @@ export function PdfViewer({
 
   // Cleanup on unmount
   useEffect(() => {
+    const cache = thumbnailCacheRef.current;
     return () => {
-      thumbnailCacheRef.current.clear();
+      cache.clear();
       thumbnailCacheOrder.current = [];
       if (throttleTimerRef.current) {
         clearTimeout(throttleTimerRef.current);

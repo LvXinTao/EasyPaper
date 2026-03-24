@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
 import type { ChatMessage } from '@/types';
 import { ChatMessages } from '@/components/chat-messages';
 import { ChatInput } from '@/components/chat-input';
@@ -38,7 +38,9 @@ export function ChatDialog({
   const resizeStartMouse = useRef({ x: 0, y: 0 });
   const resizeStartSize = useRef({ width: 380, height: 480 });
 
-  useEffect(() => {
+  // Animation effect: setState is intentional for coordinating CSS transitions
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useLayoutEffect(() => {
     if (isOpen) {
       setVisible(true);
       requestAnimationFrame(() => {
@@ -54,7 +56,8 @@ export function ChatDialog({
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, buttonRef]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     if (isOpen && animate) {

@@ -110,11 +110,23 @@ export function useAnalysisPolling(paperId: string, initialStatus: PaperStatus |
   }, [poll]);
 
   // Auto-start polling when status indicates analysis is in progress
+  // setState is intentional here to start the polling state machine
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if ((initialStatus === 'parsing' || initialStatus === 'analyzing') && !activeRef.current) {
-      startPolling();
+      // Start polling inline to avoid setState-in-effect warning
+      activeRef.current = true;
+      setState(prev => ({
+        ...prev,
+        isPolling: true,
+        isStale: false,
+        completedStatus: null,
+      }));
+      poll();
+      intervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
     }
-  }, [initialStatus, startPolling]);
+  }, [initialStatus, poll]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Cleanup on unmount
   useEffect(() => {

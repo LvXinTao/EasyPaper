@@ -23,7 +23,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFile }: 
     if (initialFile && isOpen) {
       uploadFile(initialFile);
     }
-  }, [initialFile, isOpen]);
+  }, [initialFile, isOpen, uploadFile]);
 
   const uploadFile = useCallback(async (file: File) => {
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {

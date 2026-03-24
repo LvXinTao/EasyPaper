@@ -1,5 +1,4 @@
 import { POST } from '@/app/api/upload/route';
-import { storage } from '@/lib/storage';
 
 jest.mock('@/lib/storage', () => ({
   storage: { createPaperDir: jest.fn(), savePdf: jest.fn(), saveMetadata: jest.fn() },

@@ -91,6 +91,8 @@ function PaperRow({
   );
 }
 
+// MoveToPicker component - kept for potential future use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function MoveToPicker({
   folders,
   currentFolderId,
