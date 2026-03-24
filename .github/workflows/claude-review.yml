@@ -130,21 +130,21 @@ jobs:
           REVIEW="${{ steps.review.outputs.review }}"
 
           # Write review to file for proper multiline handling
-          echo "🤖 **Claude Code Review** (Model: \`$CLAUDE_MODEL\`)" > review_body.txt
-          echo "" >> review_body.txt
-          echo "$REVIEW" >> review_body.txt
+          # Use printf to avoid backtick execution issues
+          printf '%s\n' "🤖 **Claude Code Review** (Model: \`${CLAUDE_MODEL}\`)" > review_body.txt
+          printf '%s\n' "" >> review_body.txt
+          printf '%s\n' "$REVIEW" >> review_body.txt
 
           case "$ACTION" in
             APPROVE)
-              # Use jq to build proper JSON for the API call
               jq -n --rawfile body review_body.txt '{event: "APPROVE", body: $body}' | \
                 gh api --method POST repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                  --input - 2>/dev/null || gh pr comment $PR_NUMBER --body-file review_body.txt
+                  --input - || gh pr comment $PR_NUMBER --body-file review_body.txt
               ;;
             REQUEST_CHANGES)
               jq -n --rawfile body review_body.txt '{event: "REQUEST_CHANGES", body: $body}' | \
                 gh api --method POST repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                  --input - 2>/dev/null || gh pr comment $PR_NUMBER --body-file review_body.txt
+                  --input - || gh pr comment $PR_NUMBER --body-file review_body.txt
               ;;
             *)
               gh pr comment $PR_NUMBER --body-file review_body.txt
