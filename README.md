@@ -110,3 +110,7 @@ All data is stored locally in `~/.easypaper/`.
 ## License
 
 MIT License
+
+## Test
+
+This is a test PR to verify the CI/CD flow.
