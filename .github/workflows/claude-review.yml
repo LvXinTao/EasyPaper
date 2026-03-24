@@ -66,7 +66,6 @@ jobs:
           AUTHOR="${{ steps.pr.outputs.author }}"
           FILES="${{ steps.pr.outputs.files }}"
 
-          # Build JSON using jq with proper escaping
           SYSTEM_PROMPT="You are a senior code reviewer. Review pull requests and provide actionable feedback. Be concise and focus on important issues: bugs, security vulnerabilities, performance problems, architectural concerns, and breaking changes. Ignore minor style issues. Output your review in markdown format. End your review with exactly one of these verdicts: **Verdict: APPROVE**, **Verdict: REQUEST_CHANGES**, or **Verdict: COMMENT**."
 
           USER_PROMPT="Review this pull request:\n\n**Title:** $TITLE\n**Author:** @$AUTHOR\n**Files Changed:** $FILES\n\n**Diff:**\n\`\`\`diff\n$DIFF\n\`\`\`\n\nProvide a concise review with your verdict."
@@ -75,12 +74,7 @@ jobs:
             --arg model "$CLAUDE_MODEL" \
             --arg system "$SYSTEM_PROMPT" \
             --arg user "$USER_PROMPT" \
-            '{
-              model: $model,
-              max_tokens: 4096,
-              system: $system,
-              messages: [{ role: "user", content: $user }]
-            }')
+            '{model: $model, max_tokens: 4096, system: $system, messages: [{role: "user", content: $user}]}')
 
           RESPONSE=$(curl -s -w "\n%{http_code}" "$API_URL" \
             -H "x-api-key: $CLAUDE_API_KEY" \
@@ -105,11 +99,9 @@ jobs:
             exit 1
           fi
 
-          {
-            echo "review<<REVIEW_EOF"
-            echo "$REVIEW"
-            echo "REVIEW_EOF"
-          } >> $GITHUB_OUTPUT
+          echo "review<<REVIEW_EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW" >> $GITHUB_OUTPUT
+          echo "REVIEW_EOF" >> $GITHUB_OUTPUT
 
           if echo "$REVIEW" | grep -qiE '\*\*Verdict:\s*APPROVE\*\*|Verdict:\s*APPROVE'; then
             echo "action=APPROVE" >> $GITHUB_OUTPUT
@@ -127,20 +119,14 @@ jobs:
           ACTION="${{ steps.review.outputs.action }}"
           REVIEW="${{ steps.review.outputs.review }}"
 
-          FULL_REVIEW="🤖 **Claude Code Review** (Model: \`$CLAUDE_MODEL\`)
-
-$REVIEW"
+          FULL_REVIEW="🤖 **Claude Code Review** (Model: \`$CLAUDE_MODEL\`)"$'\n\n'"$REVIEW"
 
           case "$ACTION" in
             APPROVE)
-              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                -f event="APPROVE" -f body="$FULL_REVIEW" 2>/dev/null || \
-              gh pr comment $PR_NUMBER --body "✅ $FULL_REVIEW"
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews -f event="APPROVE" -f body="$FULL_REVIEW" 2>/dev/null || gh pr comment $PR_NUMBER --body "✅ $FULL_REVIEW"
               ;;
             REQUEST_CHANGES)
-              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                -f event="REQUEST_CHANGES" -f body="$FULL_REVIEW" 2>/dev/null || \
-              gh pr comment $PR_NUMBER --body "⚠️ $FULL_REVIEW"
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews -f event="REQUEST_CHANGES" -f body="$FULL_REVIEW" 2>/dev/null || gh pr comment $PR_NUMBER --body "⚠️ $FULL_REVIEW"
               ;;
             *)
               gh pr comment $PR_NUMBER --body "$FULL_REVIEW"
