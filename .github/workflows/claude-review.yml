@@ -93,7 +93,15 @@ jobs:
 
           # Extract text from response (handle both Anthropic and OpenRouter formats)
           # OpenRouter may return multiple content types (thinking, text, redacted_thinking)
-          REVIEW=$(echo "$BODY" | jq -r '.content[] | select(.type == "text") | .text' | head -1)
+          echo "DEBUG: Response structure:" >> $GITHUB_STEP_SUMMARY
+          echo "$BODY" | jq '.content | map({type: .type})' >> $GITHUB_STEP_SUMMARY
+
+          REVIEW=$(echo "$BODY" | jq -r '[.content[] | select(.type == "text")][0].text // empty')
+
+          # Also try alternative paths
+          if [ -z "$REVIEW" ]; then
+            REVIEW=$(echo "$BODY" | jq -r '.choices[0].message.content // empty')
+          fi
 
           if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
             echo "::error::Failed to extract review from API response"
