@@ -1,35 +1,6 @@
 import { POST } from '@/app/api/upload/route';
 
-// Mock File class for Node.js test environment
-class MockFile {
-  content: Buffer;
-  name: string;
-  type: string;
-
-  constructor(content: string | Buffer, name: string, options?: { type?: string }) {
-    this.content = Buffer.isBuffer(content) ? content : Buffer.from(content);
-    this.name = name;
-    this.type = options?.type || '';
-  }
-
-  get size(): number {
-    return this.content.length;
-  }
-
-  arrayBuffer(): Promise<ArrayBuffer> {
-    const buffer = this.content.buffer.slice(
-      this.content.byteOffset,
-      this.content.byteOffset + this.content.byteLength
-    ) as ArrayBuffer;
-    return Promise.resolve(buffer);
-  }
-}
-
-// Set up global File if not available (Node.js < 20)
-if (typeof globalThis.File === 'undefined') {
-  // @ts-expect-error Mocking File for Node.js
-  globalThis.File = MockFile;
-}
+// Note: File polyfill is now handled globally in jest.setup.ts
 
 jest.mock('@/lib/storage', () => ({
   storage: { createPaperDir: jest.fn(), savePdf: jest.fn(), saveMetadata: jest.fn() },

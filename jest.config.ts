@@ -4,6 +4,7 @@ const createJestConfig = nextJest({ dir: './' });
 const config: Config = {
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.ts'],
+  setupFiles: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^react-markdown$': '<rootDir>/__mocks__/react-markdown.tsx',
