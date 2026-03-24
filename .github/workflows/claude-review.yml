@@ -129,9 +129,9 @@ jobs:
           ACTION="${{ steps.review.outputs.action }}"
           REVIEW="${{ steps.review.outputs.review }}"
 
-          # Write review to file (printf %s is safe for special chars)
-          printf '%s\n' "🤖 **Claude Code Review**" > review_body.txt
-          printf '%s\n' "" >> review_body.txt
+          # Write review to file safely
+          echo "🤖 **Claude Code Review**" > review_body.txt
+          echo "" >> review_body.txt
           printf '%s\n' "$REVIEW" >> review_body.txt
 
           case "$ACTION" in
