@@ -19,7 +19,6 @@ jobs:
       pull-requests: write
       contents: read
     env:
-      # API Configuration - can be overridden via repository variables
       CLAUDE_BASE_URL: ${{ vars.CLAUDE_BASE_URL || 'https://api.anthropic.com' }}
       CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
       CLAUDE_MODEL: ${{ inputs.model || vars.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}
@@ -27,7 +26,7 @@ jobs:
       - name: Validate Configuration
         run: |
           if [ -z "$CLAUDE_API_KEY" ]; then
-            echo "::error::CLAUDE_API_KEY secret is not configured. Please add it in Settings > Secrets and variables > Actions"
+            echo "::error::CLAUDE_API_KEY secret is not configured"
             exit 1
           fi
           echo "Using API: $CLAUDE_BASE_URL"
@@ -46,10 +45,8 @@ jobs:
           PR_NUMBER="${{ github.event.pull_request.number || inputs.pr_number }}"
           echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
-          # Get PR diff (limit to 100KB to avoid token limits)
           gh pr diff $PR_NUMBER | head -c 100000 > pr_diff.txt
 
-          # Get PR info
           PR_TITLE=$(gh pr view $PR_NUMBER --json title -q '.title')
           PR_AUTHOR=$(gh pr view $PR_NUMBER --json author -q '.author.login')
           PR_FILES=$(gh pr view $PR_NUMBER --json files -q '.files[].path' | tr '\n' ' ')
@@ -61,53 +58,36 @@ jobs:
       - name: Run Claude Review
         id: review
         run: |
-          # Build API URL
           API_URL="${CLAUDE_BASE_URL%/}/v1/messages"
           echo "Calling Claude API at: $API_URL"
 
-          # Read diff
           DIFF=$(cat pr_diff.txt)
+          TITLE="${{ steps.pr.outputs.title }}"
+          AUTHOR="${{ steps.pr.outputs.author }}"
+          FILES="${{ steps.pr.outputs.files }}"
 
-          # Build JSON payload using jq for proper escaping
+          # Build JSON using jq with proper escaping
+          SYSTEM_PROMPT="You are a senior code reviewer. Review pull requests and provide actionable feedback. Be concise and focus on important issues: bugs, security vulnerabilities, performance problems, architectural concerns, and breaking changes. Ignore minor style issues. Output your review in markdown format. End your review with exactly one of these verdicts: **Verdict: APPROVE**, **Verdict: REQUEST_CHANGES**, or **Verdict: COMMENT**."
+
+          USER_PROMPT="Review this pull request:\n\n**Title:** $TITLE\n**Author:** @$AUTHOR\n**Files Changed:** $FILES\n\n**Diff:**\n\`\`\`diff\n$DIFF\n\`\`\`\n\nProvide a concise review with your verdict."
+
           PAYLOAD=$(jq -n \
             --arg model "$CLAUDE_MODEL" \
-            --arg system "You are a senior code reviewer. Review pull requests and provide actionable feedback.
-
-Be concise and focus on important issues:
-- Bugs and logic errors
-- Security vulnerabilities
-- Performance problems
-- Architectural concerns
-- Breaking changes
-
-Ignore minor style issues. Output your review in markdown format.
-
-End your review with exactly one of these verdicts:
-- **Verdict: APPROVE** - Ready to merge
-- **Verdict: REQUEST_CHANGES** - Has issues that must be fixed
-- **Verdict: COMMENT** - Needs discussion but no blocking issues" \
-            --arg title "${{ steps.pr.outputs.title }}" \
-            --arg author "${{ steps.pr.outputs.author }}" \
-            --arg files "${{ steps.pr.outputs.files }}" \
-            --arg diff "$DIFF" \
+            --arg system "$SYSTEM_PROMPT" \
+            --arg user "$USER_PROMPT" \
             '{
               model: $model,
               max_tokens: 4096,
               system: $system,
-              messages: [{
-                role: "user",
-                content: ("Review this pull request:\n\n**Title:** " + $title + "\n**Author:** @" + $author + "\n**Files Changed:** " + $files + "\n\n**Diff:**\n```diff\n" + $diff + "\n```\n\nProvide a concise review with your verdict.")
-              }]
+              messages: [{ role: "user", content: $user }]
             }')
 
-          # Call API
           RESPONSE=$(curl -s -w "\n%{http_code}" "$API_URL" \
             -H "x-api-key: $CLAUDE_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
             -d "$PAYLOAD")
 
-          # Split response and status code
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
 
@@ -117,7 +97,6 @@ End your review with exactly one of these verdicts:
             exit 1
           fi
 
-          # Extract text from response
           REVIEW=$(echo "$BODY" | jq -r '.content[0].text')
 
           if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
@@ -126,23 +105,19 @@ End your review with exactly one of these verdicts:
             exit 1
           fi
 
-          # Save review for next step (handle multiline)
           {
             echo "review<<REVIEW_EOF"
             echo "$REVIEW"
             echo "REVIEW_EOF"
           } >> $GITHUB_OUTPUT
 
-          # Determine action from verdict
-          if echo "$REVIEW" | grep -qiE '\*\*Verdict:\s*APPROVE\*\*|Verdict:\s*APPROVE|^APPROVE$'; then
+          if echo "$REVIEW" | grep -qiE '\*\*Verdict:\s*APPROVE\*\*|Verdict:\s*APPROVE'; then
             echo "action=APPROVE" >> $GITHUB_OUTPUT
-          elif echo "$REVIEW" | grep -qiE '\*\*Verdict:\s*REQUEST_CHANGES\*\*|Verdict:\s*REQUEST_CHANGES|^REQUEST_CHANGES$'; then
+          elif echo "$REVIEW" | grep -qiE '\*\*Verdict:\s*REQUEST_CHANGES\*\*|Verdict:\s*REQUEST_CHANGES'; then
             echo "action=REQUEST_CHANGES" >> $GITHUB_OUTPUT
           else
             echo "action=COMMENT" >> $GITHUB_OUTPUT
           fi
-
-          echo "Review action: $(grep '^action=' $GITHUB_OUTPUT | cut -d= -f2)"
 
       - name: Submit Review
         env:
@@ -152,50 +127,32 @@ End your review with exactly one of these verdicts:
           ACTION="${{ steps.review.outputs.action }}"
           REVIEW="${{ steps.review.outputs.review }}"
 
-          echo "Submitting review: $ACTION"
-
-          # Add model info to review
           FULL_REVIEW="🤖 **Claude Code Review** (Model: \`$CLAUDE_MODEL\`)
 
 $REVIEW"
 
           case "$ACTION" in
             APPROVE)
-              if gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                -f event="APPROVE" \
-                -f body="$FULL_REVIEW" 2>/dev/null; then
-                echo "✅ PR Approved by Claude"
-              else
-                # Fallback to comment if review fails
-                gh pr comment $PR_NUMBER --body "✅ $FULL_REVIEW"
-                echo "✅ Approval comment added"
-              fi
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+                -f event="APPROVE" -f body="$FULL_REVIEW" 2>/dev/null || \
+              gh pr comment $PR_NUMBER --body "✅ $FULL_REVIEW"
               ;;
             REQUEST_CHANGES)
-              if gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
-                -f event="REQUEST_CHANGES" \
-                -f body="$FULL_REVIEW" 2>/dev/null; then
-                echo "⚠️ Changes Requested by Claude"
-              else
-                gh pr comment $PR_NUMBER --body "⚠️ $FULL_REVIEW"
-                echo "⚠️ Changes requested comment added"
-              fi
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+                -f event="REQUEST_CHANGES" -f body="$FULL_REVIEW" 2>/dev/null || \
+              gh pr comment $PR_NUMBER --body "⚠️ $FULL_REVIEW"
               ;;
             *)
               gh pr comment $PR_NUMBER --body "$FULL_REVIEW"
-              echo "💬 Review comment added by Claude"
               ;;
           esac
 
       - name: Summary
         run: |
-          {
-            echo "## Claude Code Review"
-            echo ""
-            echo "| Setting | Value |"
-            echo "|---------|-------|"
-            echo "| PR | #${{ steps.pr.outputs.number }} |"
-            echo "| Model | \`$CLAUDE_MODEL\` |"
-            echo "| API URL | \`$CLAUDE_BASE_URL\` |"
-            echo "| Action | ${{ steps.review.outputs.action }} |"
-          } >> $GITHUB_STEP_SUMMARY
+          echo "## Claude Code Review" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | #${{ steps.pr.outputs.number }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Model | \`$CLAUDE_MODEL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Action | ${{ steps.review.outputs.action }} |" >> $GITHUB_STEP_SUMMARY
