@@ -9,6 +9,7 @@
 Upload academic PDFs, get AI-powered analysis, chat about the content, and take notes. Fully customizable API.
 
 <!-- Test auto-merge: This is a test PR to verify auto-merge workflow -->
+<!-- Test 2: Verifying multiline review body fix -->
 
 <img src="docs/images/screenshot.png" alt="EasyPaper Screenshot" width="1000"/>
 
