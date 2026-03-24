@@ -17,7 +17,11 @@ class MockFile {
   }
 
   arrayBuffer(): Promise<ArrayBuffer> {
-    return Promise.resolve(this.content.buffer.slice(this.content.byteOffset, this.content.byteOffset + this.content.byteLength));
+    const buffer = this.content.buffer.slice(
+      this.content.byteOffset,
+      this.content.byteOffset + this.content.byteLength
+    ) as ArrayBuffer;
+    return Promise.resolve(buffer);
   }
 }
 
