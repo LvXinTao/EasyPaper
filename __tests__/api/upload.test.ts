@@ -6,12 +6,19 @@ jest.mock('@/lib/storage', () => ({
 }));
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-123' }));
 
+// Helper to create a mock request with formData support (Node 18 compatibility)
+function createMockRequest(formData: FormData): Request {
+  return {
+    formData: async () => formData,
+  } as Request;
+}
+
 describe('POST /api/upload', () => {
   it('uploads a PDF and returns paper ID', async () => {
     const file = new File(['fake pdf content'], 'test.pdf', { type: 'application/pdf' });
     const formData = new FormData();
     formData.append('file', file);
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const request = createMockRequest(formData);
     const response = await POST(request);
     const data = await response.json();
     expect(response.status).toBe(201);
@@ -22,7 +29,7 @@ describe('POST /api/upload', () => {
     const file = new File(['not a pdf'], 'test.txt', { type: 'text/plain' });
     const formData = new FormData();
     formData.append('file', file);
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const request = createMockRequest(formData);
     const response = await POST(request);
     expect(response.status).toBe(400);
     const data = await response.json();
@@ -30,7 +37,7 @@ describe('POST /api/upload', () => {
   });
   it('rejects missing file', async () => {
     const formData = new FormData();
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const request = createMockRequest(formData);
     const response = await POST(request);
     expect(response.status).toBe(400);
   });

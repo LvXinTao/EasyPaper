@@ -18,13 +18,6 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFile }: 
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
 
-  // Auto-upload if opened with an initial file (from drag onto paper list)
-  useEffect(() => {
-    if (initialFile && isOpen) {
-      uploadFile(initialFile);
-    }
-  }, [initialFile, isOpen]);
-
   const uploadFile = useCallback(async (file: File) => {
     if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
       setError('Please upload a PDF file');
@@ -56,6 +49,13 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFile }: 
       setProgress('');
     }
   }, [router, onClose, onUploadComplete]);
+
+  // Auto-upload if opened with an initial file (from drag onto paper list)
+  useEffect(() => {
+    if (initialFile && isOpen) {
+      uploadFile(initialFile);
+    }
+  }, [initialFile, isOpen, uploadFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
