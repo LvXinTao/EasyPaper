@@ -5,10 +5,16 @@ on:
     types: [submitted]
   check_suite:
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to merge'
+        required: true
 
 jobs:
   auto-merge:
     if: |
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request_review' && github.event.review.state == 'approved') ||
       (github.event_name == 'check_suite' && github.event.check_suite.conclusion == 'success')
     runs-on: ubuntu-latest
@@ -22,9 +28,12 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REVIEW_PR: ${{ github.event.pull_request.number }}
           CHECK_PR: ${{ github.event.check_suite.pull_requests[0].number }}
+          MANUAL_PR: ${{ inputs.pr_number }}
         run: |
           if [ "$EVENT_NAME" = "pull_request_review" ]; then
             echo "number=$REVIEW_PR" >> $GITHUB_OUTPUT
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "number=$MANUAL_PR" >> $GITHUB_OUTPUT
           else
             echo "number=$CHECK_PR" >> $GITHUB_OUTPUT
           fi
