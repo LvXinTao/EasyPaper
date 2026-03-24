@@ -10,17 +10,33 @@ const presets: { id: ThemePreset; name: string; preview: string }[] = [
   { id: 'warm-dark', name: 'Warm Dark', preview: '#1a1816' },
 ];
 
+// Helper to get initial theme from localStorage (only runs on client)
+function getInitialTheme(): ThemePreset {
+  if (typeof window === 'undefined') return 'light-minimal';
+  return (localStorage.getItem('easypaper-theme') as ThemePreset) || 'light-minimal';
+}
+
+function getInitialAccent(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('easypaper-accent') || '';
+}
+
 export function ThemePicker() {
-  const [current, setCurrent] = useState<ThemePreset>('light-minimal');
-  const [customAccent, setCustomAccent] = useState<string>('');
+  const [current, setCurrent] = useState<ThemePreset>(getInitialTheme);
+  const [customAccent, setCustomAccent] = useState<string>(getInitialAccent);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [saving, setSaving] = useState(false);
 
+  // Apply stored accent on mount
   useEffect(() => {
-    const stored = localStorage.getItem('easypaper-theme') as ThemePreset | null;
-    if (stored) setCurrent(stored);
-    const accent = localStorage.getItem('easypaper-accent');
-    if (accent) setCustomAccent(accent);
-  }, []);
+    if (customAccent) {
+      document.documentElement.style.setProperty('--accent', customAccent);
+      const r = parseInt(customAccent.slice(1, 3), 16);
+      const g = parseInt(customAccent.slice(3, 5), 16);
+      const b = parseInt(customAccent.slice(5, 7), 16);
+      document.documentElement.style.setProperty('--accent-subtle', `rgba(${r},${g},${b},0.1)`);
+    }
+  }, [customAccent]);
 
   const applyTheme = (preset: ThemePreset) => {
     setCurrent(preset);

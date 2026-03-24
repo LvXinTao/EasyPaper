@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { PdfViewer } from '@/components/pdf-viewer';
 import { AnalysisPanel } from '@/components/analysis-panel';
 import { NotesPanel } from '@/components/notes-panel';
@@ -416,7 +417,7 @@ export default function PaperDetailPage() {
       <div className="flex items-center justify-center h-[calc(100vh-44px)]" style={{ background: 'var(--bg)' }}>
         <div className="text-center">
           <div className="font-medium" style={{ color: 'var(--rose)' }}>{error || 'Paper not found'}</div>
-          <a href="/" className="text-sm hover:underline mt-2 inline-block" style={{ color: 'var(--accent)' }}>Back to home</a>
+          <Link href="/" className="text-sm hover:underline mt-2 inline-block" style={{ color: 'var(--accent)' }}>Back to home</Link>
         </div>
       </div>
     );

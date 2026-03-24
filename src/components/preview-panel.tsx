@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PaperListItem, PaperAnalysis, Note } from '@/types';
 import { MarkdownContent } from '@/components/markdown-content';
@@ -26,7 +26,9 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
 
-  useEffect(() => {
+  // Reset state when paper changes - intentional cascading state reset
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useLayoutEffect(() => {
     if (!paper) return;
     setAnalysis(null);
     setNoteCount(0);
@@ -53,10 +55,13 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
       } catch { /* ignore */ }
     })();
   }, [paper]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
-  useEffect(() => {
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useLayoutEffect(() => {
     setIsRenaming(false);
   }, [paper]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!paper) {
     return (

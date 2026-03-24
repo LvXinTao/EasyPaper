@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { PromptsForm } from '@/components/prompts-form';
 
 export default function PromptsPage() {
@@ -8,7 +9,7 @@ export default function PromptsPage() {
       <div className="max-w-3xl mx-auto px-6 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
-            <a href="/" className="text-sm" style={{ color: 'var(--text-tertiary)', textDecoration: 'none' }}>EasyPaper</a>
+            <Link href="/" className="text-sm" style={{ color: 'var(--text-tertiary)', textDecoration: 'none' }}>EasyPaper</Link>
             <span style={{ color: 'var(--text-tertiary)' }}>/</span>
             <h1 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>Prompts</h1>
           </div>

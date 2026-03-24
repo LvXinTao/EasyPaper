@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { SettingsForm } from './settings-form';
 import { PromptsForm } from './prompts-form';
 import { UploadModal } from './upload-modal';
@@ -29,12 +30,12 @@ export function Navbar() {
           backdropFilter: 'blur(16px)',
         }}
       >
-        <a
+        <Link
           href="/"
           style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.4px', textDecoration: 'none' }}
         >
           EasyPaper
-        </a>
+        </Link>
 
         <div className="flex-1" />
 

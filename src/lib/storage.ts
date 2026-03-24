@@ -37,6 +37,7 @@ export const storage = {
   async updateMetadata(paperId: string, updates: Partial<PaperMetadata>): Promise<PaperMetadata> {
     const current = await this.getMetadata(paperId);
     const { id: _ignoreId, ...safeUpdates } = updates;
+    void _ignoreId; // Explicitly ignore id to prevent overwriting
     const merged = { ...current, ...safeUpdates };
     await this.saveMetadata(paperId, merged);
     return merged;

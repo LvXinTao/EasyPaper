@@ -1,4 +1,4 @@
-import { AppError, ErrorCode, createErrorResponse } from '@/lib/errors';
+import { AppError, createErrorResponse } from '@/lib/errors';
 
 describe('AppError', () => {
   it('creates an error with code and message', () => {
