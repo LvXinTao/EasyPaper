@@ -11,6 +11,14 @@ class MockFile {
     this.name = name;
     this.type = options?.type || '';
   }
+
+  get size(): number {
+    return this.content.length;
+  }
+
+  arrayBuffer(): Promise<ArrayBuffer> {
+    return Promise.resolve(this.content.buffer.slice(this.content.byteOffset, this.content.byteOffset + this.content.byteLength));
+  }
 }
 
 // Set up global File if not available (Node.js < 20)
