@@ -1,35 +1,42 @@
 import { POST } from '@/app/api/upload/route';
 
-// Mock File class for Node.js test environment
-class MockFile {
-  content: Buffer;
-  name: string;
-  type: string;
-
-  constructor(content: string | Buffer, name: string, options?: { type?: string }) {
-    this.content = Buffer.isBuffer(content) ? content : Buffer.from(content);
-    this.name = name;
-    this.type = options?.type || '';
-  }
-}
-
-// Set up global File if not available (Node.js < 20)
-if (typeof globalThis.File === 'undefined') {
-  // @ts-expect-error Mocking File for Node.js
-  globalThis.File = MockFile;
-}
+// Note: File polyfill is now handled globally in jest.setup.ts
 
 jest.mock('@/lib/storage', () => ({
   storage: { createPaperDir: jest.fn(), savePdf: jest.fn(), saveMetadata: jest.fn() },
 }));
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-123' }));
 
+// Helper to create a mock File object that works in both Node 18 and 20
+function createMockFile(content: string, name: string, type: string): File {
+  const buffer = Buffer.from(content);
+  return {
+    name,
+    type,
+    size: buffer.length,
+    arrayBuffer: () => {
+      const arrayBuffer = buffer.buffer.slice(
+        buffer.byteOffset,
+        buffer.byteOffset + buffer.byteLength
+      ) as ArrayBuffer;
+      return Promise.resolve(arrayBuffer);
+    },
+  } as File;
+}
+
+// Helper to create a mock request with formData support
+function createMockRequest(file: File | null): Request {
+  return {
+    formData: async () => ({
+      get: (key: string) => (key === 'file' ? file : null),
+    }),
+  } as Request;
+}
+
 describe('POST /api/upload', () => {
   it('uploads a PDF and returns paper ID', async () => {
-    const file = new File(['fake pdf content'], 'test.pdf', { type: 'application/pdf' });
-    const formData = new FormData();
-    formData.append('file', file);
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const file = createMockFile('fake pdf content', 'test.pdf', 'application/pdf');
+    const request = createMockRequest(file);
     const response = await POST(request);
     const data = await response.json();
     expect(response.status).toBe(201);
@@ -37,18 +44,15 @@ describe('POST /api/upload', () => {
     expect(data.status).toBe('pending');
   });
   it('rejects non-PDF files', async () => {
-    const file = new File(['not a pdf'], 'test.txt', { type: 'text/plain' });
-    const formData = new FormData();
-    formData.append('file', file);
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const file = createMockFile('not a pdf', 'test.txt', 'text/plain');
+    const request = createMockRequest(file);
     const response = await POST(request);
     expect(response.status).toBe(400);
     const data = await response.json();
     expect(data.error.code).toBe('INVALID_FILE_TYPE');
   });
   it('rejects missing file', async () => {
-    const formData = new FormData();
-    const request = new Request('http://localhost/api/upload', { method: 'POST', body: formData });
+    const request = createMockRequest(null);
     const response = await POST(request);
     expect(response.status).toBe(400);
   });
