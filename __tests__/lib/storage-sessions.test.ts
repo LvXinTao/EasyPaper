@@ -102,7 +102,7 @@ describe('storage - chat sessions', () => {
       await storage.saveChatSession('paper-1', session);
 
       const sessions = await storage.listChatSessions('paper-1');
-      expect((sessions[0] as Record<string, unknown>).messages).toBeUndefined();
+      expect(sessions[0]).not.toHaveProperty('messages');
     });
   });
 
