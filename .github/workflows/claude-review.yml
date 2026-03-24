@@ -91,7 +91,9 @@ jobs:
             exit 1
           fi
 
-          REVIEW=$(echo "$BODY" | jq -r '.content[0].text')
+          # Extract text from response (handle both Anthropic and OpenRouter formats)
+          # OpenRouter may return multiple content types (thinking, text, redacted_thinking)
+          REVIEW=$(echo "$BODY" | jq -r '.content[] | select(.type == "text") | .text' | head -1)
 
           if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
             echo "::error::Failed to extract review from API response"
