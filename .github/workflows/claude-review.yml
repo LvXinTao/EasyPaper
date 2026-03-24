@@ -1,0 +1,117 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: false
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR Info
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number || inputs.pr_number }}"
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+          # Get PR diff (limit to 50KB to avoid token limits)
+          gh pr diff $PR_NUMBER | head -c 50000 > pr_diff.txt
+
+          # Get PR info
+          PR_TITLE=$(gh pr view $PR_NUMBER --json title -q '.title')
+          PR_FILES=$(gh pr view $PR_NUMBER --json files -q '.files[].path' | tr '\n' ' ')
+
+          echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+          echo "files=$PR_FILES" >> $GITHUB_OUTPUT
+
+      - name: Run Claude Review
+        id: review
+        run: |
+          DIFF=$(cat pr_diff.txt)
+          TITLE="${{ steps.pr.outputs.title }}"
+          FILES="${{ steps.pr.outputs.files }}"
+
+          # Call Claude API
+          RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{
+              "model": "claude-sonnet-4-20250514",
+              "max_tokens": 4096,
+              "system": "You are a senior code reviewer. Review pull requests and provide actionable feedback. Be concise and focus on important issues: bugs, security vulnerabilities, performance problems, and architectural concerns. Ignore minor style issues. Output your review in markdown format with a clear verdict at the end.",
+              "messages": [{
+                "role": "user",
+                "content": "Review this PR:\n\n## Title: '"$TITLE"'\n\n## Files Changed: '"$FILES"'\n\n## Diff:\n```diff\n'"$DIFF"'\n```\n\nProvide your review with:\n1. Summary of changes\n2. Issues found (if any)\n3. Suggestions (if any)\n4. Verdict: APPROVE, REQUEST_CHANGES, or COMMENT"
+              }]
+            }')
+
+          # Extract text from response
+          REVIEW=$(echo "$RESPONSE" | jq -r '.content[0].text')
+
+          # Save for next step
+          echo "review<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Determine action
+          if echo "$REVIEW" | grep -qiE "verdict.*APPROVE|## Verdict.*APPROVE"; then
+            echo "action=APPROVE" >> $GITHUB_OUTPUT
+          elif echo "$REVIEW" | grep -qiE "verdict.*REQUEST_CHANGES|## Verdict.*REQUEST_CHANGES"; then
+            echo "action=REQUEST_CHANGES" >> $GITHUB_OUTPUT
+          else
+            echo "action=COMMENT" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Submit Review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+          ACTION="${{ steps.verdict.outputs.action }}"
+          REVIEW="${{ steps.review.outputs.review }}"
+
+          echo "Submitting review with action: $ACTION"
+
+          case "$ACTION" in
+            APPROVE)
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+                -f event="APPROVE" \
+                -f body="$REVIEW" || gh pr comment $PR_NUMBER --body "✅ **Claude Review (Auto-Approved)**\n\n$REVIEW"
+              echo "✅ PR Approved by Claude"
+              ;;
+            REQUEST_CHANGES)
+              gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews \
+                -f event="REQUEST_CHANGES" \
+                -f body="$REVIEW" || gh pr comment $PR_NUMBER --body "⚠️ **Claude Review (Changes Requested)**\n\n$REVIEW"
+              echo "⚠️ Changes Requested by Claude"
+              ;;
+            *)
+              gh pr comment $PR_NUMBER --body "🤖 **Claude Review**\n\n$REVIEW"
+              echo "💬 Comment added by Claude"
+              ;;
+          esac
+
+      - name: Summary
+        run: |
+          echo "## Claude Code Review Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**PR:** #${{ steps.pr.outputs.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Action:** ${{ steps.review.outputs.action }}" >> $GITHUB_STEP_SUMMARY
