@@ -48,19 +48,25 @@ jobs:
               return { canMerge: false, reason: 'PR is not open' };
             }
 
-            // Check for Copilot approval
+            // Check for Claude or Copilot approval
             const { data: reviews } = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber
             });
 
-            const copilotApproved = reviews.some(r =>
-              r.user?.login === 'copilot' && r.state === 'APPROVED'
+            // Accept approval from Claude (bot) or Copilot
+            const aiApproved = reviews.some(r =>
+              r.state === 'APPROVED' && (
+                r.user?.login === 'copilot' ||
+                r.user?.type === 'Bot' ||
+                r.user?.login?.includes('claude') ||
+                r.user?.login?.includes('[bot]')
+              )
             );
 
-            if (!copilotApproved) {
-              return { canMerge: false, reason: 'Waiting for Copilot approval' };
+            if (!aiApproved) {
+              return { canMerge: false, reason: 'Waiting for AI (Claude/Copilot) approval' };
             }
 
             // Check CI status
