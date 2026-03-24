@@ -129,10 +129,11 @@ jobs:
           ACTION="${{ steps.review.outputs.action }}"
           REVIEW="${{ steps.review.outputs.review }}"
 
-          # Write review to file for proper multiline handling
-          # Use printf to avoid backtick execution issues
-          printf '%s\n' "🤖 **Claude Code Review** (Model: \`${CLAUDE_MODEL}\`)" > review_body.txt
-          printf '%s\n' "" >> review_body.txt
+          # Write review to file using cat with heredoc (safest for special chars)
+          cat > review_body.txt << 'REVIEW_END'
+          🤖 **Claude Code Review**
+          REVIEW_END
+          echo "" >> review_body.txt
           printf '%s\n' "$REVIEW" >> review_body.txt
 
           case "$ACTION" in
