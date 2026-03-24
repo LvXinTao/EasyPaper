@@ -61,30 +61,51 @@ jobs:
       - name: Run Claude Review
         id: review
         run: |
-          DIFF=$(cat pr_diff.txt)
-          TITLE="${{ steps.pr.outputs.title }}"
-          AUTHOR="${{ steps.pr.outputs.author }}"
-          FILES="${{ steps.pr.outputs.files }}"
-
           # Build API URL
           API_URL="${CLAUDE_BASE_URL%/}/v1/messages"
-
           echo "Calling Claude API at: $API_URL"
 
-          # Call Claude API
+          # Read diff
+          DIFF=$(cat pr_diff.txt)
+
+          # Build JSON payload using jq for proper escaping
+          PAYLOAD=$(jq -n \
+            --arg model "$CLAUDE_MODEL" \
+            --arg system "You are a senior code reviewer. Review pull requests and provide actionable feedback.
+
+Be concise and focus on important issues:
+- Bugs and logic errors
+- Security vulnerabilities
+- Performance problems
+- Architectural concerns
+- Breaking changes
+
+Ignore minor style issues. Output your review in markdown format.
+
+End your review with exactly one of these verdicts:
+- **Verdict: APPROVE** - Ready to merge
+- **Verdict: REQUEST_CHANGES** - Has issues that must be fixed
+- **Verdict: COMMENT** - Needs discussion but no blocking issues" \
+            --arg title "${{ steps.pr.outputs.title }}" \
+            --arg author "${{ steps.pr.outputs.author }}" \
+            --arg files "${{ steps.pr.outputs.files }}" \
+            --arg diff "$DIFF" \
+            '{
+              model: $model,
+              max_tokens: 4096,
+              system: $system,
+              messages: [{
+                role: "user",
+                content: ("Review this pull request:\n\n**Title:** " + $title + "\n**Author:** @" + $author + "\n**Files Changed:** " + $files + "\n\n**Diff:**\n```diff\n" + $diff + "\n```\n\nProvide a concise review with your verdict.")
+              }]
+            }')
+
+          # Call API
           RESPONSE=$(curl -s -w "\n%{http_code}" "$API_URL" \
             -H "x-api-key: $CLAUDE_API_KEY" \
             -H "anthropic-version: 2023-06-01" \
             -H "content-type: application/json" \
-            -d '{
-              "model": "'"$CLAUDE_MODEL"'",
-              "max_tokens": 4096,
-              "system": "You are a senior code reviewer. Review pull requests and provide actionable feedback.\n\nBe concise and focus on important issues:\n- Bugs and logic errors\n- Security vulnerabilities\n- Performance problems\n- Architectural concerns\n- Breaking changes\n\nIgnore minor style issues. Output your review in markdown format.\n\nEnd your review with exactly one of these verdicts:\n- **Verdict: APPROVE** - Ready to merge\n- **Verdict: REQUEST_CHANGES** - Has issues that must be fixed\n- **Verdict: COMMENT** - Needs discussion but no blocking issues",
-              "messages": [{
-                "role": "user",
-                "content": "Review this pull request:\n\n**Title:** '"$TITLE"'\n**Author:** @'"$AUTHOR"'\n**Files Changed:** '"$FILES"'\n\n**Diff:**\n```diff\n'"$DIFF"'\n```\n\nProvide a concise review with your verdict."
-              }]
-            }')
+            -d "$PAYLOAD")
 
           # Split response and status code
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -136,7 +157,7 @@ jobs:
           # Add model info to review
           FULL_REVIEW="🤖 **Claude Code Review** (Model: \`$CLAUDE_MODEL\`)
 
-          $REVIEW"
+$REVIEW"
 
           case "$ACTION" in
             APPROVE)
@@ -177,10 +198,4 @@ jobs:
             echo "| Model | \`$CLAUDE_MODEL\` |"
             echo "| API URL | \`$CLAUDE_BASE_URL\` |"
             echo "| Action | ${{ steps.review.outputs.action }} |"
-            echo ""
-            echo "### Review Preview"
-            echo ""
-            echo "${{ steps.review.outputs.review }}" | head -c 1000
-            echo ""
-            echo "_... (truncated)_"
           } >> $GITHUB_STEP_SUMMARY
