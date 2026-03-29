@@ -16,8 +16,8 @@ interface ParseConfig {
 
 interface ParseOptions {
   onProgress?: (message: string) => void;
-  onVisionChunk?: (chunk: string) => void;
-  onVisionProgress?: (info: { batch: number; totalBatches: number; pages: string; elapsed: number }) => void;
+  onBatchDone?: (batchIndex: number, totalBatches: number, content: string) => void;
+  signal?: AbortSignal;
   customVisionPrompt?: string;
 }
 
@@ -25,8 +25,9 @@ const BATCH_SIZE = 15;
 const BATCH_OVERLAP = 2;
 const MAX_TOKENS = 16384;
 const TIMEOUT_MS = 180_000;
-const DPI = 150;
+const DPI = 120;
 const SCALE = DPI / 72;
+const MAX_CONCURRENCY = 3;
 
 /**
  * Detect if model output appears truncated (unclosed code fences, tables, mid-word ending).
@@ -53,7 +54,7 @@ export async function parsePdfWithVision(
   config: ParseConfig,
   options: ParseOptions = {},
 ): Promise<string> {
-  const { onProgress = () => {}, onVisionChunk, onVisionProgress, customVisionPrompt } = options;
+  const { onProgress = () => {}, onBatchDone, signal, customVisionPrompt } = options;
 
   // 1. Load PDF with mupdf (dynamic import to avoid Turbopack ESM/WASM issues)
   const mupdf = await loadMupdf();
