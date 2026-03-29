@@ -1,8 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
 import type { Bookmark } from '@/types';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
+
+// Configure pdf.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 const THUMBNAIL_MAX_WIDTH = 80;
 const THUMBNAIL_MAX_HEIGHT = 120;
@@ -27,20 +33,14 @@ export function PdfViewer({
   onRemoveBookmark,
   onBookmarksChange,
 }: PdfViewerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const textLayerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(currentPage);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
-  const textLayerInstanceRef = useRef<{ cancel: () => void } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState('');
-  const [canvasOpacity, setCanvasOpacity] = useState(1);
-  const animationGenRef = useRef(0);
-  const skipAnimationRef = useRef(false);
   const [isDraggingBar, setIsDraggingBar] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showBookmarkPopover, setShowBookmarkPopover] = useState(false);
@@ -57,35 +57,8 @@ export function PdfViewer({
   const lastRenderedPageRef = useRef<number>(0);
   const pendingHoverPageRef = useRef<number>(0);
   const pageRef = useRef(page);
-  pageRef.current = page;
-
-  // Custom selection highlight
-  const [highlightRects, setHighlightRects] = useState<Array<{ left: number; top: number; width: number; height: number }>>([]);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const rafIdRef = useRef<number>(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Load PDF document
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPdf() {
-      setLoading(true);
-      const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
-
-      const loadingTask = pdfjsLib.getDocument(url);
-      const pdfDoc = await loadingTask.promise;
-      if (!cancelled) {
-        setPdf(pdfDoc);
-        setTotalPages(pdfDoc.numPages);
-        setLoading(false);
-      }
-    }
-
-    loadPdf();
-    return () => { cancelled = true; };
-  }, [url]);
+  pageRef.current = page;
 
   // Navigate to page when prop changes
   useEffect(() => {
@@ -93,72 +66,6 @@ export function PdfViewer({
       setPage(currentPage);
     }
   }, [currentPage, totalPages]);
-
-  // Render current page (canvas + text layer) with fade transition
-  useEffect(() => {
-    if (!pdf || !canvasRef.current || !textLayerRef.current) return;
-
-    // Clear custom selection highlights when page/scale changes
-    setHighlightRects([]);
-
-    let cancelled = false;
-    const gen = ++animationGenRef.current;
-
-    // Cancel previous text layer render
-    if (textLayerInstanceRef.current) {
-      textLayerInstanceRef.current.cancel();
-      textLayerInstanceRef.current = null;
-    }
-
-    async function renderPage() {
-      // Fade out (skip if animation disabled, e.g. during drag)
-      if (!skipAnimationRef.current) {
-        setCanvasOpacity(0);
-        await new Promise((r) => setTimeout(r, 150));
-        if (cancelled || gen !== animationGenRef.current) return;
-      }
-
-      const pdfPage = await pdf!.getPage(page);
-      const viewport = pdfPage.getViewport({ scale });
-      const canvas = canvasRef.current!;
-      const context = canvas.getContext('2d')!;
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      if (cancelled || gen !== animationGenRef.current) return;
-
-      await pdfPage.render({ canvasContext: context, viewport }).promise;
-
-      if (cancelled || gen !== animationGenRef.current) return;
-
-      // Render text layer
-      const textLayerDiv = textLayerRef.current!;
-      textLayerDiv.innerHTML = '';
-      textLayerDiv.style.width = `${viewport.width}px`;
-      textLayerDiv.style.height = `${viewport.height}px`;
-
-      const textContent = await pdfPage.getTextContent();
-      if (cancelled || gen !== animationGenRef.current) return;
-
-      const { TextLayer } = await import('pdfjs-dist');
-      const textLayer = new TextLayer({
-        textContentSource: textContent,
-        container: textLayerDiv,
-        viewport,
-      });
-
-      textLayerInstanceRef.current = textLayer;
-      await textLayer.render();
-
-      if (cancelled || gen !== animationGenRef.current) return;
-
-      // Fade in
-      setCanvasOpacity(1);
-    }
-
-    renderPage();
-    return () => { cancelled = true; };
-  }, [pdf, page, scale]);
 
   const goToPage = useCallback((p: number) => {
     if (p >= 1 && p <= totalPages) {
@@ -195,7 +102,6 @@ export function PdfViewer({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingBar(true);
-    skipAnimationRef.current = true;
     document.body.style.userSelect = 'none';
   }, []);
 
@@ -217,7 +123,6 @@ export function PdfViewer({
 
     const handleMouseUp = (e: MouseEvent) => {
       setIsDraggingBar(false);
-      skipAnimationRef.current = false;
       document.body.style.userSelect = '';
       setHoveredPage(null);
       goToPage(calcPageFromMouseX(e.clientX));
@@ -228,13 +133,12 @@ export function PdfViewer({
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
-      skipAnimationRef.current = false;
       document.body.style.userSelect = '';
     };
   }, [isDraggingBar, calcPageFromMouseX, goToPage]);
 
   const renderThumbnail = useCallback(async (pageNum: number) => {
-    if (!pdf) return null;
+    if (!pdfDoc) return null;
 
     const cached = thumbnailCacheRef.current.get(pageNum);
     if (cached) {
@@ -252,7 +156,7 @@ export function PdfViewer({
     pendingRenderRef.current = renderToken;
 
     try {
-      const pdfPage = await pdf.getPage(pageNum);
+      const pdfPage = await pdfDoc.getPage(pageNum);
       if (renderToken.cancel) return null;
 
       const baseViewport = pdfPage.getViewport({ scale: 1 });
@@ -261,7 +165,6 @@ export function PdfViewer({
       let thumbWidth: number;
       if (aspect >= THUMBNAIL_MAX_WIDTH / THUMBNAIL_MAX_HEIGHT) {
         thumbWidth = THUMBNAIL_MAX_WIDTH;
-        // thumbHeight calculated but not stored - derived from aspect
       } else {
         thumbWidth = THUMBNAIL_MAX_HEIGHT * aspect;
       }
@@ -292,7 +195,7 @@ export function PdfViewer({
     } catch {
       return null;
     }
-  }, [pdf]);
+  }, [pdfDoc]);
 
   const applyThumbnail = useCallback((pageNum: number) => {
     renderThumbnail(pageNum).then((canvas) => {
@@ -344,10 +247,8 @@ export function PdfViewer({
 
   const handleBookmarkClick = useCallback(() => {
     if (currentPageBookmark) {
-      // If bookmark exists, highlight/navigate to it - callback will be handled by parent
       onBookmarksChange?.();
     } else {
-      // Open popover to add bookmark
       setBookmarkLabel('');
       setShowBookmarkPopover(true);
     }
@@ -364,7 +265,6 @@ export function PdfViewer({
     setBookmarkLabel('');
   }, []);
 
-  // Handle keyboard in bookmark popover
   const handleBookmarkKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleAddBookmark();
@@ -382,7 +282,6 @@ export function PdfViewer({
   const handleContextMenuClose = useCallback(() => {
     setContextMenu(null);
   }, []);
-  // handleContextMenuClose is kept for potential future use with context menu UI
   void handleContextMenuClose;
 
   const handleContextMenuAddBookmark = useCallback(() => {
@@ -429,8 +328,6 @@ export function PdfViewer({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip if an input/textarea is focused (covers page-number input from Task 2)
-      // Also skip if progress bar slider is focused (Task 4) — it has its own key handler
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' ||
           target.getAttribute('role') === 'slider') {
@@ -492,132 +389,13 @@ export function PdfViewer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [totalPages, goToPage]);
 
-  // Custom selection highlight: listen to selectionchange
-  useEffect(() => {
-    const handleSelectionChange = () => {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = requestAnimationFrame(() => {
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-          setHighlightRects([]);
-          return;
-        }
+  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
+    setTotalPages(numPages);
+    setLoading(false);
+  }, []);
 
-        const textLayerEl = textLayerRef.current;
-        const wrapperEl = wrapperRef.current;
-        if (!textLayerEl || !wrapperEl) {
-          setHighlightRects([]);
-          return;
-        }
-
-        // Check if selection is within text layer
-        const anchorInTextLayer = selection.anchorNode && textLayerEl.contains(selection.anchorNode);
-        const focusInTextLayer = selection.focusNode && textLayerEl.contains(selection.focusNode);
-        if (!anchorInTextLayer && !focusInTextLayer) {
-          setHighlightRects([]);
-          return;
-        }
-
-        const wrapperRect = wrapperEl.getBoundingClientRect();
-        const rects: Array<{ left: number; top: number; width: number; height: number }> = [];
-
-        for (let i = 0; i < selection.rangeCount; i++) {
-          const range = selection.getRangeAt(i);
-
-          // Walk text nodes in the selection to extract highlight rects.
-          // Uses canvas pixel scanning to find actual text boundaries,
-          // bypassing font mismatch between text layer and PDF canvas.
-          const walker = document.createTreeWalker(
-            textLayerEl,
-            NodeFilter.SHOW_TEXT,
-            { acceptNode: (node) => range.intersectsNode(node) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT }
-          );
-
-          while (walker.nextNode()) {
-            const textNode = walker.currentNode;
-            const spanEl = textNode.parentElement as HTMLElement | null;
-            if (!spanEl || spanEl === textLayerEl) continue;
-
-            const fullText = textNode.textContent || '';
-            const startOff = textNode === range.startContainer ? range.startOffset : 0;
-            let endOff = textNode === range.endContainer ? range.endOffset : fullText.length;
-
-            // Trim trailing whitespace
-            while (endOff > startOff && /\s/.test(fullText[endOff - 1])) {
-              endOff--;
-            }
-            if (endOff <= startOff) continue;
-
-            const nodeRange = document.createRange();
-            nodeRange.setStart(textNode, startOff);
-            nodeRange.setEnd(textNode, endOff);
-
-            const nodeRects = nodeRange.getClientRects();
-            const canvas = canvasRef.current;
-            const canvasCtx = canvas?.getContext('2d');
-
-            for (let j = 0; j < nodeRects.length; j++) {
-              const r = nodeRects[j];
-              if (r.width <= 0 || r.height <= 0) continue;
-
-              const left = r.left - wrapperRect.left;
-              let width = r.width;
-
-              // Scan canvas pixels to find the actual right edge of visible text.
-              // The text layer uses browser-substituted fonts while the canvas uses
-              // PDF-embedded fonts, causing per-character width mismatches. Pixel
-              // scanning gives us the ground truth of where text actually ends.
-              if (canvasCtx && canvas) {
-                const scanWidth = Math.min(60, Math.ceil(r.width * 0.15));
-                const scanHeight = Math.max(3, Math.min(7, Math.floor(r.height * 0.4)));
-                const startX = Math.max(0, Math.floor(left + width - scanWidth));
-                const startY = Math.max(0, Math.floor(r.top - wrapperRect.top + (r.height - scanHeight) / 2));
-
-                try {
-                  const imageData = canvasCtx.getImageData(startX, startY, scanWidth, scanHeight);
-                  const pixels = imageData.data;
-
-                  // Find rightmost non-background column
-                  let rightmostCol = -1;
-                  for (let col = scanWidth - 1; col >= 0; col--) {
-                    let found = false;
-                    for (let row = 0; row < scanHeight; row++) {
-                      const idx = (row * scanWidth + col) * 4;
-                      if (pixels[idx] < 220 || pixels[idx + 1] < 220 || pixels[idx + 2] < 220) {
-                        found = true;
-                        break;
-                      }
-                    }
-                    if (found) {
-                      rightmostCol = col;
-                      break;
-                    }
-                  }
-
-                  if (rightmostCol >= 0) {
-                    // +2px padding for anti-aliased edges
-                    const adjustedRight = startX + rightmostCol + 2;
-                    width = Math.max(r.width * 0.8, adjustedRight - left);
-                  }
-                } catch {
-                  // Fallback to getClientRects width (e.g. cross-origin canvas)
-                }
-              }
-
-              rects.push({ left, top: r.top - wrapperRect.top, width, height: r.height });
-            }
-          }
-        }
-
-        setHighlightRects(rects);
-      });
-    };
-
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => {
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      cancelAnimationFrame(rafIdRef.current);
-    };
+  const onDocumentLoad = useCallback((pdf: PDFDocumentProxy) => {
+    setPdfDoc(pdf);
   }, []);
 
   if (loading) {
@@ -631,9 +409,6 @@ export function PdfViewer({
 
   return (
     <div ref={viewerRef} className="flex flex-col h-full" tabIndex={-1}>
-      {/* eslint-disable-next-line @next/next/no-css-tags */}
-      <link rel="stylesheet" href="/pdf_viewer.css" />
-
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
@@ -807,39 +582,25 @@ export function PdfViewer({
         </div>
       </div>
 
-      {/* Canvas + TextLayer */}
+      {/* Canvas + TextLayer via react-pdf */}
       <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4" style={{ background: 'var(--bg-deep)' }}
         onContextMenu={handleContextMenu}
       >
         <div className="text-center">
-          <div
-            ref={wrapperRef}
-            className="relative inline-block shadow-xl rounded overflow-hidden"
-            style={{
-              opacity: canvasOpacity,
-              transition: 'opacity 150ms ease-out',
-            }}
-          >
-            <canvas ref={canvasRef} style={{ display: 'block' }} />
-            {/* Custom selection highlight overlay */}
-            {highlightRects.length > 0 && (
-              <div className="absolute inset-0 pointer-events-none">
-                {highlightRects.map((rect, i) => (
-                  <div
-                    key={i}
-                    className="absolute rounded-sm"
-                    style={{
-                      left: rect.left,
-                      top: rect.top,
-                      width: rect.width,
-                      height: rect.height,
-                      background: 'rgba(0, 0, 255, 0.25)',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            <div ref={textLayerRef} className="textLayer" />
+          <div className="inline-block shadow-xl rounded overflow-hidden">
+            <Document
+              file={url}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoad={onDocumentLoad}
+              loading={null}
+            >
+              <Page
+                pageNumber={page}
+                scale={scale}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+              />
+            </Document>
           </div>
         </div>
       </div>
