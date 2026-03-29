@@ -58,12 +58,21 @@ export function PdfViewer({
   const pendingHoverPageRef = useRef<number>(0);
   const pageRef = useRef(page);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  pageRef.current = page;
+  const prevCurrentPageRef = useRef(currentPage);
 
-  // Navigate to page when prop changes
+  // Keep pageRef in sync for keyboard handlers
   useEffect(() => {
-    if (currentPage > 0 && currentPage <= totalPages) {
+    pageRef.current = page;
+  }, [page]);
+
+  // Sync page with currentPage prop (external navigation)
+  // This is a valid controlled/uncontrolled component pattern where we sync
+  // external prop changes to internal state
+  useEffect(() => {
+    if (currentPage !== prevCurrentPageRef.current && currentPage > 0 && currentPage <= totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPage(currentPage);
+      prevCurrentPageRef.current = currentPage;
     }
   }, [currentPage, totalPages]);
 
