@@ -133,6 +133,37 @@ describe('parsePdfWithVision', () => {
     expect(result).toContain('mid-sen');
     expect(warnings.some(w => w.toLowerCase().includes('truncat') || w.toLowerCase().includes('incomplete'))).toBe(true);
   });
+
+  it('sends batches in parallel for large papers', async () => {
+    mupdfMocks.mockCountPages.mockReturnValue(35);
+
+    // Use mockResolvedValueOnce to avoid race conditions with shared counters
+    mockCompleteVision
+      .mockResolvedValueOnce('<!-- page 1 -->\nBatch 1 content.')
+      .mockResolvedValueOnce('<!-- page 14 -->\nBatch 2 content.')
+      .mockResolvedValueOnce('<!-- page 27 -->\nBatch 3 content.');
+
+    await parsePdfWithVision('/test.pdf', config);
+
+    // 35 pages = 3 batches (1-15, 14-28, 27-35)
+    expect(mockCompleteVision).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls onBatchDone for each completed batch', async () => {
+    mupdfMocks.mockCountPages.mockReturnValue(20);
+    mockCompleteVision
+      .mockResolvedValueOnce('<!-- page 1 -->\nBatch 1.')
+      .mockResolvedValueOnce('<!-- page 14 -->\nBatch 2.');
+
+    const batchDones: Array<{ index: number; total: number }> = [];
+    await parsePdfWithVision('/test.pdf', config, {
+      onBatchDone: (idx, total) => batchDones.push({ index: idx, total }),
+    });
+
+    expect(batchDones).toHaveLength(2);
+    expect(batchDones[0].total).toBe(2);
+    expect(batchDones[1].total).toBe(2);
+  });
 });
 
 describe('detectTruncation', () => {

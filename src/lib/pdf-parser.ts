@@ -94,53 +94,101 @@ export async function parsePdfWithVision(
     let result: string;
 
     if (validImages.length <= BATCH_SIZE) {
-      // Single batch
-      const pages = `1-${validImages.length}`;
+      // Single batch — no parallelism needed
       onProgress(`Parsing with Vision AI (${validImages.length} pages)...`);
-      if (onVisionProgress) onVisionProgress({ batch: 1, totalBatches: 1, pages, elapsed: 0 });
-      console.log(`[pdf-parser] Vision stream started (batch 1/1, pages ${pages})`);
-      const startTime = Date.now();
-      result = await callVisionWithRetryStreaming(client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, onVisionChunk);
-      const elapsed = (Date.now() - startTime) / 1000;
-      const tokens = Math.ceil(result.length / 4);
-      console.log(`[pdf-parser] Vision stream completed (batch 1/1, ${tokens} tokens, ${elapsed.toFixed(1)}s)`);
-      if (onVisionProgress) onVisionProgress({ batch: 1, totalBatches: 1, pages, elapsed });
+      const batchResult = await executeBatchWithRetry(client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, signal);
+      if (onBatchDone) onBatchDone(0, 1, batchResult);
+      result = batchResult;
     } else {
-      // Multi-batch with overlap
-      const results: string[] = [];
+      // Multi-batch: build batch list, then execute in parallel
+      const batches: { images: string[]; startPage: number; endPage: number }[] = [];
       let start = 0;
-      let batchNum = 0;
-      const totalBatches = Math.ceil(validImages.length / (BATCH_SIZE - BATCH_OVERLAP));
-
       while (start < validImages.length) {
         const end = Math.min(start + BATCH_SIZE, validImages.length);
-        const batchImages = validImages.slice(start, end);
-        batchNum++;
-        const pages = `${start + 1}-${end}`;
-        onProgress(`Parsing with Vision AI (batch ${batchNum}/${totalBatches}, pages ${pages})...`);
-        if (onVisionProgress) onVisionProgress({ batch: batchNum, totalBatches, pages, elapsed: 0 });
-        console.log(`[pdf-parser] Vision stream started (batch ${batchNum}/${totalBatches}, pages ${pages})`);
-        const startTime = Date.now();
-
-        const prompt = start === 0
-          ? (customVisionPrompt || PDF_PARSE_PROMPT)
-          : PDF_PARSE_BATCH_PROMPT
-              .replace('{startPage}', String(start + 1))
-              .replace('{endPage}', String(end))
-              .replace('{totalPages}', String(validImages.length));
-
-        const batchResult = await callVisionWithRetryStreaming(client, batchImages, prompt, onVisionChunk);
-        const elapsed = (Date.now() - startTime) / 1000;
-        const tokens = Math.ceil(batchResult.length / 4);
-        console.log(`[pdf-parser] Vision stream completed (batch ${batchNum}/${totalBatches}, ${tokens} tokens, ${elapsed.toFixed(1)}s)`);
-        if (onVisionProgress) onVisionProgress({ batch: batchNum, totalBatches, pages, elapsed });
-        results.push(batchResult);
-
-        // Advance with overlap (except on last batch)
+        batches.push({ images: validImages.slice(start, end), startPage: start + 1, endPage: end });
         start += end >= validImages.length ? validImages.length : BATCH_SIZE - BATCH_OVERLAP;
       }
 
-      result = deduplicateAndJoin(results);
+      const totalBatches = batches.length;
+      onProgress(`Parsing with Vision AI (${totalBatches} batches, ${validImages.length} pages)...`);
+
+      // Parallel execution with concurrency limit and 429 pause support
+      const batchResults: (string | null)[] = new Array(totalBatches).fill(null);
+      let running = 0;
+      let nextIdx = 0;
+      let rateLimitPauseUntil = 0; // Timestamp; when > Date.now(), new launches are paused
+
+      await new Promise<void>((resolve) => {
+        let settled = 0;
+
+        function launchNext() {
+          // Pause if rate-limited
+          if (rateLimitPauseUntil > Date.now()) {
+            const delay = rateLimitPauseUntil - Date.now();
+            setTimeout(launchNext, delay);
+            return;
+          }
+
+          while (running < MAX_CONCURRENCY && nextIdx < totalBatches) {
+            const idx = nextIdx++;
+            const batch = batches[idx];
+            running++;
+
+            const prompt = idx === 0
+              ? (customVisionPrompt || PDF_PARSE_PROMPT)
+              : PDF_PARSE_BATCH_PROMPT
+                  .replace('{startPage}', String(batch.startPage))
+                  .replace('{endPage}', String(batch.endPage))
+                  .replace('{totalPages}', String(validImages.length));
+
+            executeBatchWithRetry(client, batch.images, prompt, signal, (retryAfterMs) => {
+              // 429 callback: pause the pool
+              rateLimitPauseUntil = Math.max(rateLimitPauseUntil, Date.now() + retryAfterMs);
+            })
+              .then((content) => {
+                batchResults[idx] = content;
+                if (onBatchDone) onBatchDone(idx, totalBatches, content);
+                onProgress(`Parsed batch ${idx + 1}/${totalBatches} (pages ${batch.startPage}-${batch.endPage})`);
+              })
+              .catch((err) => {
+                console.warn(`[pdf-parser] Batch ${idx + 1} failed:`, err instanceof Error ? err.message : err);
+                batchResults[idx] = null; // Mark as failed
+                onProgress(`Batch ${idx + 1}/${totalBatches} failed (pages ${batch.startPage}-${batch.endPage})`);
+              })
+              .finally(() => {
+                running--;
+                settled++;
+                if (settled === totalBatches) {
+                  resolve();
+                } else {
+                  launchNext();
+                }
+              });
+          }
+        }
+
+        launchNext();
+
+        // Edge case: 0 batches
+        if (totalBatches === 0) resolve();
+      });
+
+      // Filter successful results and deduplicate
+      const successResults = batchResults.filter((r): r is string => r !== null);
+      if (successResults.length === 0) {
+        throw new Error('All Vision API batches failed');
+      }
+
+      // Note which pages are missing
+      const failedBatches = batchResults
+        .map((r, i) => r === null ? batches[i] : null)
+        .filter((b): b is NonNullable<typeof b> => b !== null);
+      if (failedBatches.length > 0) {
+        const ranges = failedBatches.map(b => `${b.startPage}-${b.endPage}`).join(', ');
+        onProgress(`Warning: Pages ${ranges} could not be parsed.`);
+      }
+
+      result = deduplicateByPageMarkers(successResults);
     }
 
     // Check for truncation
@@ -176,13 +224,16 @@ function extractTextFallback(
 }
 
 /**
- * Call Vision API with streaming and a single retry on timeout/abort.
+ * Execute a single Vision API batch with retry, 429 rate-limit handling, and abort signal support.
+ * @param onRateLimit Called when 429 is received, with the backoff delay in ms.
+ *   The caller (concurrency pool) uses this to pause launching new batches.
  */
-async function callVisionWithRetryStreaming(
+async function executeBatchWithRetry(
   client: ReturnType<typeof createAIClient>,
   pageImages: string[],
   prompt: string,
-  onChunk?: (chunk: string) => void,
+  externalSignal?: AbortSignal,
+  onRateLimit?: (retryAfterMs: number) => void,
 ): Promise<string> {
   const content: ContentPart[] = [
     { type: 'text', text: prompt },
@@ -192,34 +243,50 @@ async function callVisionWithRetryStreaming(
     })),
   ];
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let backoffMs = 2000; // Initial backoff for 429, doubles each retry
+
+  for (let attempt = 0; attempt < 3; attempt++) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+    // Merge external signal with timeout
+    const mergedSignal = externalSignal
+      ? AbortSignal.any([externalSignal, controller.signal])
+      : controller.signal;
+
     try {
       let result = '';
-      let charsSinceLog = 0;
       for await (const chunk of client.streamCompleteVision(
         [{ role: 'user', content }],
         MAX_TOKENS,
-        controller.signal,
+        mergedSignal,
       )) {
         result += chunk;
-        charsSinceLog += chunk.length;
-        if (onChunk) onChunk(chunk);
-        // Log every ~500 chars
-        if (charsSinceLog >= 500) {
-          const preview = result.slice(-80).replace(/\n/g, '\\n');
-          console.log(`[pdf-parser] Vision streaming: "...${preview}"`);
-          charsSinceLog = 0;
-        }
       }
       return result;
     } catch (err) {
+      // If external signal was aborted, don't retry
+      if (externalSignal?.aborted) throw err;
+
+      // Handle 429 rate limit
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('429')) {
+        // Parse Retry-After from error message if available (API error format: "API error 429: ...")
+        const retryMatch = errMsg.match(/[Rr]etry-?[Aa]fter[:\s]+(\d+)/);
+        const retryAfterMs = retryMatch ? parseInt(retryMatch[1], 10) * 1000 : backoffMs;
+        console.warn(`[pdf-parser] Rate limited (429), waiting ${retryAfterMs}ms before retry...`);
+        if (onRateLimit) onRateLimit(retryAfterMs);
+        await new Promise(r => setTimeout(r, retryAfterMs));
+        backoffMs *= 2; // Exponential backoff
+        continue;
+      }
+
+      // Handle timeout/network errors (single retry)
       if (attempt === 0 && (
         (err instanceof DOMException && err.name === 'AbortError') ||
-        (err instanceof TypeError && err.message.includes('fetch'))
+        (err instanceof TypeError && errMsg.includes('fetch'))
       )) {
-        console.warn('[pdf-parser] Vision API failed, retrying...', err instanceof Error ? err.message : err);
+        console.warn('[pdf-parser] Vision batch failed, retrying...', errMsg);
         continue;
       }
       throw err;
@@ -228,7 +295,7 @@ async function callVisionWithRetryStreaming(
     }
   }
 
-  throw new Error('Vision API timed out after retry');
+  throw new Error('Vision API failed after retries');
 }
 
 /**
@@ -282,30 +349,4 @@ export function deduplicateByPageMarkers(results: string[]): string {
   // Sort by page number and join
   const sorted = [...merged.entries()].sort((a, b) => a[0] - b[0]);
   return sorted.map(([, content]) => content).join('\n\n');
-}
-
-/**
- * Join batch results, deduplicating overlapping content between batches.
- */
-function deduplicateAndJoin(results: string[]): string {
-  if (results.length <= 1) return results[0] || '';
-
-  const joined: string[] = [results[0]];
-
-  for (let i = 1; i < results.length; i++) {
-    const prev = results[i - 1];
-    const next = results[i];
-    const tail = prev.slice(-200).trim();
-
-    // Try to find the overlap point in the next batch
-    const searchStr = tail.slice(-80);
-    const overlapIdx = next.indexOf(searchStr);
-    if (overlapIdx > 0 && overlapIdx < 500) {
-      joined.push(next.slice(overlapIdx + searchStr.length));
-    } else {
-      joined.push(next);
-    }
-  }
-
-  return joined.join('\n\n');
 }
