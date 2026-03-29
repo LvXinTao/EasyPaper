@@ -26,8 +26,7 @@ export default function PaperDetailPage() {
   const [isSSEStreaming, setIsSSEStreaming] = useState(false);
   const [sseStep, setSSEStep] = useState<string | null>(null);
   const [sseMessage, setSSEMessage] = useState<string | null>(null);
-  const [visionStreamContent, setVisionStreamContent] = useState('');
-  const [visionProgress, setVisionProgress] = useState<{ batch: number; totalBatches: number; pages: string; elapsed: number } | null>(null);
+  const [parseBatchProgress, setParseBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'notes' | 'bookmarks'>('analysis');
@@ -162,8 +161,7 @@ export default function PaperDetailPage() {
     setAnalysisError(null);
     setSSEStep(null);
     setSSEMessage(null);
-    setVisionStreamContent('');
-    setVisionProgress(null);
+    setParseBatchProgress(null);
 
     try {
       const response = await fetch('/api/analyze', {
@@ -219,14 +217,8 @@ export default function PaperDetailPage() {
                 setSSEStep(event.step);
                 setSSEMessage(event.message || null);
               }
-              if (event.type === 'vision_stream') {
-                setVisionStreamContent(prev => prev + event.content);
-              }
-              if (event.type === 'vision_progress') {
-                setVisionProgress({
-                  batch: event.batch, totalBatches: event.totalBatches,
-                  pages: event.pages, elapsed: event.elapsed,
-                });
+              if (event.type === 'parse_batch_done') {
+                setParseBatchProgress({ done: event.batchIndex + 1, total: event.totalBatches });
               }
               if ('section' in event) {
                 setAnalysis(prev => prev || {
@@ -617,8 +609,7 @@ export default function PaperDetailPage() {
                   isAnalyzing={effectiveIsAnalyzing}
                   analysisStep={effectiveStep}
                   analysisMessage={effectiveMessage}
-                  visionStreamContent={visionStreamContent}
-                  visionProgress={visionProgress}
+                  parseBatchProgress={parseBatchProgress}
                   onReAnalyze={handleAnalyze}
                 />
               ) : activeTab === 'notes' ? (

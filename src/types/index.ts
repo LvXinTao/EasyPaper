@@ -14,6 +14,8 @@ export interface PaperMetadata {
     step: 'parsing' | 'analyzing' | 'saving';
     message: string;
     updatedAt: string;
+    batchesDone?: number;
+    totalBatches?: number;
   };
 }
 
@@ -79,8 +81,7 @@ export type AnalyzeEvent =
   | { step: 'parsing'; message?: string }
   | { step: 'analyzing'; message?: string }
   | { step: 'saving'; message?: string }
-  | { type: 'vision_stream'; content: string }
-  | { type: 'vision_progress'; batch: number; totalBatches: number; pages: string; elapsed: number }
+  | { type: 'parse_batch_done'; batchIndex: number; totalBatches: number; content: string }
   | { section: string; content: string }
   | { done: true }
   | { error: string };
