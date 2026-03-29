@@ -1,4 +1,4 @@
-import { parsePdfWithVision, detectTruncation } from '@/lib/pdf-parser';
+import { parsePdfWithVision, detectTruncation, deduplicateByPageMarkers } from '@/lib/pdf-parser';
 
 jest.mock('mupdf', () => {
   const mockAsText = jest.fn().mockReturnValue('Fallback text content from page');
@@ -146,5 +146,32 @@ describe('detectTruncation', () => {
 
   it('returns false for complete text', () => {
     expect(detectTruncation('# Title\n\nComplete paragraph here.')).toBe(false);
+  });
+});
+
+describe('deduplicateByPageMarkers', () => {
+  it('joins single batch without modification', () => {
+    const result = deduplicateByPageMarkers(['<!-- page 1 -->\nContent page 1\n<!-- page 2 -->\nContent page 2']);
+    expect(result).toBe('<!-- page 1 -->\nContent page 1\n<!-- page 2 -->\nContent page 2');
+  });
+
+  it('deduplicates overlapping pages between batches', () => {
+    const batch1 = '<!-- page 1 -->\nContent 1\n<!-- page 2 -->\nContent 2\n<!-- page 3 -->\nContent 3';
+    const batch2 = '<!-- page 3 -->\nContent 3 different\n<!-- page 4 -->\nContent 4';
+    const result = deduplicateByPageMarkers([batch1, batch2]);
+    expect(result).toContain('Content 1');
+    expect(result).toContain('Content 2');
+    expect(result).toContain('Content 3');  // from batch1 (first wins)
+    expect(result).toContain('Content 4');
+    expect(result).not.toContain('Content 3 different');  // batch2 overlap discarded
+  });
+
+  it('handles batches without page markers (fallback join)', () => {
+    const result = deduplicateByPageMarkers(['No markers batch 1', 'No markers batch 2']);
+    expect(result).toBe('No markers batch 1\n\nNo markers batch 2');
+  });
+
+  it('handles empty results', () => {
+    expect(deduplicateByPageMarkers([])).toBe('');
   });
 });

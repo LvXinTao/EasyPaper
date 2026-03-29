@@ -232,6 +232,59 @@ async function callVisionWithRetryStreaming(
 }
 
 /**
+ * Parse page-marker-delimited content into a Map<pageNum, content>.
+ */
+function parsePageMarkers(text: string): Map<number, string> {
+  const pages = new Map<number, string>();
+  const markerRegex = /<!--\s*page\s+(\d+)\s*-->/g;
+  let match: RegExpExecArray | null;
+  const markers: { page: number; index: number }[] = [];
+
+  while ((match = markerRegex.exec(text)) !== null) {
+    markers.push({ page: parseInt(match[1], 10), index: match.index });
+  }
+
+  for (let i = 0; i < markers.length; i++) {
+    const start = markers[i].index;
+    const end = i + 1 < markers.length ? markers[i + 1].index : text.length;
+    pages.set(markers[i].page, text.slice(start, end).trimEnd());
+  }
+
+  return pages;
+}
+
+/**
+ * Join batch results, deduplicating overlapping pages by page markers.
+ * Falls back to simple newline join if no markers are found.
+ */
+export function deduplicateByPageMarkers(results: string[]): string {
+  if (results.length === 0) return '';
+  if (results.length === 1) return results[0];
+
+  // Check if markers exist in first batch
+  const hasMarkers = /<!--\s*page\s+\d+\s*-->/.test(results[0]);
+  if (!hasMarkers) {
+    return results.join('\n\n');
+  }
+
+  const merged = new Map<number, string>();
+
+  for (const batch of results) {
+    const pages = parsePageMarkers(batch);
+    for (const [pageNum, content] of pages) {
+      // First batch wins for overlapping pages
+      if (!merged.has(pageNum)) {
+        merged.set(pageNum, content);
+      }
+    }
+  }
+
+  // Sort by page number and join
+  const sorted = [...merged.entries()].sort((a, b) => a[0] - b[0]);
+  return sorted.map(([, content]) => content).join('\n\n');
+}
+
+/**
  * Join batch results, deduplicating overlapping content between batches.
  */
 function deduplicateAndJoin(results: string[]): string {
