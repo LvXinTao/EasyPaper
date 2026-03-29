@@ -36,8 +36,18 @@ async function runAnalysis(paperId: string, config: AIConfig, send: SendFn): Pro
             analysisProgress: { step: 'parsing', message, updatedAt: new Date().toISOString() },
           }).catch(() => {});
         },
-        onVisionChunk: (content) => send({ type: 'vision_stream', content }),
-        onVisionProgress: (info) => send({ type: 'vision_progress', ...info }),
+        onBatchDone: (batchIndex, totalBatches, content) => {
+          send({ type: 'parse_batch_done', batchIndex, totalBatches, content });
+          storage.updateMetadata(paperId, {
+            analysisProgress: {
+              step: 'parsing',
+              message: `Parsed batch ${batchIndex + 1}/${totalBatches}`,
+              updatedAt: new Date().toISOString(),
+              batchesDone: batchIndex + 1,
+              totalBatches,
+            },
+          }).catch(() => {});
+        },
         customVisionPrompt,
       });
       await storage.saveParsedContent(paperId, markdown);
