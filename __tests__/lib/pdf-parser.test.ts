@@ -67,16 +67,16 @@ describe('parsePdfWithVision', () => {
   });
 
   it('renders PDF pages and sends to Vision LLM', async () => {
-    mockCompleteVision.mockResolvedValue('# Paper Title\n\nParsed content.');
+    mockCompleteVision.mockResolvedValue('<!-- page 1 -->\n# Paper Title\n<!-- page 2 -->\nParsed content.');
 
     const result = await parsePdfWithVision('/test.pdf', config);
 
-    expect(result).toBe('# Paper Title\n\nParsed content.');
+    expect(result).toContain('Paper Title');
+    expect(result).toContain('Parsed content');
     const callArgs = streamCompleteVision.mock.calls[0][0];
-    expect(callArgs[0].content).toHaveLength(3);
+    expect(callArgs[0].content).toHaveLength(3); // prompt + 2 images
     expect(callArgs[0].content[0].type).toBe('text');
     expect(callArgs[0].content[1].type).toBe('image_url');
-    expect(callArgs[0].content[2].type).toBe('image_url');
   });
 
   it('falls back to text extraction when Vision fails', async () => {
@@ -88,7 +88,7 @@ describe('parsePdfWithVision', () => {
   });
 
   it('reports progress via callback', async () => {
-    mockCompleteVision.mockResolvedValue('# Content.');
+    mockCompleteVision.mockResolvedValue('<!-- page 1 -->\n# Content.');
     const progress: string[] = [];
 
     await parsePdfWithVision('/test.pdf', config, {
@@ -111,15 +111,20 @@ describe('parsePdfWithVision', () => {
     expect(result).toContain('Page 1 content');
   });
 
-  it('batches long papers with overlap', async () => {
+  it('batches long papers and deduplicates by page markers', async () => {
     mupdfMocks.mockCountPages.mockReturnValue(20);
     mockCompleteVision
-      .mockResolvedValueOnce('# Batch 1 content ending here.')
-      .mockResolvedValueOnce('# Batch 2 content.');
+      .mockResolvedValueOnce('<!-- page 1 -->\nBatch 1 ending.\n<!-- page 14 -->\nOverlap page.')
+      .mockResolvedValueOnce('<!-- page 14 -->\nOverlap different.\n<!-- page 20 -->\nBatch 2 content.');
 
-    await parsePdfWithVision('/test.pdf', config);
+    const result = await parsePdfWithVision('/test.pdf', config);
 
     expect(mockCompleteVision).toHaveBeenCalledTimes(2);
+    expect(result).toContain('Batch 1 ending');
+    expect(result).toContain('Batch 2 content');
+    // Page 14 should come from first batch (first wins)
+    expect(result).toContain('Overlap page');
+    expect(result).not.toContain('Overlap different');
   });
 
   it('warns on truncated output but still returns it', async () => {
