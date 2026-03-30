@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder, PromptSettings, Bookmark } from '@/types';
+import type { PaperMetadata, PaperAnalysis, ChatHistory, ChatSession, ChatSessionMeta, PaperListItem, Note, Folder, PromptSettings, Bookmark, EmbeddingsData } from '@/types';
 
 function getDataDir(): string {
   return process.env.DATA_DIR || path.join(os.homedir(), '.easypaper', 'data');
@@ -221,6 +221,17 @@ export const storage = {
   async saveBookmarks(paperId: string, bookmarks: Bookmark[]): Promise<void> {
     const filePath = path.join(paperDir(paperId), 'bookmarks.json');
     await fs.writeFile(filePath, JSON.stringify(bookmarks, null, 2));
+  },
+  async getEmbeddings(paperId: string): Promise<EmbeddingsData | null> {
+    try {
+      const filePath = path.join(paperDir(paperId), 'embeddings.json');
+      const content = await fs.readFile(filePath, 'utf-8');
+      return JSON.parse(content) as EmbeddingsData;
+    } catch { return null; }
+  },
+  async saveEmbeddings(paperId: string, data: EmbeddingsData): Promise<void> {
+    const filePath = path.join(paperDir(paperId), 'embeddings.json');
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
   },
   async listPapers(): Promise<PaperListItem[]> {
     const papersDir = path.join(getDataDir(), 'papers');
