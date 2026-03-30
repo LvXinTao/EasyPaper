@@ -1,5 +1,22 @@
 export type PaperStatus = 'pending' | 'parsing' | 'analyzing' | 'analyzed' | 'error';
 
+export type EmbeddingStatus = 'pending' | 'generating' | 'generated' | 'error';
+
+export interface ChunkData {
+  id: string;
+  page: number;
+  section: string;
+  text: string;
+  similarity?: number;
+}
+
+export interface EmbeddingsData {
+  chunks: ChunkData[];
+  embeddings: number[][];
+  generatedAt: string;
+  model: string;
+}
+
 export interface PaperMetadata {
   id: string;
   title: string;
@@ -17,6 +34,9 @@ export interface PaperMetadata {
     batchesDone?: number;
     totalBatches?: number;
   };
+  embeddingStatus?: EmbeddingStatus;
+  embeddingError?: string;
+  embeddingGeneratedAt?: string;
 }
 
 export interface AnalysisSection {
@@ -68,6 +88,10 @@ export interface AppSettings {
   apiKeyIV: string;
   model: string;
   visionModel: string;
+  embeddingModel?: string;
+  useSameApiForEmbedding?: boolean;
+  embeddingBaseUrl?: string;
+  embeddingApiKey?: string;
 }
 
 export interface ApiError {
