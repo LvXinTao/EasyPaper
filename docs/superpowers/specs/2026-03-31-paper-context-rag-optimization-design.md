@@ -118,8 +118,11 @@ When a chunk spans multiple page markers (e.g., content from both page 3 and 4):
 
 ```typescript
 // chunker.ts - key logic
+const MIN_CHUNK_SIZE = 500; // Minimum tokens per chunk
+
 function splitIntoChunks(parsedContent: string): ChunkData[] {
   const blocks = parsedContent.split('\n\n');
+  const chunks: ChunkData[] = [];
   let currentChunk = '';
   let currentPage = 1;
   let currentSection = '';
@@ -201,24 +204,37 @@ if (settings.useSameApiForEmbedding) {
 **Frontend trigger (primary)**:
 
 ```typescript
-// In use-sse.ts or analysis completion handler
+// In paper detail page component
+// embeddingsExist is derived from metadata.embeddingStatus
+const embeddingsExist = metadata?.embeddingStatus === 'generated';
+
 useEffect(() => {
-  if (analysisStatus === 'analyzed' && !embeddingsExist) {
+  if (metadata?.status === 'analyzed' && !embeddingsExist) {
     fetch(`/api/embed/${paperId}`, { method: 'POST' });
   }
-}, [analysisStatus]);
+}, [metadata?.status, embeddingsExist]);
 ```
 
 **Fallback trigger (chat API)**:
 
 ```typescript
 // In chat/route.ts
+import { triggerEmbeddingGeneration } from '@/lib/embedding';
+
 const embeddings = await storage.getEmbeddings(paperId);
 if (!embeddings) {
   // Trigger async generation, use full text for this query
   triggerEmbeddingGeneration(paperId); // Fire-and-forget
   const parsedContent = await storage.getParsedContent(paperId);
   // Use full text for this query only
+}
+
+// src/lib/embedding.ts
+export async function triggerEmbeddingGeneration(paperId: string): Promise<void> {
+  // Fire-and-forget: don't await, let it run in background
+  fetch(`${process.env.INTERNAL_API_URL || ''}/api/embed/${paperId}`, {
+    method: 'POST'
+  }).catch(err => console.error('Embedding generation failed:', err));
 }
 ```
 
@@ -315,11 +331,20 @@ if (relevantChunks[0].similarity < LOW_CONFIDENCE_THRESHOLD) {
 **`src/app/api/chat/route.ts`**:
 
 ```typescript
-// Before
+// Request body now includes optional expandContext
+const { paperId, sessionId, message, quote, expandContext } = await request.json() as {
+  paperId: string;
+  sessionId?: string;
+  message: string;
+  quote?: TextSelection;
+  expandContext?: boolean;  // NEW: signal to use higher topK
+};
+
+// Before (existing)
 const parsedContent = await storage.getParsedContent(paperId);
 const prompt = chatPromptTemplate.replaceAll('{content}', parsedContent);
 
-// After
+// After (with RAG)
 const analysis = await storage.getAnalysis(paperId);
 const embeddings = await storage.getEmbeddings(paperId);
 
@@ -329,14 +354,46 @@ if (!embeddings) {
   const parsedContent = await storage.getParsedContent(paperId);
   const prompt = chatPromptTemplate.replaceAll('{content}', parsedContent);
 } else {
-  const relevantChunks = await retrieval.search(message, embeddings, topK);
+  const topK = expandContext ? 8 : 3;
+  let relevantChunks = await retrieval.search(message, embeddings, topK);
   if (quote) {
     relevantChunks = ensureQuoteIncluded(relevantChunks, quote, embeddings.chunks);
   }
   const contextContent = buildRAGContext(analysis, relevantChunks);
-  const prompt = chatPromptTemplate.replaceAll('{content}', contextContent);
+
+  // Combine with existing quote context placeholder if quote provided
+  const quoteContext = buildQuoteContext(quote);
+  const prompt = chatPromptTemplate
+    .replaceAll('{content}', contextContent)
+    .replaceAll('{quoteContext}', quoteContext);
 }
 ```
+
+### Quote Context Integration
+
+The existing `buildQuoteContext` function in `src/lib/prompts.ts` creates a separate `{quoteContext}` placeholder that highlights the quoted text. With RAG, both systems work together:
+
+```
+[论文摘要]
+- 核心思想：...
+- 方法论：...
+
+[与您问题相关的段落]
+段落1 (第3页)：...  ← From RAG retrieval
+段落2 (第5页)：...
+
+[QUOTE CONTEXT - USER IS ASKING ABOUT THIS SPECIFIC TEXT]
+The user has selected: "..."  ← From existing buildQuoteContext
+[END QUOTE CONTEXT]
+
+用户问题：...
+```
+
+**Key difference**:
+- `ensureQuoteIncluded`: Ensures the quoted chunk appears in RAG retrieval
+- `buildQuoteContext`: Explicitly highlights the quoted text for LLM attention
+
+Both are used together for maximum accuracy when quote feature is used.
 
 ### buildRAGContext Function
 
@@ -435,6 +492,23 @@ export async function POST(request: Request) {
 | User unsatisfied | Show "Get more context" button |
 | Low retrieval confidence | Auto-prompt "May need more context" |
 | No embeddings.json | Generate async on first query, temporarily use full text |
+| Embedding generation failed | Show error notification, use full text, disable "Get more context" |
+
+### Error State UI
+
+When `embeddingStatus === 'error'`:
+
+```
+[Chat interface]
+┌─────────────────────────────────────┐
+│ ⚠️ 论文索引生成失败，暂时使用全文搜索 │  ← Warning banner
+│ 错误：API rate limit exceeded        │
+│ [重新生成索引]                        │
+└─────────────────────────────────────┘
+
+Note: "Get more context" button is disabled when embeddingStatus === 'error'
+since there are no embeddings to retrieve more from.
+```
 
 ### Frontend Interaction
 
@@ -488,22 +562,37 @@ Paper Index Status:
 | File | Changes |
 |------|---------|
 | `src/lib/storage.ts` | Add `getEmbeddings()`, `saveEmbeddings()`, update `getMetadata()` to include embeddingStatus |
-| `src/lib/ai-config.ts` | Add embedding config reading |
-| `src/app/api/chat/route.ts` | Use RAG context, add expandContext param, fallback logic |
-| `src/types/index.ts` | Add `EmbeddingsData`, `ChunkData`, `EmbeddingSettings`, `EmbeddingStatus` types |
-| `src/app/settings/page.tsx` | Add embedding model config UI, index status display |
-| `src/components/chat-panel.tsx` | Add "Get more context" button, low confidence warning |
-| `src/hooks/use-sse.ts` | Trigger embedding generation after analysis completes |
+| `src/lib/ai-config.ts` | Add `getEmbeddingConfig()` function for embedding settings |
+| `src/app/api/chat/route.ts` | Use RAG context, add expandContext param, fallback logic, integrate with buildQuoteContext |
+| `src/types/index.ts` | Add `EmbeddingsData`, `ChunkData`, `EmbeddingSettings`, `EmbeddingStatus` types; extend `PaperMetadata` |
+| `src/components/settings-form.tsx` | Add embedding model config UI, index status display (main form component) |
+| `src/components/chat-panel.tsx` | Add "Get more context" button, low confidence warning, error state banner |
+| `src/app/[lang]/paper/[id]/page.tsx` | Derive embeddingsExist from metadata, trigger embedding generation after analysis |
+| `src/lib/embedding.ts` | New file: embedding API calls, triggerEmbeddingGeneration function |
+| `src/lib/chunker.ts` | New file: paper chunking logic with MIN_CHUNK_SIZE constant |
+| `src/lib/retrieval.ts` | New file: cosineSimilarity, search, ensureQuoteIncluded, buildRAGContext |
 
 ### Dependencies
 
-```json
-{
-  "compute-cosine-similarity": "^1.0.0"
+**No external npm dependency needed.** Cosine similarity is implemented inline (~5 lines):
+
+```typescript
+// src/lib/retrieval.ts
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 ```
 
-Lightweight npm dependency only (~KB), no local model files required.
+This avoids adding an external dependency for a trivial calculation.
 
 ## Type Definitions
 
@@ -527,16 +616,34 @@ export interface EmbeddingsData {
   model: string;
 }
 
-export interface EmbeddingSettings {
+// Extend existing AppSettings interface (lines 65-71)
+export interface AppSettings {
+  baseUrl: string;
+  apiKeyEncrypted: string;
+  apiKeyIV: string;
+  model: string;
+  visionModel: string;
+  // NEW: Embedding settings
   embeddingModel: string;
   useSameApiForEmbedding: boolean;
   embeddingBaseUrl?: string;
-  embeddingApiKey?: string;
+  embeddingApiKeyEncrypted?: string;
+  embeddingApiKeyIV?: string;
 }
 
-// Add to PaperMetadata
+// Extend existing PaperMetadata interface
 export interface PaperMetadata {
-  // ... existing fields
+  id: string;
+  title: string;
+  filename: string;
+  pages: number;
+  createdAt: string;
+  status: PaperStatus;
+  folderId?: string | null;
+  sortIndex?: number;
+  starred?: boolean;
+  analysisProgress?: { ... };
+  // NEW: Embedding status fields
   embeddingStatus?: EmbeddingStatus;
   embeddingError?: string;
   embeddingGeneratedAt?: string;
