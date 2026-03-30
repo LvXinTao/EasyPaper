@@ -24,10 +24,16 @@ interface ParseOptions {
 const BATCH_SIZE = 15;
 const BATCH_OVERLAP = 2;
 const MAX_TOKENS = 16384;
-const TIMEOUT_MS = 180_000;
+const TIMEOUT_MS = 300_000; // 5 minutes max - but actual timeout is based on idle time
+const IDLE_TIMEOUT_MS = 60_000; // Abort if no chunk received for 60 seconds
 const DPI = 120;
 const SCALE = DPI / 72;
-const MAX_CONCURRENCY = 3;
+const MAX_CONCURRENCY = 1; // Reduced to avoid multiple simultaneous 429s
+
+// Retry configuration for rate limit handling
+const MAX_RETRIES = 5; // Increased from 3 to give upstream more time to recover
+const INITIAL_BACKOFF_MS = 4000; // Increased from 2000ms since "retry shortly" may need seconds
+const MAX_BACKOFF_MS = 60000; // Cap backoff to avoid excessive waits (1 minute max)
 
 /**
  * Detect if model output appears truncated (unclosed code fences, tables, mid-word ending).
@@ -243,26 +249,42 @@ async function executeBatchWithRetry(
     })),
   ];
 
-  let backoffMs = 2000; // Initial backoff for 429, doubles each retry
+  let backoffMs = INITIAL_BACKOFF_MS;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    let idleTimeout: NodeJS.Timeout | null = null;
+    let lastChunkTime = Date.now();
 
-    // Merge external signal with timeout
+    // Reset idle timeout whenever we receive a chunk
+    const resetIdleTimeout = () => {
+      lastChunkTime = Date.now();
+      if (idleTimeout) clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        console.warn(`[pdf-parser] No chunk received for ${IDLE_TIMEOUT_MS}ms, aborting...`);
+        controller.abort();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    // Merge external signal with idle timeout controller
     const mergedSignal = externalSignal
       ? AbortSignal.any([externalSignal, controller.signal])
       : controller.signal;
 
     try {
       let result = '';
+      resetIdleTimeout(); // Start idle timer
+
       for await (const chunk of client.streamCompleteVision(
         [{ role: 'user', content }],
         MAX_TOKENS,
         mergedSignal,
       )) {
         result += chunk;
+        resetIdleTimeout(); // Reset timer on each chunk
       }
+
+      if (idleTimeout) clearTimeout(idleTimeout);
       return result;
     } catch (err) {
       // If external signal was aborted, don't retry
@@ -271,10 +293,9 @@ async function executeBatchWithRetry(
       // Handle 429 rate limit
       const errMsg = err instanceof Error ? err.message : String(err);
       if (errMsg.includes('429')) {
-        // Parse Retry-After from error message if available (API error format: "API error 429: ...")
-        const retryMatch = errMsg.match(/[Rr]etry-?[Aa]fter[:\s]+(\d+)/);
-        const retryAfterMs = retryMatch ? parseInt(retryMatch[1], 10) * 1000 : backoffMs;
-        console.warn(`[pdf-parser] Rate limited (429), waiting ${retryAfterMs}ms before retry...`);
+        // Use backoff with cap, since API doesn't provide Retry-After value
+        const retryAfterMs = Math.min(backoffMs, MAX_BACKOFF_MS);
+        console.warn(`[pdf-parser] Rate limited (429), attempt ${attempt + 1}/${MAX_RETRIES}, waiting ${retryAfterMs}ms before retry...`);
         if (onRateLimit) onRateLimit(retryAfterMs);
         await new Promise(r => setTimeout(r, retryAfterMs));
         backoffMs *= 2; // Exponential backoff
@@ -291,11 +312,11 @@ async function executeBatchWithRetry(
       }
       throw err;
     } finally {
-      clearTimeout(timeout);
+      if (idleTimeout) clearTimeout(idleTimeout);
     }
   }
 
-  throw new Error('Vision API failed after retries');
+  throw new Error(`Vision API failed after ${MAX_RETRIES} retries`);
 }
 
 /**
