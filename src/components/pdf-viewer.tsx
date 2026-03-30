@@ -118,10 +118,19 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
 
       // Navigate to page if needed
       if (note.selection.page !== page) {
-        pageRenderPromiseRef.current = new Promise(resolve => {
+        // Create promise with timeout to prevent hanging indefinitely
+        pageRenderPromiseRef.current = new Promise<void>((resolve) => {
+          let cancelled = false;
+          const timeoutId = setTimeout(() => {
+            cancelled = true;
+            resolve(); // Resolve anyway after timeout to proceed with scroll
+          }, 5000); // 5 second max wait
+
           const checkRender = () => {
+            if (cancelled) return;
             if (pageElementRef.current) {
-              requestAnimationFrame(resolve);
+              clearTimeout(timeoutId);
+              requestAnimationFrame(() => resolve());
             } else {
               setTimeout(checkRender, 50);
             }
@@ -1034,7 +1043,6 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
       {currentSelection && selectionPosition && !editorPopup && (
         <div data-selection-toolbar>
           <SelectionToolbar
-            selection={currentSelection}
             position={selectionPosition}
             onClick={() => {
               setEditorPopup({

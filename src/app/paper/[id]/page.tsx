@@ -161,47 +161,80 @@ export default function PaperDetailPage() {
     } catch { /* ignore */ }
   }, [paperId, fetchBookmarks]);
 
-  // Note CRUD handlers for sentence-level notes
+  // Note CRUD handlers for sentence-level notes (used by PdfViewer inline editor)
   const handleNoteCreate = useCallback(async (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => {
-    try {
+    const res = await fetch(`/api/paper/${paperId}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      console.error('Failed to create note:', await res.text());
+      return;
+    }
+    const note: Note = await res.json();
+    setNotes(prev => [note, ...prev]);
+    setNoteCount(prev => prev + 1);
+  }, [paperId]);
+
+  const handleNoteUpdate = useCallback(async (note: Note) => {
+    const res = await fetch(`/api/paper/${paperId}/notes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(note),
+    });
+    if (!res.ok) {
+      console.error('Failed to update note:', await res.text());
+      return;
+    }
+    const updated: Note = await res.json();
+    setNotes(prev => prev.map(n => n.id === updated.id ? updated : n)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+  }, [paperId]);
+
+  const handleNoteDelete = useCallback(async (noteId: string) => {
+    const res = await fetch(`/api/paper/${paperId}/notes?noteId=${noteId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: 'Failed to delete note' } }));
+      throw new Error(err.error?.message || 'Failed to delete note');
+    }
+    setNotes(prev => prev.filter(n => n.id !== noteId));
+    setNoteCount(prev => prev - 1);
+  }, [paperId]);
+
+  // Unified save handler for NotesPanel (handles both create and update)
+  const handleNoteSave = useCallback(async (data: { id?: string; title: string; content: string; tags: NoteTag[]; page?: number }) => {
+    if (data.id) {
+      // Update existing note
+      const res = await fetch(`/api/paper/${paperId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: { message: 'Failed to update note' } }));
+        throw new Error(err.error?.message || 'Failed to update note');
+      }
+      const updated: Note = await res.json();
+      setNotes(prev => prev.map(n => n.id === updated.id ? updated : n)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    } else {
+      // Create new note
       const res = await fetch(`/api/paper/${paperId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (res.ok) {
-        const note: Note = await res.json();
-        setNotes(prev => [note, ...prev]);
-        setNoteCount(prev => prev + 1);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: { message: 'Failed to create note' } }));
+        throw new Error(err.error?.message || 'Failed to create note');
       }
-    } catch { /* ignore */ }
-  }, [paperId]);
-
-  const handleNoteUpdate = useCallback(async (note: Note) => {
-    try {
-      const res = await fetch(`/api/paper/${paperId}/notes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(note),
-      });
-      if (res.ok) {
-        const updated: Note = await res.json();
-        setNotes(prev => prev.map(n => n.id === updated.id ? updated : n)
-          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
-      }
-    } catch { /* ignore */ }
-  }, [paperId]);
-
-  const handleNoteDelete = useCallback(async (noteId: string) => {
-    try {
-      const res = await fetch(`/api/paper/${paperId}/notes?noteId=${noteId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        setNotes(prev => prev.filter(n => n.id !== noteId));
-        setNoteCount(prev => prev - 1);
-      }
-    } catch { /* ignore */ }
+      const note: Note = await res.json();
+      setNotes(prev => [note, ...prev]);
+      setNoteCount(prev => prev + 1);
+    }
   }, [paperId]);
 
   // Handle click on sentence-level note in NotesPanel -> scroll PDF to highlight
@@ -698,6 +731,9 @@ export default function PaperDetailPage() {
                   currentPage={currentPage}
                   onPageChange={setCurrentPage}
                   onNoteClick={handleNoteClick}
+                  notes={notes}
+                  onNoteSave={handleNoteSave}
+                  onNoteDelete={handleNoteDelete}
                 />
               ) : (
                 <BookmarksPanel

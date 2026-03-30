@@ -18,12 +18,30 @@ function validatePage(page: unknown): number | undefined {
 function validateHighlightRect(rect: unknown): HighlightRect | null {
   if (typeof rect !== 'object' || rect === null) return null;
   const r = rect as Record<string, unknown>;
-  const left = typeof r.left === 'number' && r.left >= 0 && r.left <= 100 ? r.left : null;
-  const top = typeof r.top === 'number' && r.top >= 0 && r.top <= 100 ? r.top : null;
-  const width = typeof r.width === 'number' && r.width >= 0 && r.width <= 100 ? r.width : null;
-  const height = typeof r.height === 'number' && r.height >= 0 && r.height <= 100 ? r.height : null;
+
+  // Validate and clamp each coordinate to 0-100 range
+  const left = typeof r.left === 'number' ? Math.max(0, Math.min(100, r.left)) : null;
+  const top = typeof r.top === 'number' ? Math.max(0, Math.min(100, r.top)) : null;
+  const width = typeof r.width === 'number' ? Math.max(0, Math.min(100, r.width)) : null;
+  const height = typeof r.height === 'number' ? Math.max(0, Math.min(100, r.height)) : null;
+
   if (left === null || top === null || width === null || height === null) return null;
+
+  // Reject zero-area rectangles (degenerate)
+  if (width === 0 || height === 0) return null;
+
   return { left, top, width, height };
+}
+
+// Sanitize user input to prevent XSS
+function sanitizeString(input: string, maxLength: number): string {
+  // Trim and limit length
+  let sanitized = input.trim().slice(0, maxLength);
+  // Remove any script tags or dangerous HTML
+  sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  sanitized = sanitized.replace(/javascript:/gi, '');
+  sanitized = sanitized.replace(/on\w+\s*=/gi, '');
+  return sanitized;
 }
 
 function validateSelection(selection: unknown): TextSelection | undefined {
@@ -71,10 +89,14 @@ export async function POST(request: Request, context: RouteContext) {
   // Validate selection if provided
   const selection = validateSelection(body.selection);
 
+  // Sanitize user inputs
+  const title = sanitizeString(body.title || '', 200);
+  const content = sanitizeString(body.content || '', 10000);
+
   const note: Note = {
     id: crypto.randomUUID(),
-    title: body.title || '',
-    content: body.content || '',
+    title,
+    content,
     tags: validateTags(body.tags),
     // Use selection.page if selection exists, otherwise use provided page
     page: selection?.page ?? validatePage(body.page),
@@ -101,10 +123,14 @@ export async function PUT(request: Request, context: RouteContext) {
   // Validate selection if provided
   const validatedSelection = body.selection !== undefined ? validateSelection(body.selection) : existing.selection;
 
+  // Sanitize user inputs if provided
+  const title = body.title !== undefined ? sanitizeString(body.title, 200) : existing.title;
+  const content = body.content !== undefined ? sanitizeString(body.content, 10000) : existing.content;
+
   const updated: Note = {
     ...existing,
-    title: body.title ?? existing.title,
-    content: body.content ?? existing.content,
+    title,
+    content,
     tags: body.tags !== undefined ? validateTags(body.tags) : existing.tags,
     // Use selection.page if selection exists, otherwise use provided page or existing
     page: validatedSelection?.page ?? (body.page !== undefined ? validatePage(body.page) : existing.page),
