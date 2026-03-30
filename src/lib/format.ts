@@ -22,8 +22,8 @@ export function formatRelativeTime(dateStr: string): string | null {
 export function formatTimeRemaining(ms: number): string {
   const seconds = Math.round(ms / 1000);
   if (seconds < 60) {
-    return `约 ${seconds} 秒剩余`;
+    return `~${seconds}s remaining`;
   }
   const minutes = Math.round(seconds / 60);
-  return `约 ${minutes} 分钟剩余`;
+  return `~${minutes}m remaining`;
 }

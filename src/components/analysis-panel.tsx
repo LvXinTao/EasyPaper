@@ -112,11 +112,15 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
 
 function StreamingParsePreview({ progress, content, avgBatchTime }: StreamingParsePreviewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTimeRef = useRef<number>(0);
 
-  // Auto-scroll to bottom when content updates
+  // Auto-scroll to bottom when content updates (throttled to ~200ms)
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const now = Date.now();
+    const scrollEl = scrollRef.current;
+    if (scrollEl && now - lastScrollTimeRef.current > 200) {
+      lastScrollTimeRef.current = now;
+      scrollEl.scrollTop = scrollEl.scrollHeight;
     }
   }, [content]);
 

@@ -42,8 +42,10 @@ export default function PaperDetailPage() {
   const [sseStep, setSSEStep] = useState<string | null>(null);
   const [sseMessage, setSSEMessage] = useState<string | null>(null);
   const [parseBatchProgress, setParseBatchProgress] = useState<{ done: number; total: number } | null>(null);
-  // Streaming parse content (accumulated batch markdown)
+  // Streaming parse content - use ref for accumulation, state for render triggers
+  const streamingContentRef = useRef<string>('');
   const [streamingParsedContent, setStreamingParsedContent] = useState<string>('');
+  const streamingUpdateCounterRef = useRef<number>(0);
   // Time estimation for parsing progress
   const parseStartTimeRef = useRef<number | null>(null);
   const currentBatchIndexRef = useRef<number>(-1); // Track which batch we're streaming
@@ -277,6 +279,8 @@ export default function PaperDetailPage() {
     setSSEMessage(null);
     setParseBatchProgress(null);
     setStreamingParsedContent('');
+    streamingContentRef.current = '';
+    streamingUpdateCounterRef.current = 0;
     parseStartTimeRef.current = null;
     currentBatchIndexRef.current = -1;
     setAvgBatchTime(0);
@@ -323,6 +327,10 @@ export default function PaperDetailPage() {
             try {
               const event = JSON.parse(trimmed.slice(6));
               if (event.done) {
+                // Ensure final content update before refetch
+                if (streamingContentRef.current) {
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
                 refetch();
                 return;
               }
@@ -334,6 +342,10 @@ export default function PaperDetailPage() {
               if ('step' in event) {
                 setSSEStep(event.step);
                 setSSEMessage(event.message || null);
+                // When leaving parsing phase, ensure final content update
+                if (event.step !== 'parsing' && streamingContentRef.current) {
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
               }
               if (event.type === 'parse_batch_done') {
                 const batchIndex = event.batchIndex;
@@ -342,28 +354,37 @@ export default function PaperDetailPage() {
                 // Update progress
                 setParseBatchProgress({ done: batchIndex + 1, total: totalBatches });
 
-                // Calculate time estimation
-                if (parseStartTimeRef.current === null) {
-                  parseStartTimeRef.current = Date.now();
-                } else if (batchIndex >= 1) {
+                // Calculate time estimation (need at least 2 batches for meaningful estimate)
+                if (parseStartTimeRef.current !== null && batchIndex >= 1) {
                   const elapsed = Date.now() - parseStartTimeRef.current;
                   const avgTime = elapsed / (batchIndex + 1);
                   setAvgBatchTime(avgTime);
                 }
               }
               if (event.type === 'parse_chunk') {
-                // Real-time chunk streaming - append to content
+                // Real-time chunk streaming - accumulate in ref for performance
                 const batchIndex = event.batchIndex;
-                setStreamingParsedContent(prev => {
-                  // Add separator when starting a new batch
-                  if (currentBatchIndexRef.current !== batchIndex) {
-                    currentBatchIndexRef.current = batchIndex;
-                    if (prev !== '') {
-                      return prev + '\n\n---\n\n' + event.chunk;
-                    }
+
+                // Record start time on first chunk (more accurate than batch_done)
+                if (parseStartTimeRef.current === null) {
+                  parseStartTimeRef.current = Date.now();
+                }
+
+                // Add separator when starting a new batch
+                if (currentBatchIndexRef.current !== batchIndex) {
+                  currentBatchIndexRef.current = batchIndex;
+                  if (streamingContentRef.current !== '') {
+                    streamingContentRef.current += '\n\n---\n\n';
                   }
-                  return prev + event.chunk;
-                });
+                }
+                streamingContentRef.current += event.chunk;
+
+                // Batch state updates - update every ~50ms to reduce re-renders
+                const now = Date.now();
+                if (now - streamingUpdateCounterRef.current > 50) {
+                  streamingUpdateCounterRef.current = now;
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
               }
               if ('section' in event) {
                 setAnalysis(prev => prev || {
