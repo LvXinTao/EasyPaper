@@ -11,7 +11,7 @@ export async function GET() {
       visionModel: process.env.AI_VISION_MODEL || 'gpt-4o',
       hasApiKey: !!process.env.AI_API_KEY,
       embeddingModel: process.env.AI_EMBEDDING_MODEL || 'text-embedding-3-small',
-      embeddingSameService: true,
+      useSameApiForEmbedding: true,
       embeddingBaseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
       hasEmbeddingApiKey: false,
       theme: { preset: 'dark-minimal', customAccent: null }
@@ -23,9 +23,9 @@ export async function GET() {
     visionModel: settings.visionModel,
     hasApiKey: !!(settings.apiKeyEncrypted || process.env.AI_API_KEY),
     embeddingModel: settings.embeddingModel || 'text-embedding-3-small',
-    embeddingSameService: settings.embeddingSameService !== undefined ? settings.embeddingSameService : true,
+    useSameApiForEmbedding: settings.useSameApiForEmbedding !== undefined ? settings.useSameApiForEmbedding : true,
     embeddingBaseUrl: settings.embeddingBaseUrl || settings.baseUrl || 'https://api.openai.com/v1',
-    hasEmbeddingApiKey: !!(settings.embeddingApiKeyEncrypted || (settings.embeddingSameService ? settings.apiKeyEncrypted : false)),
+    hasEmbeddingApiKey: !!(settings.embeddingApiKeyEncrypted || (settings.useSameApiForEmbedding ? settings.apiKeyEncrypted : false)),
     theme: settings.theme || { preset: 'dark-minimal', customAccent: null }
   });
 }
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   // Embedding settings
   if (body.embeddingModel !== undefined) merged.embeddingModel = body.embeddingModel || 'text-embedding-3-small';
-  if (body.embeddingSameService !== undefined) merged.embeddingSameService = body.embeddingSameService;
+  if (body.useSameApiForEmbedding !== undefined) merged.useSameApiForEmbedding = body.useSameApiForEmbedding;
   if (body.embeddingBaseUrl !== undefined) merged.embeddingBaseUrl = body.embeddingBaseUrl || 'https://api.openai.com/v1';
 
   // Only update encrypted key if a new plaintext key is provided

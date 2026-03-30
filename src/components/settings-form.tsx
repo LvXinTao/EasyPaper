@@ -9,7 +9,7 @@ interface SettingsData {
   visionModel: string;
   hasApiKey: boolean;
   embeddingModel: string;
-  embeddingSameService: boolean;
+  useSameApiForEmbedding: boolean;
   embeddingBaseUrl: string;
   hasEmbeddingApiKey: boolean;
 }
@@ -21,7 +21,7 @@ export function SettingsForm() {
     visionModel: 'gpt-4o',
     hasApiKey: false,
     embeddingModel: 'text-embedding-3-small',
-    embeddingSameService: true,
+    useSameApiForEmbedding: true,
     embeddingBaseUrl: 'https://api.openai.com/v1',
     hasEmbeddingApiKey: false,
   });
@@ -53,12 +53,12 @@ export function SettingsForm() {
         model: settings.model,
         visionModel: settings.visionModel,
         embeddingModel: settings.embeddingModel,
-        embeddingSameService: settings.embeddingSameService,
+        useSameApiForEmbedding: settings.useSameApiForEmbedding,
       };
       if (apiKey) {
         body.apiKey = apiKey;
       }
-      if (!settings.embeddingSameService) {
+      if (!settings.useSameApiForEmbedding) {
         body.embeddingBaseUrl = settings.embeddingBaseUrl;
         if (embeddingApiKey) {
           body.embeddingApiKey = embeddingApiKey;
@@ -186,8 +186,8 @@ export function SettingsForm() {
           >
             <input
               type="checkbox"
-              checked={settings.embeddingSameService}
-              onChange={(e) => setSettings({ ...settings, embeddingSameService: e.target.checked })}
+              checked={settings.useSameApiForEmbedding}
+              onChange={(e) => setSettings({ ...settings, useSameApiForEmbedding: e.target.checked })}
               className="rounded"
               style={{ accentColor: 'var(--text-primary)' }}
             />
@@ -195,7 +195,7 @@ export function SettingsForm() {
           </label>
         </div>
 
-        {!settings.embeddingSameService && (
+        {!settings.useSameApiForEmbedding && (
           <>
             <div className="mb-4">
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
