@@ -69,6 +69,9 @@ export default function PaperDetailPage() {
   // Pending quote state for Ask AI feature
   const [pendingQuote, setPendingQuote] = useState<TextSelection | null>(null);
 
+  // Low confidence state for RAG context expansion
+  const [lowConfidence, setLowConfidence] = useState(false);
+
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -491,7 +494,7 @@ export default function PaperDetailPage() {
   }, [paperId, activeSessionId, sessions, handleSelectSession]);
 
   const handleSendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, expandContext: boolean = false) => {
       // Capture the session this message belongs to, so we can guard UI updates
       // if the user switches sessions while the stream is still running.
       const sendingSessionId = activeSessionId;
@@ -500,12 +503,13 @@ export default function PaperDetailPage() {
       setPendingQuote(null);
       setIsChatStreaming(true);
       setStreamingContent('');
+      setLowConfidence(false);
 
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend }),
+          body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend, expandContext }),
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -536,6 +540,9 @@ export default function PaperDetailPage() {
                   setIsChatStreaming(true);
                 }
               }
+              if (data.lowConfidence) {
+                setLowConfidence(true);
+              }
               if (data.done) {
                 if (activeSessionIdRef.current === sendingSessionId) {
                   setChatMessages((prev) => [
@@ -564,6 +571,14 @@ export default function PaperDetailPage() {
     },
     [paperId, activeSessionId, fetchSessions, pendingQuote]
   );
+
+  // Handle expand context when RAG retrieval has low confidence
+  const handleExpandContext = useCallback(() => {
+    const lastUserMessage = [...chatMessages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage) {
+      handleSendMessage(lastUserMessage.content, true);
+    }
+  }, [chatMessages, handleSendMessage]);
 
   // Horizontal divider: save left panel width to localStorage
   const handleLeftWidthChange = useCallback(
@@ -928,6 +943,8 @@ export default function PaperDetailPage() {
                 streamingContent={streamingContent}
                 isStreaming={isChatStreaming}
                 onJumpToQuote={handleJumpToQuote}
+                lowConfidence={lowConfidence}
+                onExpandContext={handleExpandContext}
               />
             </div>
 
