@@ -42,6 +42,14 @@ export default function PaperDetailPage() {
   const [sseStep, setSSEStep] = useState<string | null>(null);
   const [sseMessage, setSSEMessage] = useState<string | null>(null);
   const [parseBatchProgress, setParseBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  // Streaming parse content - use ref for accumulation, state for render triggers
+  const streamingContentRef = useRef<string>('');
+  const [streamingParsedContent, setStreamingParsedContent] = useState<string>('');
+  const streamingUpdateCounterRef = useRef<number>(0);
+  // Time estimation for parsing progress
+  const parseStartTimeRef = useRef<number | null>(null);
+  const currentBatchIndexRef = useRef<number>(-1); // Track which batch we're streaming
+  const [avgBatchTime, setAvgBatchTime] = useState<number>(0);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'notes' | 'bookmarks'>('analysis');
@@ -270,6 +278,12 @@ export default function PaperDetailPage() {
     setSSEStep(null);
     setSSEMessage(null);
     setParseBatchProgress(null);
+    setStreamingParsedContent('');
+    streamingContentRef.current = '';
+    streamingUpdateCounterRef.current = 0;
+    parseStartTimeRef.current = null;
+    currentBatchIndexRef.current = -1;
+    setAvgBatchTime(0);
 
     try {
       const response = await fetch('/api/analyze', {
@@ -313,6 +327,10 @@ export default function PaperDetailPage() {
             try {
               const event = JSON.parse(trimmed.slice(6));
               if (event.done) {
+                // Ensure final content update before refetch
+                if (streamingContentRef.current) {
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
                 refetch();
                 return;
               }
@@ -324,9 +342,49 @@ export default function PaperDetailPage() {
               if ('step' in event) {
                 setSSEStep(event.step);
                 setSSEMessage(event.message || null);
+                // When leaving parsing phase, ensure final content update
+                if (event.step !== 'parsing' && streamingContentRef.current) {
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
               }
               if (event.type === 'parse_batch_done') {
-                setParseBatchProgress({ done: event.batchIndex + 1, total: event.totalBatches });
+                const batchIndex = event.batchIndex;
+                const totalBatches = event.totalBatches;
+
+                // Update progress
+                setParseBatchProgress({ done: batchIndex + 1, total: totalBatches });
+
+                // Calculate time estimation (need at least 2 batches for meaningful estimate)
+                if (parseStartTimeRef.current !== null && batchIndex >= 1) {
+                  const elapsed = Date.now() - parseStartTimeRef.current;
+                  const avgTime = elapsed / (batchIndex + 1);
+                  setAvgBatchTime(avgTime);
+                }
+              }
+              if (event.type === 'parse_chunk') {
+                // Real-time chunk streaming - accumulate in ref for performance
+                const batchIndex = event.batchIndex;
+
+                // Record start time on first chunk (more accurate than batch_done)
+                if (parseStartTimeRef.current === null) {
+                  parseStartTimeRef.current = Date.now();
+                }
+
+                // Add separator when starting a new batch
+                if (currentBatchIndexRef.current !== batchIndex) {
+                  currentBatchIndexRef.current = batchIndex;
+                  if (streamingContentRef.current !== '') {
+                    streamingContentRef.current += '\n\n---\n\n';
+                  }
+                }
+                streamingContentRef.current += event.chunk;
+
+                // Batch state updates - update every ~50ms to reduce re-renders
+                const now = Date.now();
+                if (now - streamingUpdateCounterRef.current > 50) {
+                  streamingUpdateCounterRef.current = now;
+                  setStreamingParsedContent(streamingContentRef.current);
+                }
               }
               if ('section' in event) {
                 setAnalysis(prev => prev || {
@@ -723,6 +781,8 @@ export default function PaperDetailPage() {
                   analysisStep={effectiveStep}
                   analysisMessage={effectiveMessage}
                   parseBatchProgress={parseBatchProgress}
+                  streamingParsedContent={streamingParsedContent}
+                  avgBatchTime={avgBatchTime}
                   onReAnalyze={handleAnalyze}
                 />
               ) : activeTab === 'notes' ? (

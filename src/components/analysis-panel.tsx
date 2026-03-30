@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import type { PaperAnalysis } from '@/types';
 import { SectionTabs } from './section-tabs';
 import { MarkdownContent } from './markdown-content';
-import { formatRelativeTime } from '@/lib/format';
+import { formatRelativeTime, formatTimeRemaining } from '@/lib/format';
 
 export { formatRelativeTime } from '@/lib/format';
 
@@ -14,7 +14,15 @@ interface AnalysisPanelProps {
   analysisStep?: string | null;
   analysisMessage?: string | null;
   parseBatchProgress?: { done: number; total: number } | null;
+  streamingParsedContent?: string;
+  avgBatchTime?: number;
   onReAnalyze?: () => void;
+}
+
+interface StreamingParsePreviewProps {
+  progress: { done: number; total: number };
+  content: string;
+  avgBatchTime: number; // milliseconds
 }
 
 function SectionContent({
@@ -49,7 +57,7 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
   const currentIdx = ANALYSIS_STEPS.findIndex((s) => s.key === step);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-8">
+    <div className="flex flex-col items-center justify-center px-8 py-6" style={{ flexShrink: 0 }}>
       <div className="w-full max-w-sm">
         <div className="space-y-4">
           {ANALYSIS_STEPS.map((s, i) => {
@@ -102,38 +110,62 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
   );
 }
 
-function BatchProgressBar({ progress }: { progress: { done: number; total: number } | null }) {
-  if (!progress) return null;
+function StreamingParsePreview({ progress, content, avgBatchTime }: StreamingParsePreviewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTimeRef = useRef<number>(0);
+
+  // Auto-scroll to bottom when content updates (throttled to ~200ms)
+  useEffect(() => {
+    const now = Date.now();
+    const scrollEl = scrollRef.current;
+    if (scrollEl && now - lastScrollTimeRef.current > 200) {
+      lastScrollTimeRef.current = now;
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    }
+  }, [content]);
+
+  // Calculate estimated remaining time
+  const estimatedTime = useMemo(() => {
+    if (avgBatchTime === 0) return null;
+    const remaining = progress.total - progress.done;
+    const ms = remaining * avgBatchTime;
+    return formatTimeRemaining(ms);
+  }, [progress, avgBatchTime]);
 
   const percent = Math.round((progress.done / progress.total) * 100);
 
   return (
-    <div className="mx-4 mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--glass-border)' }}>
-      <div className="px-3 py-2 flex items-center gap-3">
+    <div className="flex flex-col flex-1 overflow-hidden mx-4 mb-3 rounded-lg" style={{ border: '1px solid var(--glass-border)', minHeight: '200px' }}>
+      {/* Progress indicator row */}
+      <div className="px-3 py-2 flex items-center gap-3" style={{ background: 'var(--glass)' }}>
         <div
           className="animate-spin w-3 h-3 border-2 border-t-transparent rounded-full"
           style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }}
         />
-        <div className="flex-1">
-          <div className="flex items-center justify-between text-xs mb-1.5">
-            <span style={{ color: 'var(--text-secondary)' }}>
-              Parsing batch {progress.done}/{progress.total}
-            </span>
-            <span style={{ color: 'var(--accent)' }}>{percent}%</span>
-          </div>
-          <div
-            className="h-1.5 rounded-full overflow-hidden"
-            style={{ background: 'var(--glass)' }}
-          >
-            <div
-              className="h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${percent}%`,
-                background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent), white 25%))',
-              }}
-            />
-          </div>
+        <div className="flex-1 flex items-center gap-2 text-xs">
+          <span style={{ color: 'var(--text-secondary)' }}>
+            Parsing batch {progress.done}/{progress.total}
+          </span>
+          <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+          <span style={{ color: 'var(--accent)' }}>{percent}%</span>
+          {estimatedTime && (
+            <>
+              <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+              <span style={{ color: 'var(--text-secondary)' }}>{estimatedTime}</span>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* Markdown scrolling area */}
+      <div ref={scrollRef} className="flex-1 overflow-auto p-3">
+        {content ? (
+          <MarkdownContent content={content} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            Parsing PDF content...
+          </div>
+        )}
       </div>
     </div>
   );
@@ -145,6 +177,8 @@ export function AnalysisPanel({
   analysisStep,
   analysisMessage,
   parseBatchProgress,
+  streamingParsedContent,
+  avgBatchTime,
   onReAnalyze,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
@@ -154,9 +188,15 @@ export function AnalysisPanel({
     return (
       <div className="flex flex-col h-full">
         <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
-        <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
+        <div style={{ flexShrink: 0 }}>
+          <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
+        </div>
         {analysisStep === 'parsing' && parseBatchProgress && (
-          <BatchProgressBar progress={parseBatchProgress} />
+          <StreamingParsePreview
+            progress={parseBatchProgress}
+            content={streamingParsedContent || ''}
+            avgBatchTime={avgBatchTime || 0}
+          />
         )}
       </div>
     );

@@ -18,3 +18,12 @@ export function formatRelativeTime(dateStr: string): string | null {
 
   return `on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
+
+export function formatTimeRemaining(ms: number): string {
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) {
+    return `~${seconds}s remaining`;
+  }
+  const minutes = Math.round(seconds / 60);
+  return `~${minutes}m remaining`;
+}
