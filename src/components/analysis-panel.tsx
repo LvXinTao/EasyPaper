@@ -57,7 +57,7 @@ function AnalysisProgress({ step, message }: { step: string | null; message: str
   const currentIdx = ANALYSIS_STEPS.findIndex((s) => s.key === step);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full px-8">
+    <div className="flex flex-col items-center justify-center px-8 py-6" style={{ flexShrink: 0 }}>
       <div className="w-full max-w-sm">
         <div className="space-y-4">
           {ANALYSIS_STEPS.map((s, i) => {
@@ -178,7 +178,9 @@ export function AnalysisPanel({
     return (
       <div className="flex flex-col h-full">
         <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
-        <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
+        <div style={{ flexShrink: 0 }}>
+          <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
+        </div>
         {analysisStep === 'parsing' && parseBatchProgress && (
           <StreamingParsePreview
             progress={parseBatchProgress}
