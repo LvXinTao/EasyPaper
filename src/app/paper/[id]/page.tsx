@@ -45,7 +45,7 @@ export default function PaperDetailPage() {
   // Streaming parse content (accumulated batch markdown)
   const [streamingParsedContent, setStreamingParsedContent] = useState<string>('');
   // Time estimation for parsing progress
-  const [parseStartTime, setParseStartTime] = useState<number | null>(null);
+  const parseStartTimeRef = useRef<number | null>(null);
   const [avgBatchTime, setAvgBatchTime] = useState<number>(0);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -276,7 +276,7 @@ export default function PaperDetailPage() {
     setSSEMessage(null);
     setParseBatchProgress(null);
     setStreamingParsedContent('');
-    setParseStartTime(null);
+    parseStartTimeRef.current = null;
     setAvgBatchTime(0);
 
     try {
@@ -347,10 +347,10 @@ export default function PaperDetailPage() {
                 });
 
                 // Calculate time estimation
-                if (parseStartTime === null) {
-                  setParseStartTime(Date.now());
+                if (parseStartTimeRef.current === null) {
+                  parseStartTimeRef.current = Date.now();
                 } else if (batchIndex >= 1) {
-                  const elapsed = Date.now() - parseStartTime;
+                  const elapsed = Date.now() - parseStartTimeRef.current;
                   const avgTime = elapsed / (batchIndex + 1);
                   setAvgBatchTime(avgTime);
                 }
