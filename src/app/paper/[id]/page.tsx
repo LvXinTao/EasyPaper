@@ -275,6 +275,9 @@ export default function PaperDetailPage() {
     setSSEStep(null);
     setSSEMessage(null);
     setParseBatchProgress(null);
+    setStreamingParsedContent('');
+    setParseStartTime(null);
+    setAvgBatchTime(0);
 
     try {
       const response = await fetch('/api/analyze', {
