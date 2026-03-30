@@ -135,14 +135,11 @@ export async function generatePaperEmbeddings(paperId: string): Promise<Embeddin
 /**
  * Trigger embedding generation in background.
  */
-export function triggerEmbeddingGeneration(paperId: string): void {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000';
-
-  fetch(`${baseUrl}/api/embed/${paperId}`, {
+export async function triggerEmbeddingGeneration(paperId: string): Promise<void> {
+  // Fire-and-forget: don't await, let it run in background
+  fetch(`${process.env.INTERNAL_API_URL || ''}/api/embed/${paperId}`, {
     method: 'POST',
   }).catch(err => {
-    console.error('Failed to trigger embedding generation:', err);
+    console.error('Embedding generation failed:', err);
   });
 }

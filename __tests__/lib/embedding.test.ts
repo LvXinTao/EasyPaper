@@ -277,10 +277,7 @@ describe('embedding', () => {
     it('should call embed API endpoint', async () => {
       mockFetch.mockResolvedValueOnce({ ok: true });
 
-      triggerEmbeddingGeneration('paper-123');
-
-      // Wait for async fetch
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await triggerEmbeddingGeneration('paper-123');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/embed/paper-123'),
@@ -292,12 +289,9 @@ describe('embedding', () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      triggerEmbeddingGeneration('paper-123');
+      await triggerEmbeddingGeneration('paper-123');
 
-      // Wait for async fetch
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to trigger embedding generation:', expect.any(Error));
+      expect(consoleSpy).toHaveBeenCalledWith('Embedding generation failed:', expect.any(Error));
       consoleSpy.mockRestore();
     });
   });
