@@ -159,8 +159,15 @@ import type { TextSelection } from '@/types';
 
 export function buildQuoteContext(quote: TextSelection | null | undefined): string {
   if (!quote) return '';
-  return `用户引用了论文中的以下内容作为提问背景：
-> ${quote.text}（第 ${quote.page} 页）
+  return `[QUOTE CONTEXT - USER IS ASKING ABOUT THIS SPECIFIC TEXT]
 
-请优先关注这段引用内容回答问题，同时可以参考论文的其他部分提供补充说明。`;
+The user has selected and is asking about the following text from the paper (Page ${quote.page}):
+
+"""
+${quote.text}
+"""
+
+IMPORTANT: Your answer should PRIMARILY focus on explaining this quoted text. You may reference other parts of the paper for context, but the core of your response should address the user's question about this specific quote.
+
+[END QUOTE CONTEXT]`;
 }

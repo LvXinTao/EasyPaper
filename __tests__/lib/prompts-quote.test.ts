@@ -10,8 +10,8 @@ describe('buildQuoteContext', () => {
     };
     const result = buildQuoteContext(quote);
     expect(result).toContain('假设空间的严格约束');
-    expect(result).toContain('第 3 页');
-    expect(result).toContain('用户引用了论文中的以下内容');
+    expect(result).toContain('Page 3');
+    expect(result).toContain('QUOTE CONTEXT');
   });
 
   it('returns empty string for undefined quote', () => {

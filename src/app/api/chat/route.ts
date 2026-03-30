@@ -36,10 +36,17 @@ export async function POST(request: Request) {
     const quoteContext = buildQuoteContext(quote);
     const promptSettings = await storage.getPromptSettings();
     let chatPromptTemplate = promptSettings?.chat?.custom || CHAT_PROMPT;
+
     // Inject quoteContext placeholder if not present in custom prompt
+    // Insert BEFORE "User question:" or "{question}" to ensure AI sees the context
     if (!chatPromptTemplate.includes('{quoteContext}')) {
-      chatPromptTemplate = chatPromptTemplate.replace('User question:', '{quoteContext}\n\nUser question:');
+      if (chatPromptTemplate.includes('User question:')) {
+        chatPromptTemplate = chatPromptTemplate.replace('User question:', '{quoteContext}\n\nUser question:');
+      } else if (chatPromptTemplate.includes('{question}')) {
+        chatPromptTemplate = chatPromptTemplate.replace('{question}', '{quoteContext}\n\n{question}');
+      }
     }
+
     const prompt = chatPromptTemplate
       .replaceAll('{content}', parsedContent || '')
       .replaceAll('{history}', historyStr)
