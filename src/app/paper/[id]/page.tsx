@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { PdfViewer } from '@/components/pdf-viewer';
+import dynamic from 'next/dynamic';
 import { AnalysisPanel } from '@/components/analysis-panel';
 import { NotesPanel } from '@/components/notes-panel';
 import { BookmarksPanel } from '@/components/bookmarks-panel';
@@ -15,6 +15,20 @@ import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
 import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark } from '@/types';
+
+// Dynamic import for PdfViewer to skip SSR (required for react-pdf)
+const PdfViewer = dynamic(
+  () => import('@/components/pdf-viewer').then((mod) => mod.PdfViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full" style={{ background: 'var(--bg-deep)' }}>
+        <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full"
+             style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+      </div>
+    ),
+  }
+);
 
 export default function PaperDetailPage() {
   const params = useParams();

@@ -7,7 +7,8 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import type { Bookmark } from '@/types';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
-// Configure pdf.js worker
+// Configure pdf.js worker - use static file from public folder
+// This worker must be from pdfjs-dist 5.x (react-pdf's bundled version)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 const THUMBNAIL_MAX_WIDTH = 80;
@@ -407,17 +408,15 @@ export function PdfViewer({
     setPdfDoc(pdf);
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full" style={{ color: 'var(--text-tertiary)', background: 'var(--bg-deep)' }}>
-        <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-3" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
-        <span className="text-sm">Loading PDF...</span>
-      </div>
-    );
-  }
-
   return (
     <div ref={viewerRef} className="flex flex-col h-full" tabIndex={-1}>
+      {/* Loading overlay - shown while PDF is loading */}
+      {loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-50" style={{ color: 'var(--text-tertiary)', background: 'var(--bg-deep)' }}>
+          <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-3" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
+          <span className="text-sm">Loading PDF...</span>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
