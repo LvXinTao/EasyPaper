@@ -750,6 +750,8 @@ export default function PaperDetailPage() {
                   analysisStep={effectiveStep}
                   analysisMessage={effectiveMessage}
                   parseBatchProgress={parseBatchProgress}
+                  streamingParsedContent={streamingParsedContent}
+                  avgBatchTime={avgBatchTime}
                   onReAnalyze={handleAnalyze}
                 />
               ) : activeTab === 'notes' ? (
