@@ -10,15 +10,15 @@ Extend the existing page-level notes feature to support sentence-level notes tie
 
 ```typescript
 export interface HighlightRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+  left: number;    // Percentage (0-100) of page width
+  top: number;     // Percentage (0-100) of page height
+  width: number;   // Percentage (0-100) of page width
+  height: number;  // Percentage (0-100) of page height
 }
 
 export interface TextSelection {
   text: string;              // The selected text content
-  rects: HighlightRect[];    // Rectangle positions for rendering (page-relative)
+  rects: HighlightRect[];    // Rectangle positions as percentages
   page: number;              // Page number (1-indexed)
 }
 
@@ -34,11 +34,21 @@ export interface Note {
 }
 ```
 
+### Coordinate System
+
+Coordinates are stored as **percentages (0-100)** of page dimensions at scale 1.0. This ensures:
+
+- **Zoom independence:** Highlights align correctly at any zoom level
+- **Device independence:** Works across different screen sizes
+- **Conversion formula:**
+  - Capture: `percent = (viewportCoord / pageSize) * 100`
+  - Render: `pixel = (percent / 100) * renderedPageSize * scale`
+
 ### Key Decisions
 
 - `page` remains optional for backward compatibility with existing notes
 - `selection` is optional - if present, it's a sentence-level note; if absent, it's a page-level note
-- `selection.rects` stores coordinates relative to the PDF page wrapper (same format as existing `highlightRects`)
+- `selection.rects` stores coordinates as percentages for zoom independence
 - A note with `selection` implicitly has `page = selection.page`
 
 ### Storage
@@ -109,12 +119,32 @@ Compact editor opened from SelectionToolbar or AnnotationBubble.
 
 ### Persistent Highlight Rendering
 
-- **Container:** Separate div below temporary selection highlights
+- **Container:** Sibling div to the text layer, positioned absolutely within the page wrapper
+- **z-index:** Below text layer (z-index: 0) to allow text selection to pass through
 - **Color:** Warm yellow `rgba(250, 204, 21, 0.35)` (distinct from blue temporary highlights)
 - **Persistence:** Re-rendered on page load/change from notes data
 - **Interaction:** Click on highlight → opens InlineNoteEditor
 
 ## PDF Viewer Integration
+
+### Selection Capture Method
+
+When user selects text in the PDF, capture the selection data:
+
+1. **Listen for selection:** `document.addEventListener('selectionchange', handler)`
+2. **Check selection target:** Verify anchor/focus node is within the text layer div
+3. **Get selection rectangles:** `range.getClientRects()` returns viewport-relative coordinates
+4. **Convert to percentages:**
+   ```typescript
+   const wrapperRect = wrapperRef.current.getBoundingClientRect();
+   const rects = Array.from(range.getClientRects()).map(rect => ({
+     left: ((rect.left - wrapperRect.left) / wrapperRect.width) * 100,
+     top: ((rect.top - wrapperRect.top) / wrapperRect.height) * 100,
+     width: (rect.width / wrapperRect.width) * 100,
+     height: (rect.height / wrapperRect.height) * 100,
+   }));
+   ```
+5. **Get selected text:** `selection.toString()` returns the text content
 
 ### New Props
 
@@ -122,11 +152,14 @@ Compact editor opened from SelectionToolbar or AnnotationBubble.
 interface PdfViewerProps {
   // ... existing props
   notes?: Note[];
-  onNoteCreate?: (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => void;
-  onNoteUpdate?: (note: Note) => void;
-  onNoteDelete?: (noteId: string) => void;
+  // Callbacks: PdfViewer invokes these; parent page.tsx handles API calls and state updates
+  onNoteCreate?: (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => Promise<void>;
+  onNoteUpdate?: (note: Note) => Promise<void>;
+  onNoteDelete?: (noteId: string) => Promise<void>;
 }
 ```
+
+**API Responsibility:** PdfViewer calls callbacks with note data. Parent page.tsx makes API calls and updates notes state. Callbacks return Promises so PdfViewer can show loading states.
 
 ### New State
 
@@ -135,13 +168,15 @@ const [editorPopup, setEditorPopup] = useState<{
   mode: 'create' | 'edit';
   note?: Note;
   position: { x: number; y: number };
+  selection?: TextSelection;
 } | null>(null);
 ```
 
 ### New Refs
 
 ```typescript
-const wrapperRef = useRef<HTMLDivElement>(null);  // For coordinate conversion
+const wrapperRef = useRef<HTMLDivElement>(null);  // Page wrapper for coordinate conversion
+const pageContainerRef = useRef<HTMLDivElement>(null);  // Scroll container for scroll-to-selection
 ```
 
 ### Highlight Rendering Logic
@@ -168,6 +203,41 @@ const rightmostRect = rects.reduce((max, r) =>
   r.left + r.width > max.left + max.width ? r : max, rects[0]);
 const bubbleX = rightmostRect.left + rightmostRect.width + 8;
 const bubbleY = rightmostRect.top;
+```
+
+**InlineNoteEditor Viewport Adjustment:**
+```typescript
+const EDITOR_WIDTH = 320;
+const EDITOR_HEIGHT = 280;
+
+function calculateEditorPosition(triggerX: number, triggerY: number) {
+  const viewport = { width: window.innerWidth, height: window.innerHeight };
+
+  // Initial position: below and centered on trigger
+  let x = triggerX - EDITOR_WIDTH / 2;
+  let y = triggerY + 8;
+
+  // Adjust if right edge exceeds viewport
+  if (x + EDITOR_WIDTH > viewport.width - 16) {
+    x = viewport.width - EDITOR_WIDTH - 16;
+  }
+  // Adjust if left edge exceeds viewport
+  if (x < 16) {
+    x = 16;
+  }
+  // Flip to above if bottom exceeds viewport
+  if (y + EDITOR_HEIGHT > viewport.height - 16) {
+    y = triggerY - EDITOR_HEIGHT - 8;
+  }
+
+  return { x, y };
+}
+```
+
+**Multiple Bubbles Overlap:**
+When multiple AnnotationBubbles would overlap at the same position, offset vertically:
+```typescript
+const bubbleY = baseY + (bubbleIndex * 24);  // 24px vertical offset per bubble
 ```
 
 ### Event Flow
@@ -201,11 +271,27 @@ User clicks AnnotationBubble or yellow highlight
 **Sentence-level notes:**
 - Yellow snippet badge: `"...{text.slice(0, 30)}..."`
 - Page badge: `p.{page}`
-- Click → highlights text in PDF + jumps to page
+- Click → calls `onNoteClick` callback with note data
 
 **Page-level notes:**
 - Only page badge (existing behavior)
-- Click → jumps to page (existing behavior)
+- Click → calls `onPageChange` to jump to page (existing behavior)
+
+### Scroll-to-Selection Behavior
+
+When clicking a sentence note, PdfViewer must scroll to bring the highlight into view:
+
+```typescript
+function scrollToSelection(note: Note) {
+  if (!note.selection || !pageContainerRef.current) return;
+
+  const topPercent = note.selection.rects[0]?.top || 0;
+  const container = pageContainerRef.current;
+  const scrollY = (topPercent / 100) * container.scrollHeight;
+
+  container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
+}
+```
 
 ### Visual Distinction
 
@@ -243,13 +329,16 @@ page.tsx
 |----------|----------|
 | Selection across multiple lines | Multiple rects stored and rendered |
 | Selection spans page boundary | Not possible - single page rendering |
-| User zooms after creating note | Rects in page-relative coords, scale-independent |
+| User zooms after creating note | Coordinates stored as percentages, scale-independent |
 | Note deleted | Highlight and bubble removed |
 | Page change | Persistent highlights re-rendered from notes data |
 | Selection cleared | Toolbar hides, blue highlight disappears |
-| Editor outside viewport | Auto-adjust position to stay within bounds |
+| Editor outside viewport | Auto-adjust position using viewport calculation |
 | Duplicate note on same text | Allowed - each note is independent |
 | Rapid page navigation | Editor popup closes on page change |
+| Multiple bubbles overlap | Vertical offset of 24px per bubble |
+| Touch device selection | SelectionToolbar appears after `touchend` with larger touch targets |
+| Performance with many highlights | Virtualization if >20 notes per page; typical use is <10 |
 
 ## Implementation Scope
 
