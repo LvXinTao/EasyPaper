@@ -154,3 +154,13 @@ export const PROMPT_PRESETS = {
     zh: { label: '中文', content: CHAT_PROMPT_ZH },
   },
 };
+
+import type { TextSelection } from '@/types';
+
+export function buildQuoteContext(quote: TextSelection | null | undefined): string {
+  if (!quote) return '';
+  return `用户引用了论文中的以下内容作为提问背景：
+> ${quote.text}（第 ${quote.page} 页）
+
+请优先关注这段引用内容回答问题，同时可以参考论文的其他部分提供补充说明。`;
+}
