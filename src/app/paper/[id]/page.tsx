@@ -124,7 +124,8 @@ export default function PaperDetailPage() {
   const embeddingsExist = data?.metadata?.embeddingStatus === 'generated';
   useEffect(() => {
     if (data?.metadata?.status === 'analyzed' && !embeddingsExist) {
-      fetch(`/api/embed/${paperId}`, { method: 'POST' });
+      fetch(`/api/embed/${paperId}`, { method: 'POST' })
+        .catch(err => console.error('Failed to trigger embedding generation:', err));
     }
   }, [data?.metadata?.status, embeddingsExist, paperId]);
 
