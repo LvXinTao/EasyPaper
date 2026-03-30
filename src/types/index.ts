@@ -91,7 +91,8 @@ export interface AppSettings {
   embeddingModel?: string;
   useSameApiForEmbedding?: boolean;
   embeddingBaseUrl?: string;
-  embeddingApiKey?: string;
+  embeddingApiKeyEncrypted?: string;
+  embeddingApiKeyIV?: string;
 }
 
 export interface ApiError {
