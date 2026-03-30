@@ -42,6 +42,11 @@ export default function PaperDetailPage() {
   const [sseStep, setSSEStep] = useState<string | null>(null);
   const [sseMessage, setSSEMessage] = useState<string | null>(null);
   const [parseBatchProgress, setParseBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  // Streaming parse content (accumulated batch markdown)
+  const [streamingParsedContent, setStreamingParsedContent] = useState<string>('');
+  // Time estimation for parsing progress
+  const [parseStartTime, setParseStartTime] = useState<number | null>(null);
+  const [avgBatchTime, setAvgBatchTime] = useState<number>(0);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'notes' | 'bookmarks'>('analysis');
