@@ -194,8 +194,21 @@ const [editorPopup, setEditorPopup] = useState<{
 ### New Refs
 
 ```typescript
-const wrapperRef = useRef<HTMLDivElement>(null);  // .react-pdf__Page element for coordinate conversion
-const pageContainerRef = useRef<HTMLDivElement>(null);  // Scroll container for scroll-to-selection
+const pageElementRef = useRef<HTMLDivElement>(null);  // .react-pdf__Page element for coordinate conversion
+const scrollContainerRef = useRef<HTMLDivElement>(null);  // Scroll container for scroll-to-selection (existing)
+```
+
+**Obtaining the Page element reference:**
+The react-pdf `Page` component wraps its content in a div with class `react-pdf__Page`. Use a callback ref on the container div inside the `Document` component, or use the `inputRef` prop if available. The Page element is needed for accurate coordinate conversion regardless of PDF paper size.
+
+```tsx
+<Document file={url} ...>
+  <Page
+    pageNumber={page}
+    inputRef={pageElementRef}  // react-pdf supports inputRef for the Page container
+    ...
+  />
+</Document>
 ```
 
 ### Loading & Error States
@@ -230,6 +243,7 @@ const pageContainerRef = useRef<HTMLDivElement>(null);  // Scroll container for 
 - On note creation: "Note created"
 - On note deletion: "Note deleted"
 - On error: Error message announced
+- Implementation: Use a hidden `div` with `aria-live="polite"` and `role="status"`; append message text to trigger announcement
 
 ### Highlight Rendering Logic
 
@@ -337,18 +351,41 @@ When clicking a sentence note:
 2. If note is on different page: navigate to that page first, wait for render, then scroll
 
 ```typescript
+// Use a promise-based approach with react-pdf's render callback
+const pageRenderPromiseRef = useRef<Promise<void> | null>(null);
+
+// In Page component's onRenderSuccess callback
+const handlePageRenderSuccess = () => {
+  // Resolve any pending scroll promise
+  if (pageRenderPromiseRef.current) {
+    pageRenderPromiseRef.current = null;
+  }
+};
+
 async function scrollToSelection(note: Note) {
-  if (!note.selection || !pageContainerRef.current) return;
+  if (!note.selection || !scrollContainerRef.current) return;
 
   // Navigate to page if needed
   if (note.selection.page !== currentPage) {
-    await goToPage(note.selection.page);
-    // Wait for page render (react-pdf onLoadSuccess callback)
-    await new Promise(resolve => setTimeout(resolve, 100)); // Or use proper render callback
+    // Create a promise that resolves when page renders
+    pageRenderPromiseRef.current = new Promise(resolve => {
+      // Will be resolved in onRenderSuccess callback
+      const checkRender = () => {
+        if (pageElementRef.current) {
+          requestAnimationFrame(resolve);
+        } else {
+          setTimeout(checkRender, 50);
+        }
+      };
+      checkRender();
+    });
+
+    goToPage(note.selection.page);
+    await pageRenderPromiseRef.current;
   }
 
   const topPercent = note.selection.rects[0]?.top || 0;
-  const container = pageContainerRef.current;
+  const container = scrollContainerRef.current;
   const scrollY = (topPercent / 100) * container.scrollHeight;
 
   container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
@@ -390,7 +427,7 @@ page.tsx
 | Scenario | Handling |
 |----------|----------|
 | Selection across multiple lines | Multiple rects stored and rendered |
-| Selection spans page boundary | Not possible - single page rendering |
+| Selection spans page boundary | Not possible - single page rendering; selection truncated to current page by browser |
 | User zooms after creating note | Coordinates stored as percentages, scale-independent |
 | Note deleted | Highlight and bubble removed |
 | Page change | Persistent highlights re-rendered from notes data |
@@ -401,6 +438,7 @@ page.tsx
 | Multiple bubbles overlap | Vertical offset of 24px per bubble |
 | Touch device selection | SelectionToolbar appears after `touchend`; min touch target 44x44px; long-press initiates selection on some devices |
 | Performance with many highlights | Current scope handles <10 per page; virtualization deferred to future if needed |
+| PDF re-parsed or re-uploaded | Selection coordinates may become stale; `selection.text` provides visual reference for users |
 
 ## Touch Device Support
 
@@ -428,16 +466,50 @@ page.tsx
 
 | File | Changes |
 |------|---------|
-| `src/types/index.ts` | Add `HighlightRect`, `TextSelection`, extend `Note` |
-| `src/components/pdf-viewer.tsx` | Add props, state, refs; render highlights/bubbles/editor |
+| `src/types/index.ts` | Add `HighlightRect`, `TextSelection` interfaces; extend `Note` type with optional `selection` field |
+| `src/components/pdf-viewer.tsx` | Add props, state, refs; render highlights/bubbles/editor; add page element ref for coordinate conversion |
 | `src/components/notes-list.tsx` | Add snippet badge, handle note click |
 | `src/components/notes-panel.tsx` | Add `onNoteClick` prop |
 | `src/app/paper/[id]/page.tsx` | Pass notes to PdfViewer, handle callbacks |
+| `src/app/api/paper/[id]/notes/route.ts` | Extract and validate `selection` field in POST/PUT handlers; apply validation rules |
+
+### API Route Modifications
+
+The notes API route must be updated to handle the `selection` field:
+
+```typescript
+// In POST handler
+const { title, content, tags, page, selection } = await request.json();
+
+// Validate selection if provided
+if (selection) {
+  if (!selection.text || selection.text.length > 1000) {
+    return Response.json({ error: { code: 'VALIDATION_ERROR', message: 'selection.text must be 1-1000 characters' }}, { status: 400 });
+  }
+  if (!selection.rects || selection.rects.length === 0) {
+    return Response.json({ error: { code: 'VALIDATION_ERROR', message: 'selection.rects must be non-empty' }}, { status: 400 });
+  }
+  if (!selection.page || selection.page < 1) {
+    return Response.json({ error: { code: 'VALIDATION_ERROR', message: 'selection.page must be >= 1' }}, { status: 400 });
+  }
+}
+
+// Include selection in note object
+const note = {
+  id: crypto.randomUUID(),
+  title,
+  content,
+  tags,
+  page: selection?.page ?? page,
+  selection,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+```
 
 ### No Changes Needed
 
 - `src/lib/storage.ts` - JSON storage handles new fields transparently
-- `src/app/api/paper/[id]/notes/route.ts` - Handles new fields in request body
 - `src/components/note-editor.tsx` - Full editor unchanged, only used for existing note editing from panel
 
 ## Dependencies
