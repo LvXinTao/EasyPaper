@@ -120,6 +120,14 @@ export default function PaperDetailPage() {
       .catch(() => {});
   }, []);
 
+  // Auto-trigger embedding generation after analysis completes
+  const embeddingsExist = data?.metadata?.embeddingStatus === 'generated';
+  useEffect(() => {
+    if (data?.metadata?.status === 'analyzed' && !embeddingsExist) {
+      fetch(`/api/embed/${paperId}`, { method: 'POST' });
+    }
+  }, [data?.metadata?.status, embeddingsExist, paperId]);
+
   // Fetch notes (for PdfViewer highlights and note count)
   const fetchNotes = useCallback(async () => {
     try {
