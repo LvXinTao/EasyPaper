@@ -112,6 +112,7 @@ export function InlineNoteEditor({
       }}
       role="dialog"
       aria-label="Edit note"
+      onClick={(e) => e.stopPropagation()} // Prevent clicks inside from triggering document's click handler
     >
       {/* Error banner */}
       {error && (
@@ -139,7 +140,10 @@ export function InlineNoteEditor({
           <span className="text-xs" style={{ color: 'var(--rose)' }}>Delete this note?</span>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowDeleteConfirm(false)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(false);
+              }}
               className="px-2 py-0.5 text-xs rounded transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)'; }}
@@ -148,7 +152,10 @@ export function InlineNoteEditor({
               Cancel
             </button>
             <button
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete();
+              }}
               disabled={loading}
               className="px-2 py-0.5 text-xs text-white rounded transition-colors disabled:opacity-50"
               style={{ background: 'var(--rose)' }}
@@ -245,7 +252,10 @@ export function InlineNoteEditor({
         <div className="flex items-center justify-between pt-1">
           {mode === 'edit' && onDelete && !showDeleteConfirm && (
             <button
-              onClick={() => setShowDeleteConfirm(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(true);
+              }}
               className="px-2 py-1 text-xs rounded transition-colors"
               style={{ color: 'var(--rose)' }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--rose-subtle)'; }}
