@@ -167,6 +167,8 @@ export function AnalysisPanel({
   analysisStep,
   analysisMessage,
   parseBatchProgress,
+  streamingParsedContent,
+  avgBatchTime,
   onReAnalyze,
 }: AnalysisPanelProps) {
   const [activeSection, setActiveSection] = useState('summary');
@@ -178,7 +180,11 @@ export function AnalysisPanel({
         <SectionTabs activeSection={activeSection} onSectionChange={setActiveSection} />
         <AnalysisProgress step={analysisStep || null} message={analysisMessage || null} />
         {analysisStep === 'parsing' && parseBatchProgress && (
-          <BatchProgressBar progress={parseBatchProgress} />
+          <StreamingParsePreview
+            progress={parseBatchProgress}
+            content={streamingParsedContent || ''}
+            avgBatchTime={avgBatchTime || 0}
+          />
         )}
       </div>
     );
