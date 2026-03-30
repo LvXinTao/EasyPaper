@@ -4,12 +4,14 @@ import { createErrorResponse } from '@/lib/errors';
 import { generatePaperEmbeddings } from '@/lib/embedding';
 import type { EmbeddingStatus } from '@/types';
 
+interface RouteContext { params: Promise<{ id: string }>; }
+
 // GET - Get embedding status for a paper
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const paperId = params.id;
+  const { id: paperId } = await context.params;
 
   const exists = await storage.paperExists(paperId);
   if (!exists) {
@@ -27,9 +29,9 @@ export async function GET(
 // POST - Generate embeddings for a paper
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: RouteContext
 ) {
-  const paperId = params.id;
+  const { id: paperId } = await context.params;
 
   const exists = await storage.paperExists(paperId);
   if (!exists) {
@@ -46,9 +48,6 @@ export async function POST(
   if (metadata.embeddingStatus === 'generated') {
     return Response.json({ status: 'generated', message: 'Embeddings already exist' });
   }
-
-  // Update status to generating
-  await storage.updateMetadata(paperId, { embeddingStatus: 'generating' as EmbeddingStatus });
 
   try {
     // Generate embeddings (this function handles getting parsed content internally)
