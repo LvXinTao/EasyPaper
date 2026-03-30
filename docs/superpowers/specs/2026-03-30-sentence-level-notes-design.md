@@ -59,6 +59,19 @@ No change to storage structure - notes still stored in `data/papers/{paperId}/no
 
 No new routes needed. Existing `/api/paper/[id]/notes` handles all operations.
 
+### Validation Rules
+
+**Selection field validation:**
+- `selection.text`: Required, max 1000 characters, trimmed
+- `selection.rects`: Required, non-empty array, each rect has `left`, `top`, `width`, `height` in range [0, 100]
+- `selection.page`: Required, integer ≥ 1
+- If both `page` and `selection.page` provided, they should match (server ignores `page` if mismatch)
+
+**Error response format:**
+```typescript
+{ error: { code: 'VALIDATION_ERROR', message: 'selection.text is required' } }
+```
+
 ### Request/Response Changes
 
 **POST/PUT body:**
@@ -123,7 +136,8 @@ Compact editor opened from SelectionToolbar or AnnotationBubble.
 - **z-index:** Below text layer (z-index: 0) to allow text selection to pass through
 - **Color:** Warm yellow `rgba(250, 204, 21, 0.35)` (distinct from blue temporary highlights)
 - **Persistence:** Re-rendered on page load/change from notes data
-- **Interaction:** Click on highlight → opens InlineNoteEditor
+- **Interaction:** Click on highlighted text opens InlineNoteEditor (click detected on text layer, check if click position overlaps a highlight rect)
+- **pointer-events:** `none` on highlight divs to let clicks pass through to text layer; click detection via coordinate comparison
 
 ## PDF Viewer Integration
 
@@ -136,14 +150,19 @@ When user selects text in the PDF, capture the selection data:
 3. **Get selection rectangles:** `range.getClientRects()` returns viewport-relative coordinates
 4. **Convert to percentages:**
    ```typescript
-   const wrapperRect = wrapperRef.current.getBoundingClientRect();
+   // wrapperRef points to the .react-pdf__Page__canvas container (the rendered page)
+   // This is the same container used by react-pdf for the canvas and text layer
+   const pageElement = wrapperRef.current;  // .react-pdf__Page element
+   const pageRect = pageElement.getBoundingClientRect();
+
    const rects = Array.from(range.getClientRects()).map(rect => ({
-     left: ((rect.left - wrapperRect.left) / wrapperRect.width) * 100,
-     top: ((rect.top - wrapperRect.top) / wrapperRect.height) * 100,
-     width: (rect.width / wrapperRect.width) * 100,
-     height: (rect.height / wrapperRect.height) * 100,
+     left: ((rect.left - pageRect.left) / pageRect.width) * 100,
+     top: ((rect.top - pageRect.top) / pageRect.height) * 100,
+     width: (rect.width / pageRect.width) * 100,
+     height: (rect.height / pageRect.height) * 100,
    }));
    ```
+   **Note:** The `.react-pdf__Page` element is used because it represents the rendered page dimensions regardless of PDF paper size. Different paper sizes (A4, Letter, etc.) will have different dimensions, but percentage coordinates work correctly in all cases.
 5. **Get selected text:** `selection.toString()` returns the text content
 
 ### New Props
@@ -175,9 +194,42 @@ const [editorPopup, setEditorPopup] = useState<{
 ### New Refs
 
 ```typescript
-const wrapperRef = useRef<HTMLDivElement>(null);  // Page wrapper for coordinate conversion
+const wrapperRef = useRef<HTMLDivElement>(null);  // .react-pdf__Page element for coordinate conversion
 const pageContainerRef = useRef<HTMLDivElement>(null);  // Scroll container for scroll-to-selection
 ```
+
+### Loading & Error States
+
+**Loading indicator:** During save/delete operations, the Save/Delete button shows a spinner and becomes disabled.
+
+**Error handling:**
+- API errors display inline in the editor popup (red banner with error message)
+- No optimistic updates - wait for API confirmation before updating UI
+- User can retry or dismiss the error
+
+**Delete confirmation:** Before deleting, show a confirmation row in the editor: "Delete this note? [Cancel] [Confirm]" with Confirm in red.
+
+### Accessibility
+
+**Keyboard navigation:**
+- `Tab` cycles through: PDF content → AnnotationBubbles → SelectionToolbar (when visible)
+- `Enter` on AnnotationBubble opens InlineNoteEditor
+- `Escape` closes InlineNoteEditor without saving
+
+**Focus management:**
+- When InlineNoteEditor opens, focus moves to title input
+- When InlineNoteEditor closes, focus returns to trigger element (bubble or toolbar)
+
+**ARIA labels:**
+- SelectionToolbar: `aria-label="Add note to selected text"`
+- AnnotationBubble: `aria-label="Note: {title}"`
+- Yellow highlights: No ARIA (visual only, semantic meaning in bubble)
+- InlineNoteEditor: `role="dialog" aria-label="Edit note"`
+
+**Screen reader announcements:**
+- On note creation: "Note created"
+- On note deletion: "Note deleted"
+- On error: Error message announced
 
 ### Highlight Rendering Logic
 
@@ -279,11 +331,21 @@ User clicks AnnotationBubble or yellow highlight
 
 ### Scroll-to-Selection Behavior
 
-When clicking a sentence note, PdfViewer must scroll to bring the highlight into view:
+When clicking a sentence note:
+
+1. If note is on current page: scroll to highlight position immediately
+2. If note is on different page: navigate to that page first, wait for render, then scroll
 
 ```typescript
-function scrollToSelection(note: Note) {
+async function scrollToSelection(note: Note) {
   if (!note.selection || !pageContainerRef.current) return;
+
+  // Navigate to page if needed
+  if (note.selection.page !== currentPage) {
+    await goToPage(note.selection.page);
+    // Wait for page render (react-pdf onLoadSuccess callback)
+    await new Promise(resolve => setTimeout(resolve, 100)); // Or use proper render callback
+  }
 
   const topPercent = note.selection.rects[0]?.top || 0;
   const container = pageContainerRef.current;
@@ -334,11 +396,23 @@ page.tsx
 | Page change | Persistent highlights re-rendered from notes data |
 | Selection cleared | Toolbar hides, blue highlight disappears |
 | Editor outside viewport | Auto-adjust position using viewport calculation |
-| Duplicate note on same text | Allowed - each note is independent |
+| Duplicate note on same text | Allowed - bubbles offset vertically; consider badge count in future |
 | Rapid page navigation | Editor popup closes on page change |
 | Multiple bubbles overlap | Vertical offset of 24px per bubble |
-| Touch device selection | SelectionToolbar appears after `touchend` with larger touch targets |
-| Performance with many highlights | Virtualization if >20 notes per page; typical use is <10 |
+| Touch device selection | SelectionToolbar appears after `touchend`; min touch target 44x44px; long-press initiates selection on some devices |
+| Performance with many highlights | Current scope handles <10 per page; virtualization deferred to future if needed |
+
+## Touch Device Support
+
+**Selection detection:**
+- Listen for `selectionchange` event (fires after touch-based text selection completes)
+- SelectionToolbar appears when selection is non-empty
+- Hide toolbar on `touchstart` outside text layer (before potential new selection)
+
+**Touch targets:**
+- SelectionToolbar button: min 44x44px
+- AnnotationBubble: min height 44px, full width clickable
+- InlineNoteEditor buttons: min 44x44px touch target
 
 ## Implementation Scope
 
