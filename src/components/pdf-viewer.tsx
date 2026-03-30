@@ -1,19 +1,25 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/TextLayer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
-import type { Bookmark } from '@/types';
+import type { Bookmark, Note, NoteTag, TextSelection } from '@/types';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { SelectionToolbar } from './selection-toolbar';
+import { AnnotationBubble } from './annotation-bubble';
+import { InlineNoteEditor } from './inline-note-editor';
 
 // Configure pdf.js worker - use static file from public folder
-// This worker must be from pdfjs-dist 5.x (react-pdf's bundled version)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 const THUMBNAIL_MAX_WIDTH = 80;
 const THUMBNAIL_MAX_HEIGHT = 120;
 const THUMBNAIL_CACHE_SIZE = 50;
+
+export interface PdfViewerRef {
+  scrollToNote: (note: Note) => void;
+}
 
 interface PdfViewerProps {
   url: string;
@@ -23,9 +29,14 @@ interface PdfViewerProps {
   onAddBookmark?: (page: number, label?: string) => void;
   onRemoveBookmark?: (bookmarkId: string) => void;
   onBookmarksChange?: () => void;
+  // Sentence-level notes props
+  notes?: Note[];
+  onNoteCreate?: (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => Promise<void>;
+  onNoteUpdate?: (note: Note) => Promise<void>;
+  onNoteDelete?: (noteId: string) => Promise<void>;
 }
 
-export function PdfViewer({
+export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
   url,
   currentPage = 1,
   onPageChange,
@@ -33,7 +44,11 @@ export function PdfViewer({
   onAddBookmark,
   onRemoveBookmark,
   onBookmarksChange,
-}: PdfViewerProps) {
+  notes = [],
+  onNoteCreate,
+  onNoteUpdate,
+  onNoteDelete,
+}, ref) => {
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(currentPage);
@@ -61,12 +76,24 @@ export function PdfViewer({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const prevCurrentPageRef = useRef(currentPage);
 
+  // Sentence-level notes state
+  const pageElementRef = useRef<HTMLDivElement>(null);
+  const [currentSelection, setCurrentSelection] = useState<TextSelection | null>(null);
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [editorPopup, setEditorPopup] = useState<{
+    mode: 'create' | 'edit';
+    note?: Note;
+    position: { x: number; y: number };
+    selection?: TextSelection;
+  } | null>(null);
+  const pageRenderPromiseRef = useRef<Promise<void> | null>(null);
+
   // Keep pageRef in sync for keyboard handlers
   useEffect(() => {
     pageRef.current = page;
   }, [page]);
 
-  // Sync page with currentPage prop (external navigation)
+  // Sync page with currentPage prop
   // This is a valid controlled/uncontrolled component pattern where we sync
   // external prop changes to internal state
   useEffect(() => {
@@ -83,6 +110,266 @@ export function PdfViewer({
       onPageChange?.(p);
     }
   }, [totalPages, onPageChange]);
+
+  // Expose scrollToNote method via ref
+  useImperativeHandle(ref, () => ({
+    scrollToNote: async (note: Note) => {
+      if (!note.selection || !scrollContainerRef.current) return;
+
+      // Navigate to page if needed
+      if (note.selection.page !== page) {
+        // Create promise with timeout to prevent hanging indefinitely
+        pageRenderPromiseRef.current = new Promise<void>((resolve) => {
+          let cancelled = false;
+          const timeoutId = setTimeout(() => {
+            cancelled = true;
+            resolve(); // Resolve anyway after timeout to proceed with scroll
+          }, 5000); // 5 second max wait
+
+          const checkRender = () => {
+            if (cancelled) return;
+            if (pageElementRef.current) {
+              clearTimeout(timeoutId);
+              requestAnimationFrame(() => resolve());
+            } else {
+              setTimeout(checkRender, 50);
+            }
+          };
+          checkRender();
+        });
+
+        goToPage(note.selection.page);
+        await pageRenderPromiseRef.current;
+      }
+
+      const topPercent = note.selection.rects[0]?.top || 0;
+      const container = scrollContainerRef.current;
+      const scrollY = (topPercent / 100) * container.scrollHeight;
+      container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
+    },
+  }));
+
+  // Selection capture for sentence-level notes
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setCurrentSelection(null);
+        setSelectionPosition(null);
+        return;
+      }
+
+      // Check if selection is within the text layer
+      const anchorNode = selection.anchorNode;
+      if (!anchorNode) return;
+
+      const textLayer = anchorNode.parentElement?.closest('.textLayer');
+      if (!textLayer) {
+        setCurrentSelection(null);
+        setSelectionPosition(null);
+        return;
+      }
+
+      // Get the page container (parent of textLayer which contains canvas)
+      const pageContainer = textLayer.parentElement;
+      if (!pageContainer) {
+        setCurrentSelection(null);
+        setSelectionPosition(null);
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const text = selection.toString().trim();
+      if (!text) {
+        setCurrentSelection(null);
+        setSelectionPosition(null);
+        return;
+      }
+
+      const pageRect = pageContainer.getBoundingClientRect();
+      // Filter out rects with zero width or height (can happen with multi-line selections)
+      const clientRects = Array.from(range.getClientRects()).filter(rect => rect.width > 0 && rect.height > 0);
+
+      if (clientRects.length === 0) {
+        setCurrentSelection(null);
+        setSelectionPosition(null);
+        return;
+      }
+
+      const rects = clientRects.map(rect => ({
+        left: ((rect.left - pageRect.left) / pageRect.width) * 100,
+        top: ((rect.top - pageRect.top) / pageRect.height) * 100,
+        width: (rect.width / pageRect.width) * 100,
+        height: (rect.height / pageRect.height) * 100,
+      }));
+
+      // Calculate toolbar position at bottom-right of selection
+      // Find the bottommost rect (highest top + height value)
+      const bottommostRect = rects.reduce((max, r) => {
+        const maxBottom = max.top + max.height;
+        const rBottom = r.top + r.height;
+        return rBottom > maxBottom ? r : max;
+      }, rects[0]);
+
+      // Position at the right edge of the bottommost rect
+      const toolbarX = pageRect.left + (bottommostRect.left + bottommostRect.width) / 100 * pageRect.width;
+      const toolbarY = pageRect.top + bottommostRect.top / 100 * pageRect.height + bottommostRect.height / 100 * pageRect.height;
+
+      setCurrentSelection({ text, rects, page });
+      setSelectionPosition({ x: toolbarX, y: toolbarY });
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+  }, [page]);
+
+  // Clear selection on page change
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentSelection(null);
+     
+    setSelectionPosition(null);
+     
+    setEditorPopup(null);
+  }, [page]);
+
+  // Close editor on click outside
+  useEffect(() => {
+    if (!editorPopup) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-note-editor]') && !target.closest('[data-selection-toolbar]')) {
+        setEditorPopup(null);
+      }
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [editorPopup]);
+
+  // Handle note creation
+  const handleNoteCreate = useCallback(async (data: { title: string; content: string; tags: NoteTag[]; selection?: TextSelection }) => {
+    if (!onNoteCreate || !data.selection) return;
+    await onNoteCreate({ title: data.title, content: data.content, tags: data.tags, selection: data.selection });
+    window.getSelection()?.removeAllRanges();
+    setCurrentSelection(null);
+    setSelectionPosition(null);
+  }, [onNoteCreate]);
+
+  // Handle note update
+  const handleNoteUpdate = useCallback(async (data: { title: string; content: string; tags: NoteTag[]; selection?: TextSelection }) => {
+    if (!onNoteUpdate || !editorPopup?.note) return;
+    const updatedNote: Note = {
+      ...editorPopup.note,
+      title: data.title,
+      content: data.content,
+      tags: data.tags,
+      selection: data.selection,
+      page: data.selection?.page ?? editorPopup.note.page,
+      updatedAt: new Date().toISOString(),
+    };
+    await onNoteUpdate(updatedNote);
+  }, [onNoteUpdate, editorPopup]);
+
+  // Handle note delete
+  const handleNoteDelete = useCallback(async () => {
+    if (!onNoteDelete || !editorPopup?.note) return;
+    await onNoteDelete(editorPopup.note.id);
+  }, [onNoteDelete, editorPopup]);
+
+  // Handle annotation bubble click
+  const handleAnnotationClick = useCallback((note: Note) => {
+    if (!note.selection) return;
+    const rightmostRect = note.selection.rects.reduce((max, r) =>
+      r.left + r.width > max.left + max.width ? r : max, note.selection!.rects[0]);
+
+    if (!pageElementRef.current) return;
+    const pageRect = pageElementRef.current.getBoundingClientRect();
+    const bubbleX = pageRect.left + (rightmostRect.left + rightmostRect.width) / 100 * pageRect.width;
+    const bubbleY = pageRect.top + rightmostRect.top / 100 * pageRect.height;
+
+    setEditorPopup({
+      mode: 'edit',
+      note,
+      position: { x: bubbleX, y: bubbleY },
+      selection: note.selection,
+    });
+    setCurrentSelection(null);
+    setSelectionPosition(null);
+  }, []);
+
+  // State for bubble positions (calculated via useEffect)
+  const [bubblePositions, setBubblePositions] = useState<{ note: Note; x: number; y: number }[]>([]);
+
+  // Get notes with selection on current page
+  const notesWithSelectionOnPage = notes.filter(n => n.selection && n.selection.page === page);
+
+  // Update bubble positions when page/scale/notes change
+  useEffect(() => {
+    const updateBubblePositions = () => {
+      // Find the page container (react-pdf renders .react-pdf__Page inside our container)
+      const pageContainer = pageElementRef.current?.querySelector('.react-pdf__Page') ||
+                            pageElementRef.current?.querySelector('.textLayer')?.parentElement;
+
+      if (!pageContainer) {
+        setBubblePositions([]);
+        return;
+      }
+
+      const pageRect = pageContainer.getBoundingClientRect();
+      const positions: { note: Note; x: number; y: number }[] = [];
+
+      notesWithSelectionOnPage.forEach((note, index) => {
+        if (!note.selection) return;
+        const rightmostRect = note.selection.rects.reduce((max, r) =>
+          r.left + r.width > max.left + max.width ? r : max, note.selection.rects[0]);
+        const x = pageRect.left + (rightmostRect.left + rightmostRect.width) / 100 * pageRect.width;
+        const y = pageRect.top + rightmostRect.top / 100 * pageRect.height + (index * 24);
+        positions.push({ note, x, y });
+      });
+
+      setBubblePositions(positions);
+    };
+
+    // Run after render with a small delay to ensure DOM is ready
+    const timer = setTimeout(updateBubblePositions, 100);
+
+    // Update on resize
+    const resizeObserver = new ResizeObserver(updateBubblePositions);
+    if (pageElementRef.current) {
+      resizeObserver.observe(pageElementRef.current);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+    };
+  }, [notesWithSelectionOnPage, page, scale]);
+
+  // Render persistent yellow highlights
+  const renderPersistentHighlights = () => {
+    return notesWithSelectionOnPage.map(note => {
+      if (!note.selection) return null;
+      return note.selection.rects.map((rect, i) => {
+        const style = {
+          left: `${rect.left}%`,
+          top: `${rect.top}%`,
+          width: `${rect.width}%`,
+          height: `${rect.height}%`,
+          position: 'absolute' as const,
+          background: 'rgba(250, 204, 21, 0.35)',
+          pointerEvents: 'none' as const,
+          zIndex: 0,
+        };
+        return (
+          <div
+            key={`${note.id}-${i}`}
+            style={style}
+            data-highlight-id={note.id}
+          />
+        );
+      });
+    });
+  };
 
   const handlePageInputSubmit = useCallback(() => {
     const parsed = parseInt(editValue, 10);
@@ -121,8 +408,6 @@ export function PdfViewer({
     const handleMouseMove = (e: MouseEvent) => {
       const pageNum = calcPageFromMouseX(e.clientX);
       goToPage(pageNum);
-
-      // Update hover state so thumbnail follows during drag
       const bar = progressBarRef.current;
       if (bar) {
         const rect = bar.getBoundingClientRect();
@@ -211,7 +496,6 @@ export function PdfViewer({
     renderThumbnail(pageNum).then((canvas) => {
       if (canvas && thumbnailCanvasRef.current && pendingHoverPageRef.current === pageNum) {
         lastRenderedPageRef.current = pageNum;
-        // Imperative DOM: this container is managed outside React for canvas element insertion
         thumbnailCanvasRef.current.innerHTML = '';
         thumbnailCanvasRef.current.appendChild(canvas);
       }
@@ -410,13 +694,14 @@ export function PdfViewer({
 
   return (
     <div ref={viewerRef} className="flex flex-col h-full" tabIndex={-1}>
-      {/* Loading overlay - shown while PDF is loading */}
+      {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-50" style={{ color: 'var(--text-tertiary)', background: 'var(--bg-deep)' }}>
           <div className="animate-spin w-6 h-6 border-2 border-t-transparent rounded-full mb-3" style={{ borderColor: 'var(--accent)', borderTopColor: 'transparent' }} />
           <span className="text-sm">Loading PDF...</span>
         </div>
       )}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
@@ -501,7 +786,6 @@ export function PdfViewer({
           </button>
         </div>
         <div className="flex items-center gap-1.5">
-          {/* Bookmark button */}
           <button
             onClick={handleBookmarkClick}
             className="px-2 py-1 text-xs rounded-md transition-colors"
@@ -516,7 +800,6 @@ export function PdfViewer({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
             </svg>
           </button>
-          {/* Bookmark popover */}
           {showBookmarkPopover && (
             <div
               className="absolute right-0 top-full mt-1 rounded-lg z-20"
@@ -595,7 +878,7 @@ export function PdfViewer({
         onContextMenu={handleContextMenu}
       >
         <div className="text-center">
-          <div className="inline-block shadow-xl rounded overflow-hidden">
+          <div className="inline-block shadow-xl rounded overflow-hidden relative" ref={pageElementRef}>
             <Document
               file={url}
               onLoadSuccess={onDocumentLoadSuccess}
@@ -609,6 +892,10 @@ export function PdfViewer({
                 renderAnnotationLayer={true}
               />
             </Document>
+            {/* Persistent yellow highlights layer */}
+            <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+              {renderPersistentHighlights()}
+            </div>
           </div>
         </div>
       </div>
@@ -635,7 +922,6 @@ export function PdfViewer({
           aria-label="Page navigation"
           tabIndex={0}
         >
-          {/* Thumbnail preview popover */}
           {hoveredPage !== null && (
             <div
               className="absolute bottom-6 pointer-events-none z-10"
@@ -656,13 +942,11 @@ export function PdfViewer({
                   Page {hoveredPage}
                 </div>
               </div>
-              {/* Arrow */}
               <div className="flex justify-center -mt-px">
                 <div className="w-2.5 h-2.5 rotate-45 shadow-[2px_2px_4px_rgba(0,0,0,0.1)]" style={{ background: 'var(--surface)' }} />
               </div>
             </div>
           )}
-          {/* Filled track */}
           <div
             className="absolute top-0 left-0 h-full rounded-full"
             style={{
@@ -670,7 +954,6 @@ export function PdfViewer({
               background: 'var(--accent)',
             }}
           />
-          {/* Drag indicator */}
           <div
             className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 rounded-full shadow cursor-grab active:cursor-grabbing"
             style={{
@@ -681,7 +964,6 @@ export function PdfViewer({
             }}
             onMouseDown={handleBarDragStart}
           />
-          {/* Bookmark markers on progress bar */}
           {bookmarks.map((bookmark) => {
             const position = totalPages > 1 ? ((bookmark.page - 1) / (totalPages - 1)) * 100 : 0;
             return (
@@ -756,6 +1038,49 @@ export function PdfViewer({
           )}
         </div>
       )}
+
+      {/* Selection Toolbar */}
+      {currentSelection && selectionPosition && !editorPopup && (
+        <div data-selection-toolbar>
+          <SelectionToolbar
+            position={selectionPosition}
+            onClick={() => {
+              setEditorPopup({
+                mode: 'create',
+                position: selectionPosition,
+                selection: currentSelection,
+              });
+            }}
+          />
+        </div>
+      )}
+
+      {/* Annotation Bubbles */}
+      {bubblePositions.map(({ note, x, y }) => (
+        <AnnotationBubble
+          key={note.id}
+          note={note}
+          position={{ x, y }}
+          onClick={() => handleAnnotationClick(note)}
+        />
+      ))}
+
+      {/* Inline Note Editor */}
+      {editorPopup && (
+        <div data-note-editor>
+          <InlineNoteEditor
+            mode={editorPopup.mode}
+            note={editorPopup.note}
+            selection={editorPopup.selection}
+            triggerPosition={editorPopup.position}
+            onSave={editorPopup.mode === 'create' ? handleNoteCreate : handleNoteUpdate}
+            onDelete={editorPopup.mode === 'edit' ? handleNoteDelete : undefined}
+            onClose={() => setEditorPopup(null)}
+          />
+        </div>
+      )}
     </div>
   );
-}
+});
+
+PdfViewer.displayName = 'PdfViewer';
