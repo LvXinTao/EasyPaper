@@ -150,9 +150,9 @@ When user selects text in the PDF, capture the selection data:
 3. **Get selection rectangles:** `range.getClientRects()` returns viewport-relative coordinates
 4. **Convert to percentages:**
    ```typescript
-   // wrapperRef points to the .react-pdf__Page__canvas container (the rendered page)
-   // This is the same container used by react-pdf for the canvas and text layer
-   const pageElement = wrapperRef.current;  // .react-pdf__Page element
+   // pageElementRef points to the .react-pdf__Page__canvas container (the rendered page)
+   // This is obtained via react-pdf Page component's inputRef prop
+   const pageElement = pageElementRef.current;  // .react-pdf__Page element
    const pageRect = pageElement.getBoundingClientRect();
 
    const rects = Array.from(range.getClientRects()).map(rect => ({
@@ -341,7 +341,19 @@ User clicks AnnotationBubble or yellow highlight
 
 **Page-level notes:**
 - Only page badge (existing behavior)
-- Click → calls `onPageChange` to jump to page (existing behavior)
+- Click → calls `onSelect` to open NoteEditor (existing behavior)
+
+### Click Behavior
+
+**Sentence-level note card:**
+- **Click on card body** → `onNoteClick(note)` → scroll PDF to highlight (does NOT open editor)
+- **Click on page badge** → `onPageChange(page)` → navigate to page only (same as existing)
+
+**Page-level note card (existing behavior):**
+- **Click on card body** → `onSelect(note)` → open NoteEditor for editing
+- **Click on page badge** → `onPageChange(page)` → navigate to page
+
+The distinction: Sentence-level notes are viewed in the PDF via scroll-to-selection. Users edit them by clicking the annotation bubble in the PDF, not from the notes list. Page-level notes continue to open the editor from the list.
 
 ### Scroll-to-Selection Behavior
 
@@ -349,6 +361,39 @@ When clicking a sentence note:
 
 1. If note is on current page: scroll to highlight position immediately
 2. If note is on different page: navigate to that page first, wait for render, then scroll
+
+**Coordination between NotesPanel and PdfViewer:**
+
+Use `useImperativeHandle` to expose scroll method from PdfViewer:
+
+```typescript
+// In pdf-viewer.tsx
+export interface PdfViewerRef {
+  scrollToNote: (note: Note) => void;
+}
+
+const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>((props, ref) => {
+  useImperativeHandle(ref, () => ({
+    scrollToNote: (note: Note) => {
+      if (!note.selection || !scrollContainerRef.current) return;
+      // ... scroll logic below
+    },
+  }));
+
+  // ... rest of component
+});
+
+// In page.tsx
+const pdfViewerRef = useRef<PdfViewerRef>(null);
+
+const handleNoteClick = (note: Note) => {
+  if (note.selection) {
+    pdfViewerRef.current?.scrollToNote(note);
+  }
+};
+```
+
+**Scroll implementation:**
 
 ```typescript
 // Use a promise-based approach with react-pdf's render callback
@@ -362,7 +407,7 @@ const handlePageRenderSuccess = () => {
   }
 };
 
-async function scrollToSelection(note: Note) {
+async function scrollToNote(note: Note) {
   if (!note.selection || !scrollContainerRef.current) return;
 
   // Navigate to page if needed
