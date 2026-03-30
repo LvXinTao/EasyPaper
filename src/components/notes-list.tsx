@@ -15,6 +15,7 @@ interface NotesListProps {
   onSelect: (note: Note) => void;
   onNew: () => void;
   onPageClick: (page: number) => void;
+  onNoteClick?: (note: Note) => void;  // For sentence-level notes to scroll PDF
 }
 
 function stripMarkdown(text: string): string {
@@ -28,7 +29,17 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProps) {
+export function NotesList({ notes, onSelect, onNew, onPageClick, onNoteClick }: NotesListProps) {
+  const handleNoteClick = (note: Note) => {
+    // Sentence-level notes: scroll to highlight in PDF
+    if (note.selection && onNoteClick) {
+      onNoteClick(note);
+    } else {
+      // Page-level notes: open editor
+      onSelect(note);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -61,71 +72,103 @@ export function NotesList({ notes, onSelect, onNew, onPageClick }: NotesListProp
             <p className="text-sm">No notes yet</p>
           </div>
         ) : (
-          notes.map((note) => (
-            <div
-              key={note.id}
-              onClick={() => onSelect(note)}
-              className="rounded-lg p-3 cursor-pointer transition-colors"
-              style={{
-                background: 'var(--glass)',
-                border: '1px solid var(--glass-border)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)';
-              }}
-            >
-              <div className="flex items-start justify-between mb-1">
-                <h3
-                  className="text-sm font-semibold truncate flex-1 mr-2"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {note.title || 'Untitled'}
-                </h3>
-                {note.page != null && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onPageClick(note.page!); }}
-                    className="text-xs flex-shrink-0 transition-colors"
-                    style={{ color: 'var(--text-tertiary)' }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-tertiary)';
-                    }}
+          notes.map((note) => {
+            const isSentenceNote = !!note.selection;
+            return (
+              <div
+                key={note.id}
+                onClick={() => handleNoteClick(note)}
+                className="rounded-lg p-3 cursor-pointer transition-colors"
+                style={{
+                  background: 'var(--glass)',
+                  border: '1px solid var(--glass-border)',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--glass-border)';
+                }}
+              >
+                {/* Sentence-level note: show snippet badge */}
+                {isSentenceNote && note.selection && (
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-medium truncate max-w-[150px]"
+                      style={{
+                        background: 'rgba(250, 204, 21, 0.2)',
+                        color: 'rgb(250, 204, 21)',
+                      }}
+                      title={note.selection.text}
+                    >
+                      &quot;{note.selection.text.length > 30 ? note.selection.text.slice(0, 30) + '...' : note.selection.text}&quot;
+                    </span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onPageClick(note.selection!.page); }}
+                      className="text-xs flex-shrink-0 transition-colors"
+                      style={{ color: 'var(--text-tertiary)' }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-tertiary)';
+                      }}
+                    >
+                      p.{note.selection.page}
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-start justify-between mb-1">
+                  <h3
+                    className="text-sm font-semibold truncate flex-1 mr-2"
+                    style={{ color: 'var(--text-primary)' }}
                   >
-                    p.{note.page}
-                  </button>
+                    {note.title || 'Untitled'}
+                  </h3>
+                  {/* Page-level note: show page badge in header */}
+                  {!isSentenceNote && note.page != null && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onPageClick(note.page!); }}
+                      className="text-xs flex-shrink-0 transition-colors"
+                      style={{ color: 'var(--text-tertiary)' }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-tertiary)';
+                      }}
+                    >
+                      p.{note.page}
+                    </button>
+                  )}
+                </div>
+                {note.content && (
+                  <p
+                    className="text-xs line-clamp-2 mb-2 leading-relaxed"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {stripMarkdown(note.content)}
+                  </p>
+                )}
+                {note.tags.length > 0 && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    {note.tags.map((tag) => {
+                      const config = TAG_CONFIG[tag];
+                      return (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 rounded-full text-[11px]"
+                          style={{ background: config.bg, color: config.text }}
+                        >
+                          {config.label}
+                        </span>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {note.content && (
-                <p
-                  className="text-xs line-clamp-2 mb-2 leading-relaxed"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  {stripMarkdown(note.content)}
-                </p>
-              )}
-              {note.tags.length > 0 && (
-                <div className="flex gap-1.5 flex-wrap">
-                  {note.tags.map((tag) => {
-                    const config = TAG_CONFIG[tag];
-                    return (
-                      <span
-                        key={tag}
-                        className="px-2 py-0.5 rounded-full text-[11px]"
-                        style={{ background: config.bg, color: config.text }}
-                      >
-                        {config.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

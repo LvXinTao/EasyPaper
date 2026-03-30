@@ -14,7 +14,8 @@ import { ResizableDivider } from '@/components/resizable-divider';
 import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
-import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark } from '@/types';
+import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection } from '@/types';
+import type { PdfViewerRef } from '@/components/pdf-viewer';
 
 // Dynamic import for PdfViewer to skip SSR (required for react-pdf)
 const PdfViewer = dynamic(
@@ -52,6 +53,10 @@ export default function PaperDetailPage() {
   const [modelName, setModelName] = useState<string>('');
   const [noteCount, setNoteCount] = useState(0);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+
+  // Notes state (shared between PdfViewer and NotesPanel)
+  const [notes, setNotes] = useState<Note[]>([]);
+  const pdfViewerRef = useRef<PdfViewerRef>(null);
 
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
@@ -101,13 +106,21 @@ export default function PaperDetailPage() {
       .catch(() => {});
   }, []);
 
-  // Fetch note count for tab badge
-  useEffect(() => {
-    fetch(`/api/paper/${paperId}/notes`)
-      .then(r => r.json())
-      .then(d => { if (d.notes) setNoteCount(d.notes.length); })
-      .catch(() => {});
+  // Fetch notes (for PdfViewer highlights and note count)
+  const fetchNotes = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/notes`);
+      if (res.ok) {
+        const data: Note[] = await res.json();
+        setNotes(data.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+        setNoteCount(data.length);
+      }
+    } catch { /* ignore */ }
   }, [paperId]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
 
   // Fetch bookmarks
   const fetchBookmarks = useCallback(async () => {
@@ -147,6 +160,54 @@ export default function PaperDetailPage() {
       }
     } catch { /* ignore */ }
   }, [paperId, fetchBookmarks]);
+
+  // Note CRUD handlers for sentence-level notes
+  const handleNoteCreate = useCallback(async (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const note: Note = await res.json();
+        setNotes(prev => [note, ...prev]);
+        setNoteCount(prev => prev + 1);
+      }
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  const handleNoteUpdate = useCallback(async (note: Note) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/notes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(note),
+      });
+      if (res.ok) {
+        const updated: Note = await res.json();
+        setNotes(prev => prev.map(n => n.id === updated.id ? updated : n)
+          .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+      }
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  const handleNoteDelete = useCallback(async (noteId: string) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}/notes?noteId=${noteId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setNotes(prev => prev.filter(n => n.id !== noteId));
+        setNoteCount(prev => prev - 1);
+      }
+    } catch { /* ignore */ }
+  }, [paperId]);
+
+  // Handle click on sentence-level note in NotesPanel -> scroll PDF to highlight
+  const handleNoteClick = useCallback((note: Note) => {
+    pdfViewerRef.current?.scrollToNote(note);
+  }, []);
 
   // Fetch sessions on mount and when paper data loads
   const fetchSessions = useCallback(async () => {
@@ -534,6 +595,7 @@ export default function PaperDetailPage() {
         {/* Left: PDF Viewer */}
         <div style={{ width: `${effectiveLeftWidth}px`, minWidth: '300px', flexShrink: 0 }}>
           <PdfViewer
+            ref={pdfViewerRef}
             url={`/api/paper/${paperId}/pdf`}
             currentPage={currentPage}
             onPageChange={setCurrentPage}
@@ -541,6 +603,10 @@ export default function PaperDetailPage() {
             onAddBookmark={handleAddBookmark}
             onRemoveBookmark={handleRemoveBookmark}
             onBookmarksChange={() => setActiveTab('bookmarks')}
+            notes={notes}
+            onNoteCreate={handleNoteCreate}
+            onNoteUpdate={handleNoteUpdate}
+            onNoteDelete={handleNoteDelete}
           />
         </div>
 
@@ -631,6 +697,7 @@ export default function PaperDetailPage() {
                   paperId={paperId}
                   currentPage={currentPage}
                   onPageChange={setCurrentPage}
+                  onNoteClick={handleNoteClick}
                 />
               ) : (
                 <BookmarksPanel

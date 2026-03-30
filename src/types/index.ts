@@ -115,12 +115,26 @@ export interface Folder {
 
 export type NoteTag = 'important' | 'question' | 'todo' | 'idea' | 'summary';
 
+export interface HighlightRect {
+  left: number;    // Percentage (0-100) of page width
+  top: number;     // Percentage (0-100) of page height
+  width: number;   // Percentage (0-100) of page width
+  height: number;  // Percentage (0-100) of page height
+}
+
+export interface TextSelection {
+  text: string;              // The selected text content
+  rects: HighlightRect[];    // Rectangle positions as percentages
+  page: number;              // Page number (1-indexed)
+}
+
 export interface Note {
   id: string;
   title: string;
   content: string;
   tags: NoteTag[];
-  page?: number;
+  page?: number;                    // Legacy: page-level reference (for existing notes)
+  selection?: TextSelection;        // New: sentence-level selection
   createdAt: string;
   updatedAt: string;
 }

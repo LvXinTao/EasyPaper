@@ -9,9 +9,10 @@ interface NotesPanelProps {
   paperId: string;
   currentPage: number;
   onPageChange: (page: number) => void;
+  onNoteClick?: (note: Note) => void;  // For sentence-level notes to scroll PDF
 }
 
-export function NotesPanel({ paperId, currentPage, onPageChange }: NotesPanelProps) {
+export function NotesPanel({ paperId, currentPage, onPageChange, onNoteClick }: NotesPanelProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<'list' | 'edit'>('list');
@@ -123,6 +124,7 @@ export function NotesPanel({ paperId, currentPage, onPageChange }: NotesPanelPro
           onSelect={handleSelect}
           onNew={handleNew}
           onPageClick={onPageChange}
+          onNoteClick={onNoteClick}
         />
       ) : (
         <NoteEditor
