@@ -35,6 +35,8 @@ interface PdfViewerProps {
   onNoteCreate?: (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => Promise<void>;
   onNoteUpdate?: (note: Note) => Promise<void>;
   onNoteDelete?: (noteId: string) => Promise<void>;
+  // Ask AI about selected text
+  onAskAI?: (selection: TextSelection) => void;
 }
 
 export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
@@ -49,6 +51,7 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
   onNoteCreate,
   onNoteUpdate,
   onNoteDelete,
+  onAskAI,
 }, ref) => {
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -1086,8 +1089,8 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
               });
             }}
             onAskAI={() => {
-              // TODO: Implement in Task 6 - Ask AI about selected text
-              console.log('Ask AI about:', currentSelection);
+              onAskAI?.(currentSelection);
+              window.getSelection()?.removeAllRanges();
             }}
           />
         </div>
