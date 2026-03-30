@@ -20,6 +20,31 @@ function generateSessionId(): string {
   return `session_${Date.now()}_${suffix}`;
 }
 
+// Simple mutex for concurrent metadata updates per paperId
+const metadataLocks = new Map<string, Promise<void>>();
+
+async function withMetadataLock<T>(paperId: string, fn: () => Promise<T>): Promise<T> {
+  // Wait for any existing operation on this paperId
+  const existingLock = metadataLocks.get(paperId);
+  let resolveLock: () => void;
+  const newLock = new Promise<void>((resolve) => { resolveLock = resolve; });
+
+  if (existingLock) {
+    metadataLocks.set(paperId, existingLock.then(() => newLock));
+    await existingLock;
+  } else {
+    metadataLocks.set(paperId, newLock);
+  }
+
+  try {
+    const result = await fn();
+    return result;
+  } finally {
+    resolveLock!();
+    metadataLocks.delete(paperId);
+  }
+}
+
 export const storage = {
   async createPaperDir(paperId: string): Promise<void> {
     const dir = paperDir(paperId);
@@ -35,12 +60,14 @@ export const storage = {
     return JSON.parse(content);
   },
   async updateMetadata(paperId: string, updates: Partial<PaperMetadata>): Promise<PaperMetadata> {
-    const current = await this.getMetadata(paperId);
-    const { id: _ignoreId, ...safeUpdates } = updates;
-    void _ignoreId; // Explicitly ignore id to prevent overwriting
-    const merged = { ...current, ...safeUpdates };
-    await this.saveMetadata(paperId, merged);
-    return merged;
+    return withMetadataLock(paperId, async () => {
+      const current = await this.getMetadata(paperId);
+      const { id: _ignoreId, ...safeUpdates } = updates;
+      void _ignoreId; // Explicitly ignore id to prevent overwriting
+      const merged = { ...current, ...safeUpdates };
+      await this.saveMetadata(paperId, merged);
+      return merged;
+    });
   },
   async savePdf(paperId: string, buffer: Buffer): Promise<void> {
     const filePath = path.join(paperDir(paperId), 'original.pdf');

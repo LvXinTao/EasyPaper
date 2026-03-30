@@ -38,7 +38,22 @@ export default function HomePage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Initial load on mount
   useEffect(() => { fetchPapers(); fetchFolders(); }, [fetchPapers, fetchFolders]);
+
+  // Refresh papers when page becomes visible again (e.g., returning from detail page)
+  // Also reset folder filter to show all papers (new uploads have folderId=null)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPapers();
+        // Reset folder filter so newly uploaded papers are visible
+        setSelectedFolderId(null);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchPapers]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this paper?')) return;
