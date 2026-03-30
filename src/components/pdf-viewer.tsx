@@ -19,6 +19,7 @@ const THUMBNAIL_CACHE_SIZE = 50;
 
 export interface PdfViewerRef {
   scrollToNote: (note: Note) => void;
+  scrollToQuote: (quote: TextSelection) => void;
 }
 
 interface PdfViewerProps {
@@ -143,6 +144,39 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
       }
 
       const topPercent = note.selection.rects[0]?.top || 0;
+      const container = scrollContainerRef.current;
+      const scrollY = (topPercent / 100) * container.scrollHeight;
+      container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
+    },
+    scrollToQuote: async (quote: TextSelection) => {
+      if (!scrollContainerRef.current) return;
+
+      // Navigate to page if needed
+      if (quote.page !== page) {
+        pageRenderPromiseRef.current = new Promise<void>((resolve) => {
+          let cancelled = false;
+          const timeoutId = setTimeout(() => {
+            cancelled = true;
+            resolve();
+          }, 5000);
+
+          const checkRender = () => {
+            if (cancelled) return;
+            if (pageElementRef.current) {
+              clearTimeout(timeoutId);
+              requestAnimationFrame(() => resolve());
+            } else {
+              setTimeout(checkRender, 50);
+            }
+          };
+          checkRender();
+        });
+
+        goToPage(quote.page);
+        await pageRenderPromiseRef.current;
+      }
+
+      const topPercent = quote.rects[0]?.top || 0;
       const container = scrollContainerRef.current;
       const scrollY = (topPercent / 100) * container.scrollHeight;
       container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
