@@ -155,7 +155,13 @@ function StreamingParsePreview({ progress, content, avgBatchTime }: StreamingPar
 
       {/* Markdown scrolling area */}
       <div ref={scrollRef} className="flex-1 overflow-auto p-3">
-        {content && <MarkdownContent content={content} />}
+        {content ? (
+          <MarkdownContent content={content} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            Parsing PDF content...
+          </div>
+        )}
       </div>
     </div>
   );

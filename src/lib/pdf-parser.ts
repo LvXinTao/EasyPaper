@@ -102,6 +102,8 @@ export async function parsePdfWithVision(
     if (validImages.length <= BATCH_SIZE) {
       // Single batch — no parallelism needed
       onProgress(`Parsing with Vision AI (${validImages.length} pages)...`);
+      // Send initial batch event to show streaming preview
+      if (onBatchDone) onBatchDone(0, 1, '');
       const batchResult = await executeBatchWithRetry(client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, signal);
       if (onBatchDone) onBatchDone(0, 1, batchResult);
       result = batchResult;
