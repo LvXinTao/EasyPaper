@@ -35,7 +35,7 @@ export function MessageQuote({ quote, onJumpToQuote }: MessageQuoteProps) {
         <span style={{ color: 'var(--accent)', fontSize: '10px' }}>P.{quote.page}</span>
       </div>
       <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', margin: 0, fontStyle: 'italic', fontFamily: 'serif' }}>
-        "{quote.text}"
+        &ldquo;{quote.text}&rdquo;
       </p>
     </div>
   );

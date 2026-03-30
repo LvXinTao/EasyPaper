@@ -28,7 +28,7 @@ export function ChatInput({ onSend, disabled, pendingQuote, onClearQuote }: Chat
             <span style={{ color: 'var(--text-tertiary)', fontSize: '10px' }}>第 {pendingQuote.page} 页</span>
             <button onClick={onClearQuote} style={{ marginLeft: 'auto', padding: '2px 6px', border: '1px solid var(--border)', borderRadius: '4px', fontSize: '10px', cursor: 'pointer' }}>清除</button>
           </div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0, fontStyle: 'italic', fontFamily: 'serif' }}>"{pendingQuote.text}"</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0, fontStyle: 'italic', fontFamily: 'serif' }}>&ldquo;{pendingQuote.text}&rdquo;</p>
         </div>
       )}
       <div className="flex gap-2 pt-3">
