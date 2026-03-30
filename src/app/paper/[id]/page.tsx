@@ -331,7 +331,26 @@ export default function PaperDetailPage() {
                 setSSEMessage(event.message || null);
               }
               if (event.type === 'parse_batch_done') {
-                setParseBatchProgress({ done: event.batchIndex + 1, total: event.totalBatches });
+                const batchIndex = event.batchIndex;
+                const totalBatches = event.totalBatches;
+
+                // Update progress
+                setParseBatchProgress({ done: batchIndex + 1, total: totalBatches });
+
+                // Accumulate content
+                setStreamingParsedContent(prev => {
+                  if (prev === '') return event.content;
+                  return prev + '\n\n---\n\n' + event.content;
+                });
+
+                // Calculate time estimation
+                if (parseStartTime === null) {
+                  setParseStartTime(Date.now());
+                } else if (batchIndex >= 1) {
+                  const elapsed = Date.now() - parseStartTime;
+                  const avgTime = elapsed / (batchIndex + 1);
+                  setAvgBatchTime(avgTime);
+                }
               }
               if ('section' in event) {
                 setAnalysis(prev => prev || {
