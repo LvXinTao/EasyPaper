@@ -1,13 +1,18 @@
 import { storage } from '@/lib/storage';
 import { createAIClient } from '@/lib/ai-client';
 import { createErrorResponse } from '@/lib/errors';
-import { CHAT_PROMPT } from '@/lib/prompts';
+import { CHAT_PROMPT, buildQuoteContext } from '@/lib/prompts';
 import { getAIConfig } from '@/lib/ai-config';
-import type { ChatSession } from '@/types';
+import type { ChatSession, TextSelection } from '@/types';
 
 export async function POST(request: Request) {
   try {
-    const { paperId, sessionId, message } = await request.json();
+    const { paperId, sessionId, message, quote } = await request.json() as {
+      paperId: string;
+      sessionId?: string;
+      message: string;
+      quote?: TextSelection;
+    };
     if (!paperId) return createErrorResponse('VALIDATION_ERROR', 'paperId is required');
     if (!message) return createErrorResponse('VALIDATION_ERROR', 'message is required');
     const exists = await storage.paperExists(paperId);
@@ -28,14 +33,23 @@ export async function POST(request: Request) {
 
     const parsedContent = await storage.getParsedContent(paperId);
     const historyStr = session.messages.map((m) => `${m.role}: ${m.content}`).join('\n');
+    const quoteContext = buildQuoteContext(quote);
     const promptSettings = await storage.getPromptSettings();
-    const chatPromptTemplate = promptSettings?.chat?.custom || CHAT_PROMPT;
-    const prompt = chatPromptTemplate.replaceAll('{content}', parsedContent || '').replaceAll('{history}', historyStr).replaceAll('{question}', message);
+    let chatPromptTemplate = promptSettings?.chat?.custom || CHAT_PROMPT;
+    // Inject quoteContext placeholder if not present in custom prompt
+    if (!chatPromptTemplate.includes('{quoteContext}')) {
+      chatPromptTemplate = chatPromptTemplate.replace('User question:', '{quoteContext}\n\nUser question:');
+    }
+    const prompt = chatPromptTemplate
+      .replaceAll('{content}', parsedContent || '')
+      .replaceAll('{history}', historyStr)
+      .replaceAll('{quoteContext}', quoteContext)
+      .replaceAll('{question}', message);
     const client = createAIClient({ baseUrl, apiKey, model });
     const encoder = new TextEncoder();
 
     // Persist user message immediately so it survives stream aborts (e.g. session switching)
-    session.messages.push({ role: 'user', content: message });
+    session.messages.push({ role: 'user', content: message, quote });
     if (session.title === 'New Chat') {
       session.title = message.slice(0, 30);
     }
