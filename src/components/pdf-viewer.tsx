@@ -1044,12 +1044,16 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
         <div data-selection-toolbar>
           <SelectionToolbar
             position={selectionPosition}
-            onClick={() => {
+            onNoteCreate={() => {
               setEditorPopup({
                 mode: 'create',
                 position: selectionPosition,
                 selection: currentSelection,
               });
+            }}
+            onAskAI={() => {
+              // TODO: Implement in Task 6 - Ask AI about selected text
+              console.log('Ask AI about:', currentSelection);
             }}
           />
         </div>
