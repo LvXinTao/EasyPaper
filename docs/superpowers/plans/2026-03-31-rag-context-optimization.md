@@ -360,6 +360,18 @@ Create `__tests__/lib/embedding.test.ts`:
 ```typescript
 import { getEmbeddingConfig, generateEmbeddings } from '@/lib/embedding';
 
+// Mock storage module
+jest.mock('@/lib/storage', () => ({
+  storage: {
+    getSettings: jest.fn().mockResolvedValue(null),
+  },
+}));
+
+// Mock crypto module
+jest.mock('@/lib/crypto', () => ({
+  decryptApiKey: jest.fn(),
+}));
+
 global.fetch = jest.fn();
 
 describe('embedding', () => {
@@ -1029,8 +1041,55 @@ git commit -m "feat(api): add embed endpoint for embedding generation
 
 **Files:**
 - Create: `src/app/api/embed/regenerate-all/route.ts`
+- Create: `__tests__/api/regenerate-all.test.ts`
 
-- [ ] **Step 1: Implement regenerate-all endpoint**
+- [ ] **Step 1: Write failing test for regenerate-all endpoint**
+
+Create `__tests__/api/regenerate-all.test.ts`:
+
+```typescript
+import { POST } from '@/app/api/embed/regenerate-all/route';
+
+jest.mock('@/lib/storage', () => ({
+  storage: {
+    listPapers: jest.fn().mockResolvedValue([
+      { id: 'paper-1', status: 'analyzed' },
+      { id: 'paper-2', status: 'analyzed' },
+    ]),
+  },
+}));
+
+jest.mock('@/lib/embedding', () => ({
+  generatePaperEmbeddings: jest.fn().mockResolvedValue({
+    chunks: [],
+    embeddings: [],
+    generatedAt: '2026-03-31T10:00:00Z',
+    model: 'test-model',
+  }),
+}));
+
+describe('/api/embed/regenerate-all', () => {
+  it('should regenerate embeddings for all analyzed papers', async () => {
+    const request = new Request('http://localhost/api/embed/regenerate-all', {
+      method: 'POST',
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.total).toBe(2);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `npx jest __tests__/api/regenerate-all.test.ts`
+Expected: FAIL with module not found
+
+- [ ] **Step 3: Implement regenerate-all endpoint**
 
 Create `src/app/api/embed/regenerate-all/route.ts`:
 
@@ -1064,6 +1123,10 @@ export async function POST(request: Request) {
 
     for (const batch of chunk(analyzedPapers, BATCH_SIZE)) {
       await Promise.all(batch.map(async (paper) => {
+        // generatePaperEmbeddings handles all metadata updates internally:
+        // - Sets embeddingStatus: 'generating' before starting
+        // - Sets embeddingStatus: 'generated' + embeddingGeneratedAt on success
+        // - Sets embeddingStatus: 'error' + embeddingError on failure
         try {
           await generatePaperEmbeddings(paper.id);
           successCount++;
@@ -1091,15 +1154,21 @@ export async function POST(request: Request) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `npx jest __tests__/api/regenerate-all.test.ts`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/app/api/embed/regenerate-all/route.ts
+git add src/app/api/embed/regenerate-all/route.ts __tests__/api/regenerate-all.test.ts
 git commit -m "feat(api): add regenerate-all endpoint for batch embedding
 
 - Process papers in batches of 5
 - Add 1s delay between batches for rate limiting
-- Return success/error counts"
+- Return success/error counts
+- Note: generatePaperEmbeddings handles per-paper metadata updates"
 ```
 
 ---
@@ -1276,7 +1345,7 @@ git commit -m "feat(chat): integrate RAG for context optimization
 
 Update `src/components/settings-form.tsx` to add embedding fields:
 
-Add to the SettingsData interface:
+**1. Update SettingsData interface:**
 ```typescript
 interface SettingsData {
   baseUrl: string;
@@ -1289,7 +1358,42 @@ interface SettingsData {
 }
 ```
 
-Add embedding model input after Vision Model input:
+**2. Update initial state in useState:**
+```typescript
+  const [settings, setSettings] = useState<SettingsData>({
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o',
+    visionModel: 'gpt-4o',
+    hasApiKey: false,
+    embeddingModel: 'text-embedding-3-small',
+    useSameApiForEmbedding: true,
+  });
+```
+
+**3. Update loadSettings useEffect to include new fields:**
+```typescript
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        setSettings({
+          baseUrl: data.baseUrl || 'https://api.openai.com/v1',
+          model: data.model || 'gpt-4o',
+          visionModel: data.visionModel || 'gpt-4o',
+          hasApiKey: data.hasApiKey || false,
+          embeddingModel: data.embeddingModel || 'text-embedding-3-small',
+          useSameApiForEmbedding: data.useSameApiForEmbedding !== false,
+        });
+      } catch {
+        // Use defaults
+      }
+    }
+    loadSettings();
+  }, []);
+```
+
+**4. Add embedding model input after Vision Model input (around line 133):**
 ```tsx
       <div className="mb-6 pb-6" style={{ borderBottom: '1px solid var(--border)' }}>
         <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>Embedding Settings</h3>
@@ -1320,7 +1424,7 @@ Add embedding model input after Vision Model input:
       </div>
 ```
 
-Update handleSave to include embedding settings:
+**5. Update handleSave to include embedding settings:**
 ```typescript
       const body: Record<string, string | boolean> = {
         baseUrl: settings.baseUrl,
@@ -1337,22 +1441,22 @@ Update handleSave to include embedding settings:
 git add src/components/settings-form.tsx
 git commit -m "feat(settings): add embedding model configuration UI
 
-- Add embedding model text input
-- Add 'use same API' checkbox
-- Include in save payload"
+- Add embedding model text input with default
+- Add 'use same API' checkbox (default checked)
+- Include new fields in loadSettings and handleSave"
 ```
 
 ### Task 10: Add "Get More Context" Button to Chat
 
 **Files:**
 - Modify: `src/components/chat-messages.tsx`
-- Modify: `src/app/paper/[id]/page.tsx`
+- Modify: `src/app/paper/[id]/page.tsx` (actual path: verify with `ls src/app/paper`)
 
 - [ ] **Step 1: Add expandContext support to ChatMessages**
 
 Update `src/components/chat-messages.tsx`:
 
-Add to interface:
+**1. Update interface:**
 ```typescript
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -1364,7 +1468,12 @@ interface ChatMessagesProps {
 }
 ```
 
-Add button after message rendering:
+**2. Update function signature:**
+```typescript
+export function ChatMessages({ messages, streamingContent, isStreaming, onJumpToQuote, lowConfidence, onExpandContext }: ChatMessagesProps) {
+```
+
+**3. Add button before the `<div ref={bottomRef} />` line (around line 85):**
 ```tsx
       {messages.length > 0 && !isStreaming && onExpandContext && (
         <div className="flex justify-start">
@@ -1387,12 +1496,12 @@ Add button after message rendering:
 
 Update `src/app/paper/[id]/page.tsx`:
 
-Add state for low confidence:
+**1. Add state for low confidence (around line 60):**
 ```typescript
   const [lowConfidence, setLowConfidence] = useState(false);
 ```
 
-Update handleSendMessage to track lowConfidence and support expandContext:
+**2. Replace handleSendMessage function (lines 493-566) with updated version:**
 ```typescript
   const handleSendMessage = useCallback(
     async (message: string, expandContext: boolean = false) => {
@@ -1410,14 +1519,58 @@ Update handleSendMessage to track lowConfidence and support expandContext:
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend, expandContext }),
         });
-        // ... rest of streaming logic
+        if (!response.ok) throw new Error('Failed to send message');
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.content) {
+                fullResponse += data.content;
+                if (activeSessionIdRef.current === sendingSessionId) {
+                  setStreamingContent(fullResponse);
+                  setIsChatStreaming(true);
+                }
+              }
               if (data.done) {
                 if (data.lowConfidence) {
                   setLowConfidence(true);
                 }
-                // ... rest
+                if (activeSessionIdRef.current === sendingSessionId) {
+                  setChatMessages((prev) => [
+                    ...prev,
+                    { role: 'assistant', content: fullResponse },
+                  ]);
+                  setStreamingContent('');
+                }
+                if (data.sessionId && !sendingSessionId) {
+                  setActiveSessionId(data.sessionId);
+                }
+                fetchSessions();
               }
-        // ...
+            } catch { }
+          }
+        }
+      } catch (error) {
+        console.error('Chat error:', error);
+      } finally {
+        if (activeSessionIdRef.current === sendingSessionId) {
+          setIsChatStreaming(false);
+        }
       }
     },
     [paperId, activeSessionId, fetchSessions, pendingQuote]
@@ -1431,7 +1584,7 @@ Update handleSendMessage to track lowConfidence and support expandContext:
   }, [chatMessages, handleSendMessage]);
 ```
 
-Pass props to ChatMessages:
+**3. Update ChatMessages props (around line 926):**
 ```tsx
               <ChatMessages
                 messages={chatMessages}
@@ -1462,7 +1615,7 @@ git commit -m "feat(chat): add 'Get more context' button
 
 - [ ] **Step 1: Add useEffect to trigger embedding after analysis**
 
-Add to `src/app/paper/[id]/page.tsx`:
+Add to `src/app/paper/[id]/page.tsx` after the refetch useEffect (around line 89):
 
 ```typescript
   // Trigger embedding generation after analysis completes
@@ -1506,11 +1659,13 @@ Expected: No errors
 Run: `npm run build`
 Expected: Build succeeds
 
-- [ ] **Step 4: Final commit**
+- [ ] **Step 4: Final commit (if any files were modified)**
 
 ```bash
-git add -A
-git commit -m "chore: verify all tests pass for RAG implementation"
+# Only if there are uncommitted changes from fixes
+git status
+# Add specific files if needed, not -A
+git commit -m "chore: fix any remaining issues for RAG implementation"
 ```
 
 ### Task 13: Update Documentation
