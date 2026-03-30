@@ -17,6 +17,7 @@ interface ParseConfig {
 interface ParseOptions {
   onProgress?: (message: string) => void;
   onBatchDone?: (batchIndex: number, totalBatches: number, content: string) => void;
+  onChunk?: (batchIndex: number, chunk: string) => void; // Real-time chunk callback
   signal?: AbortSignal;
   customVisionPrompt?: string;
 }
@@ -60,7 +61,7 @@ export async function parsePdfWithVision(
   config: ParseConfig,
   options: ParseOptions = {},
 ): Promise<string> {
-  const { onProgress = () => {}, onBatchDone, signal, customVisionPrompt } = options;
+  const { onProgress = () => {}, onBatchDone, onChunk, signal, customVisionPrompt } = options;
 
   // 1. Load PDF with mupdf (dynamic import to avoid Turbopack ESM/WASM issues)
   const mupdf = await loadMupdf();
@@ -104,7 +105,11 @@ export async function parsePdfWithVision(
       onProgress(`Parsing with Vision AI (${validImages.length} pages)...`);
       // Send initial batch event to show streaming preview
       if (onBatchDone) onBatchDone(0, 1, '');
-      const batchResult = await executeBatchWithRetry(client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, signal);
+      const batchResult = await executeBatchWithRetry(
+        client, validImages, customVisionPrompt || PDF_PARSE_PROMPT, signal,
+        undefined, // onRateLimit
+        onChunk ? (chunk: string) => onChunk(0, chunk) : undefined,
+      );
       if (onBatchDone) onBatchDone(0, 1, batchResult);
       result = batchResult;
     } else {
@@ -149,10 +154,14 @@ export async function parsePdfWithVision(
                   .replace('{endPage}', String(batch.endPage))
                   .replace('{totalPages}', String(validImages.length));
 
-            executeBatchWithRetry(client, batch.images, prompt, signal, (retryAfterMs) => {
-              // 429 callback: pause the pool
-              rateLimitPauseUntil = Math.max(rateLimitPauseUntil, Date.now() + retryAfterMs);
-            })
+            executeBatchWithRetry(
+              client, batch.images, prompt, signal,
+              (retryAfterMs) => {
+                // 429 callback: pause the pool
+                rateLimitPauseUntil = Math.max(rateLimitPauseUntil, Date.now() + retryAfterMs);
+              },
+              onChunk ? (chunk: string) => onChunk(idx, chunk) : undefined,
+            )
               .then((content) => {
                 batchResults[idx] = content;
                 if (onBatchDone) onBatchDone(idx, totalBatches, content);
@@ -242,6 +251,7 @@ async function executeBatchWithRetry(
   prompt: string,
   externalSignal?: AbortSignal,
   onRateLimit?: (retryAfterMs: number) => void,
+  onChunk?: (chunk: string) => void, // Real-time chunk callback
 ): Promise<string> {
   const content: ContentPart[] = [
     { type: 'text', text: prompt },
@@ -283,6 +293,7 @@ async function executeBatchWithRetry(
         mergedSignal,
       )) {
         result += chunk;
+        if (onChunk) onChunk(chunk); // Real-time chunk callback
         resetIdleTimeout(); // Reset timer on each chunk
       }
 

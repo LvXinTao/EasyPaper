@@ -82,6 +82,7 @@ export type AnalyzeEvent =
   | { step: 'analyzing'; message?: string }
   | { step: 'saving'; message?: string }
   | { type: 'parse_batch_done'; batchIndex: number; totalBatches: number; content: string }
+  | { type: 'parse_chunk'; batchIndex: number; chunk: string }
   | { section: string; content: string }
   | { done: true }
   | { error: string };

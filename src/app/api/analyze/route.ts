@@ -48,6 +48,9 @@ async function runAnalysis(paperId: string, config: AIConfig, send: SendFn): Pro
             },
           }).catch(() => {});
         },
+        onChunk: (batchIndex, chunk) => {
+          send({ type: 'parse_chunk', batchIndex, chunk });
+        },
         customVisionPrompt,
       });
       await storage.saveParsedContent(paperId, markdown);

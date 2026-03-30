@@ -46,6 +46,7 @@ export default function PaperDetailPage() {
   const [streamingParsedContent, setStreamingParsedContent] = useState<string>('');
   // Time estimation for parsing progress
   const parseStartTimeRef = useRef<number | null>(null);
+  const currentBatchIndexRef = useRef<number>(-1); // Track which batch we're streaming
   const [avgBatchTime, setAvgBatchTime] = useState<number>(0);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -277,6 +278,7 @@ export default function PaperDetailPage() {
     setParseBatchProgress(null);
     setStreamingParsedContent('');
     parseStartTimeRef.current = null;
+    currentBatchIndexRef.current = -1;
     setAvgBatchTime(0);
 
     try {
@@ -340,12 +342,6 @@ export default function PaperDetailPage() {
                 // Update progress
                 setParseBatchProgress({ done: batchIndex + 1, total: totalBatches });
 
-                // Accumulate content
-                setStreamingParsedContent(prev => {
-                  if (prev === '') return event.content;
-                  return prev + '\n\n---\n\n' + event.content;
-                });
-
                 // Calculate time estimation
                 if (parseStartTimeRef.current === null) {
                   parseStartTimeRef.current = Date.now();
@@ -354,6 +350,20 @@ export default function PaperDetailPage() {
                   const avgTime = elapsed / (batchIndex + 1);
                   setAvgBatchTime(avgTime);
                 }
+              }
+              if (event.type === 'parse_chunk') {
+                // Real-time chunk streaming - append to content
+                const batchIndex = event.batchIndex;
+                setStreamingParsedContent(prev => {
+                  // Add separator when starting a new batch
+                  if (currentBatchIndexRef.current !== batchIndex) {
+                    currentBatchIndexRef.current = batchIndex;
+                    if (prev !== '') {
+                      return prev + '\n\n---\n\n' + event.chunk;
+                    }
+                  }
+                  return prev + event.chunk;
+                });
               }
               if ('section' in event) {
                 setAnalysis(prev => prev || {
