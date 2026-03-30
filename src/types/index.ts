@@ -39,6 +39,7 @@ export interface PaperAnalysis {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  quote?: TextSelection;  // 新增：引用文本及位置信息
 }
 
 export interface ChatHistory {

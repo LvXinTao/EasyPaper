@@ -154,3 +154,20 @@ export const PROMPT_PRESETS = {
     zh: { label: '中文', content: CHAT_PROMPT_ZH },
   },
 };
+
+import type { TextSelection } from '@/types';
+
+export function buildQuoteContext(quote: TextSelection | null | undefined): string {
+  if (!quote) return '';
+  return `[QUOTE CONTEXT - USER IS ASKING ABOUT THIS SPECIFIC TEXT]
+
+The user has selected and is asking about the following text from the paper (Page ${quote.page}):
+
+"""
+${quote.text}
+"""
+
+IMPORTANT: Your answer should PRIMARILY focus on explaining this quoted text. You may reference other parts of the paper for context, but the core of your response should address the user's question about this specific quote.
+
+[END QUOTE CONTEXT]`;
+}

@@ -19,6 +19,7 @@ const THUMBNAIL_CACHE_SIZE = 50;
 
 export interface PdfViewerRef {
   scrollToNote: (note: Note) => void;
+  scrollToQuote: (quote: TextSelection) => void;
 }
 
 interface PdfViewerProps {
@@ -34,6 +35,8 @@ interface PdfViewerProps {
   onNoteCreate?: (data: { title: string; content: string; tags: NoteTag[]; selection: TextSelection }) => Promise<void>;
   onNoteUpdate?: (note: Note) => Promise<void>;
   onNoteDelete?: (noteId: string) => Promise<void>;
+  // Ask AI about selected text
+  onAskAI?: (selection: TextSelection) => void;
 }
 
 export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
@@ -48,6 +51,7 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
   onNoteCreate,
   onNoteUpdate,
   onNoteDelete,
+  onAskAI,
 }, ref) => {
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
@@ -143,6 +147,39 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
       }
 
       const topPercent = note.selection.rects[0]?.top || 0;
+      const container = scrollContainerRef.current;
+      const scrollY = (topPercent / 100) * container.scrollHeight;
+      container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
+    },
+    scrollToQuote: async (quote: TextSelection) => {
+      if (!scrollContainerRef.current) return;
+
+      // Navigate to page if needed
+      if (quote.page !== page) {
+        pageRenderPromiseRef.current = new Promise<void>((resolve) => {
+          let cancelled = false;
+          const timeoutId = setTimeout(() => {
+            cancelled = true;
+            resolve();
+          }, 5000);
+
+          const checkRender = () => {
+            if (cancelled) return;
+            if (pageElementRef.current) {
+              clearTimeout(timeoutId);
+              requestAnimationFrame(() => resolve());
+            } else {
+              setTimeout(checkRender, 50);
+            }
+          };
+          checkRender();
+        });
+
+        goToPage(quote.page);
+        await pageRenderPromiseRef.current;
+      }
+
+      const topPercent = quote.rects[0]?.top || 0;
       const container = scrollContainerRef.current;
       const scrollY = (topPercent / 100) * container.scrollHeight;
       container.scrollTo({ top: scrollY - 50, behavior: 'smooth' });
@@ -1044,12 +1081,16 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
         <div data-selection-toolbar>
           <SelectionToolbar
             position={selectionPosition}
-            onClick={() => {
+            onNoteCreate={() => {
               setEditorPopup({
                 mode: 'create',
                 position: selectionPosition,
                 selection: currentSelection,
               });
+            }}
+            onAskAI={() => {
+              onAskAI?.(currentSelection);
+              window.getSelection()?.removeAllRanges();
             }}
           />
         </div>

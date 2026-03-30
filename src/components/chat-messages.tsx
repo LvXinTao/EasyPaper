@@ -1,17 +1,19 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, TextSelection } from '@/types';
 import { useTypewriter } from '@/hooks/use-typewriter';
 import { MarkdownContent } from './markdown-content';
+import { MessageQuote } from './message-quote';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
   streamingContent?: string;
   isStreaming?: boolean;
+  onJumpToQuote?: (quote: TextSelection) => void;
 }
 
-export function ChatMessages({ messages, streamingContent, isStreaming }: ChatMessagesProps) {
+export function ChatMessages({ messages, streamingContent, isStreaming, onJumpToQuote }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { displayedText, isTyping } = useTypewriter(streamingContent || '', {
     isStreaming,
@@ -51,6 +53,9 @@ export function ChatMessages({ messages, streamingContent, isStreaming }: ChatMe
                 : { background: 'var(--glass)', color: 'var(--text-secondary)' }
             }
           >
+            {msg.role === 'user' && msg.quote && (
+              <MessageQuote quote={msg.quote} onJumpToQuote={onJumpToQuote} />
+            )}
             {msg.role === 'assistant' ? (
               <MarkdownContent content={msg.content} />
             ) : (

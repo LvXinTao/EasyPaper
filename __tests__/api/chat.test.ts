@@ -1,5 +1,6 @@
 import { POST } from '@/app/api/chat/route';
 import { storage } from '@/lib/storage';
+import type { TextSelection } from '@/types';
 
 jest.mock('@/lib/storage', () => ({
   storage: {
@@ -7,12 +8,21 @@ jest.mock('@/lib/storage', () => ({
     getParsedContent: jest.fn(),
     getChatSession: jest.fn(),
     saveChatSession: jest.fn(),
-    createChatSession: jest.fn(),
+    createChatSession: jest.fn().mockResolvedValue({
+      id: 'test-session',
+      title: 'New Chat',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+      messages: [],
+    }),
     getSettings: jest.fn().mockResolvedValue(null),
+    getPromptSettings: jest.fn().mockResolvedValue(null),
   },
 }));
-const mockFetch = jest.fn();
-global.fetch = mockFetch;
+
+jest.mock('@/lib/ai-client', () => ({
+  createAIClient: jest.fn(),
+}));
 
 describe('POST /api/chat', () => {
   beforeEach(() => {
@@ -53,5 +63,51 @@ describe('POST /api/chat', () => {
     });
     const response = await POST(request);
     expect(response.status).toBe(404);
+  });
+});
+
+describe('POST /api/chat with quote', () => {
+  beforeEach(() => {
+    process.env.AI_API_KEY = 'sk-test';
+    process.env.AI_BASE_URL = 'https://api.test.com/v1';
+    process.env.AI_MODEL = 'gpt-4o';
+    jest.clearAllMocks();
+  });
+
+  it('accepts quote parameter in request', async () => {
+    (storage.paperExists as jest.Mock).mockResolvedValue(true);
+    (storage.createChatSession as jest.Mock).mockResolvedValue({
+      id: 'test-session',
+      title: 'New Chat',
+      createdAt: '2024-01-01',
+      updatedAt: '2024-01-01',
+      messages: [],
+    });
+    (storage.getParsedContent as jest.Mock).mockResolvedValue('Test paper content');
+
+    // Import the mock to verify it's set up
+    const { createAIClient } = await import('@/lib/ai-client');
+    const mockStreamComplete = jest.fn().mockImplementation(async function* () {
+      yield 'test response';
+    });
+    (createAIClient as jest.Mock).mockReturnValue({
+      streamComplete: mockStreamComplete,
+    });
+
+    const quote: TextSelection = {
+      text: 'Test quote text',
+      rects: [{ left: 10, top: 20, width: 30, height: 5 }],
+      page: 1,
+    };
+
+    const request = new Request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paperId: 'test-id', message: 'What does this mean?', quote }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/event-stream');
   });
 });

@@ -66,6 +66,9 @@ export default function PaperDetailPage() {
   const [notes, setNotes] = useState<Note[]>([]);
   const pdfViewerRef = useRef<PdfViewerRef>(null);
 
+  // Pending quote state for Ask AI feature
+  const [pendingQuote, setPendingQuote] = useState<TextSelection | null>(null);
+
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -248,6 +251,23 @@ export default function PaperDetailPage() {
   // Handle click on sentence-level note in NotesPanel -> scroll PDF to highlight
   const handleNoteClick = useCallback((note: Note) => {
     pdfViewerRef.current?.scrollToNote(note);
+  }, []);
+
+  // Handle Ask AI from PDF selection - set pending quote and switch to chat
+  const handleAskAI = useCallback((selection: TextSelection) => {
+    setPendingQuote(selection);
+    setActiveTab('analysis');
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  // Handle jump to quote in PDF
+  const handleJumpToQuote = useCallback((quote: TextSelection) => {
+    pdfViewerRef.current?.scrollToQuote(quote);
+  }, []);
+
+  // Handle clear pending quote
+  const handleClearQuote = useCallback(() => {
+    setPendingQuote(null);
   }, []);
 
   // Fetch sessions on mount and when paper data loads
@@ -475,7 +495,9 @@ export default function PaperDetailPage() {
       // Capture the session this message belongs to, so we can guard UI updates
       // if the user switches sessions while the stream is still running.
       const sendingSessionId = activeSessionId;
-      setChatMessages((prev) => [...prev, { role: 'user', content: message }]);
+      const quoteToSend = pendingQuote;
+      setChatMessages((prev) => [...prev, { role: 'user', content: message, quote: quoteToSend ?? undefined }]);
+      setPendingQuote(null);
       setIsChatStreaming(true);
       setStreamingContent('');
 
@@ -483,7 +505,7 @@ export default function PaperDetailPage() {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paperId, sessionId: activeSessionId, message }),
+          body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend }),
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -540,7 +562,7 @@ export default function PaperDetailPage() {
         }
       }
     },
-    [paperId, activeSessionId, fetchSessions]
+    [paperId, activeSessionId, fetchSessions, pendingQuote]
   );
 
   // Horizontal divider: save left panel width to localStorage
@@ -698,6 +720,7 @@ export default function PaperDetailPage() {
             onNoteCreate={handleNoteCreate}
             onNoteUpdate={handleNoteUpdate}
             onNoteDelete={handleNoteDelete}
+            onAskAI={handleAskAI}
           />
         </div>
 
@@ -904,12 +927,18 @@ export default function PaperDetailPage() {
                 messages={chatMessages}
                 streamingContent={streamingContent}
                 isStreaming={isChatStreaming}
+                onJumpToQuote={handleJumpToQuote}
               />
             </div>
 
             {/* Input */}
             <div className="px-4 pb-3 pt-2">
-              <ChatInput onSend={handleSendMessage} disabled={isChatStreaming} />
+              <ChatInput
+                onSend={handleSendMessage}
+                disabled={isChatStreaming}
+                pendingQuote={pendingQuote}
+                onClearQuote={handleClearQuote}
+              />
             </div>
           </div>
           </div>{/* end shared card container */}
