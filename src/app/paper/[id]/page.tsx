@@ -69,6 +69,12 @@ export default function PaperDetailPage() {
   // Pending quote state for Ask AI feature
   const [pendingQuote, setPendingQuote] = useState<TextSelection | null>(null);
 
+  // Low confidence state for RAG context expansion
+  const [lowConfidence, setLowConfidence] = useState(false);
+
+  // Embedding generation state (for polling control)
+  const [isEmbeddingTriggered, setIsEmbeddingTriggered] = useState(false);
+
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -116,6 +122,41 @@ export default function PaperDetailPage() {
       .then(s => { if (s.model) setModelName(s.model); })
       .catch(() => {});
   }, []);
+
+  // Auto-trigger embedding generation after analysis completes
+  const embeddingsExist = data?.metadata?.embeddingStatus === 'generated';
+  const embeddingInProgress = data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered;
+
+  useEffect(() => {
+    // Only trigger if analyzed and no embeddings (not generated, not generating, not triggered)
+    if (data?.metadata?.status === 'analyzed' && !data?.metadata?.embeddingStatus && !isEmbeddingTriggered) {
+      setIsEmbeddingTriggered(true);
+      fetch(`/api/embed/${paperId}`, { method: 'POST' })
+        .then(() => {
+          // Refetch after a short delay to get the updated 'generating' status
+          setTimeout(() => refetch(), 500);
+        })
+        .catch(err => console.error('Failed to trigger embedding generation:', err));
+    }
+  }, [data?.metadata?.status, data?.metadata?.embeddingStatus, paperId, isEmbeddingTriggered, refetch]);
+
+  // Poll for embedding status when generating (metadata shows 'generating' or we triggered it)
+  useEffect(() => {
+    if (!embeddingInProgress) return;
+
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/embed/${paperId}`);
+      if (res.ok) {
+        const status = await res.json();
+        if (status.status === 'generated' || status.status === 'error') {
+          setIsEmbeddingTriggered(false);
+          refetch(); // Refresh paper data to get updated status
+        }
+      }
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [embeddingInProgress, paperId, refetch]);
 
   // Fetch notes (for PdfViewer highlights and note count)
   const fetchNotes = useCallback(async () => {
@@ -491,7 +532,7 @@ export default function PaperDetailPage() {
   }, [paperId, activeSessionId, sessions, handleSelectSession]);
 
   const handleSendMessage = useCallback(
-    async (message: string) => {
+    async (message: string, expandContext: boolean = false) => {
       // Capture the session this message belongs to, so we can guard UI updates
       // if the user switches sessions while the stream is still running.
       const sendingSessionId = activeSessionId;
@@ -500,12 +541,13 @@ export default function PaperDetailPage() {
       setPendingQuote(null);
       setIsChatStreaming(true);
       setStreamingContent('');
+      setLowConfidence(false);
 
       try {
         const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend }),
+          body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend, expandContext }),
         });
         if (!response.ok) throw new Error('Failed to send message');
 
@@ -536,6 +578,9 @@ export default function PaperDetailPage() {
                   setIsChatStreaming(true);
                 }
               }
+              if (data.lowConfidence) {
+                setLowConfidence(true);
+              }
               if (data.done) {
                 if (activeSessionIdRef.current === sendingSessionId) {
                   setChatMessages((prev) => [
@@ -564,6 +609,14 @@ export default function PaperDetailPage() {
     },
     [paperId, activeSessionId, fetchSessions, pendingQuote]
   );
+
+  // Handle expand context when RAG retrieval has low confidence
+  const handleExpandContext = useCallback(() => {
+    const lastUserMessage = [...chatMessages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage) {
+      handleSendMessage(lastUserMessage.content, true);
+    }
+  }, [chatMessages, handleSendMessage]);
 
   // Horizontal divider: save left panel width to localStorage
   const handleLeftWidthChange = useCallback(
@@ -910,6 +963,60 @@ export default function PaperDetailPage() {
                     {modelName}
                   </span>
                 )}
+                {/* Embedding status pill */}
+                {(embeddingInProgress || data?.metadata?.embeddingStatus === 'generated' || data?.metadata?.embeddingStatus === 'error') && (
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                    data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' :
+                    data?.metadata?.embeddingStatus === 'generated' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' :
+                    'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                  }`}>
+                    {(data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered) && (
+                      <>
+                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Building index...
+                      </>
+                    )}
+                    {data?.metadata?.embeddingStatus === 'generated' && (
+                      <>
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        RAG
+                        <button
+                          onClick={async () => {
+                            setIsEmbeddingTriggered(true);
+                            await fetch(`/api/embed/${paperId}?force=true`, { method: 'POST' });
+                            setTimeout(() => refetch(), 500);
+                          }}
+                          className="underline hover:no-underline"
+                        >
+                          Regen
+                        </button>
+                      </>
+                    )}
+                    {data?.metadata?.embeddingStatus === 'error' && (
+                      <>
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Error
+                        <button
+                          onClick={async () => {
+                            setIsEmbeddingTriggered(true);
+                            await fetch(`/api/embed/${paperId}`, { method: 'POST' });
+                            setTimeout(() => refetch(), 500);
+                          }}
+                          className="underline hover:no-underline"
+                        >
+                          Retry
+                        </button>
+                      </>
+                    )}
+                  </span>
+                )}
               </div>
             </div>
             {showSessionBar && (
@@ -928,6 +1035,8 @@ export default function PaperDetailPage() {
                 streamingContent={streamingContent}
                 isStreaming={isChatStreaming}
                 onJumpToQuote={handleJumpToQuote}
+                lowConfidence={lowConfidence}
+                onExpandContext={handleExpandContext}
               />
             </div>
 

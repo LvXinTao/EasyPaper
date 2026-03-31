@@ -17,11 +17,29 @@ jest.mock('@/lib/storage', () => ({
     }),
     getSettings: jest.fn().mockResolvedValue(null),
     getPromptSettings: jest.fn().mockResolvedValue(null),
+    getEmbeddings: jest.fn().mockResolvedValue(null),
+    getAnalysis: jest.fn().mockResolvedValue(null),
   },
 }));
 
 jest.mock('@/lib/ai-client', () => ({
   createAIClient: jest.fn(),
+}));
+
+jest.mock('@/lib/retrieval', () => ({
+  search: jest.fn().mockResolvedValue([]),
+  buildRAGContext: jest.fn().mockReturnValue(''),
+  ensureQuoteIncluded: jest.fn().mockReturnValue([]),
+  LOW_CONFIDENCE_THRESHOLD: 0.3,
+}));
+
+jest.mock('@/lib/embedding', () => ({
+  getEmbeddingConfig: jest.fn().mockResolvedValue({
+    embeddingModel: 'text-embedding-3-small',
+    baseUrl: 'https://api.test.com/v1',
+    apiKey: 'sk-test',
+  }),
+  triggerEmbeddingGeneration: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('POST /api/chat', () => {

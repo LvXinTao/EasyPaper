@@ -11,9 +11,11 @@ interface ChatMessagesProps {
   streamingContent?: string;
   isStreaming?: boolean;
   onJumpToQuote?: (quote: TextSelection) => void;
+  lowConfidence?: boolean;
+  onExpandContext?: () => void;
 }
 
-export function ChatMessages({ messages, streamingContent, isStreaming, onJumpToQuote }: ChatMessagesProps) {
+export function ChatMessages({ messages, streamingContent, isStreaming, onJumpToQuote, lowConfidence, onExpandContext }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const { displayedText, isTyping } = useTypewriter(streamingContent || '', {
     isStreaming,
@@ -60,6 +62,18 @@ export function ChatMessages({ messages, streamingContent, isStreaming, onJumpTo
               <MarkdownContent content={msg.content} />
             ) : (
               <div className="whitespace-pre-wrap">{msg.content}</div>
+            )}
+            {!isStreaming && lowConfidence && onExpandContext && i === messages.length - 1 && msg.role === 'assistant' && (
+              <button
+                onClick={onExpandContext}
+                className="mt-2 px-3 py-1 text-sm rounded transition-colors"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'white',
+                }}
+              >
+                Get more context
+              </button>
             )}
           </div>
         </div>
