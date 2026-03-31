@@ -96,10 +96,16 @@ jobs:
           echo "DEBUG: Response structure:" >> $GITHUB_STEP_SUMMARY
           echo "$BODY" | jq '.content | map({type: .type})' >> $GITHUB_STEP_SUMMARY
 
+          # Try text content first (Anthropic format)
           REVIEW=$(echo "$BODY" | jq -r '[.content[] | select(.type == "text")][0].text // empty')
 
-          # Also try alternative paths
-          if [ -z "$REVIEW" ]; then
+          # If no text, try thinking content (some models like mimo only return thinking)
+          if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
+            REVIEW=$(echo "$BODY" | jq -r '[.content[] | select(.type == "thinking")][0].thinking // empty')
+          fi
+
+          # Also try alternative paths for OpenAI-compatible format
+          if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
             REVIEW=$(echo "$BODY" | jq -r '.choices[0].message.content // empty')
           fi
 
