@@ -744,12 +744,12 @@ export function PaperRow({ paper, isActive, onClick, onDoubleClick, onToggleStar
                 background: status.className === 'analyzed' ? 'var(--green-subtle)' :
                             status.className === 'error' ? 'var(--rose-subtle)' :
                             status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue-subtle)' :
-                            status.className === 'queued' ? 'var(--gray-subtle)' :
+                            status.className === 'queued' ? 'var(--amber-subtle)' :
                             'var(--amber-subtle)',
                 color: status.className === 'analyzed' ? 'var(--green)' :
                        status.className === 'error' ? 'var(--rose)' :
                        status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue)' :
-                       status.className === 'queued' ? 'var(--gray)' :
+                       status.className === 'queued' ? 'var(--amber)' :
                        'var(--amber)',
               }}
             >
