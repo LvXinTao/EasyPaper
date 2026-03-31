@@ -134,12 +134,11 @@ export async function generatePaperEmbeddings(paperId: string): Promise<Embeddin
 
 /**
  * Trigger embedding generation in background.
+ * Calls generatePaperEmbeddings directly instead of HTTP request.
  */
 export async function triggerEmbeddingGeneration(paperId: string): Promise<void> {
   // Fire-and-forget: don't await, let it run in background
-  fetch(`${process.env.INTERNAL_API_URL || ''}/api/embed/${paperId}`, {
-    method: 'POST',
-  }).catch(err => {
+  generatePaperEmbeddings(paperId).catch(err => {
     console.error('Embedding generation failed:', err);
   });
 }

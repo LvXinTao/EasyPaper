@@ -274,22 +274,37 @@ describe('embedding', () => {
   });
 
   describe('triggerEmbeddingGeneration', () => {
-    it('should call embed API endpoint', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true });
+    it('should call generatePaperEmbeddings internally', async () => {
+      const { storage } = await import('@/lib/storage');
+      const { chunkPaper } = await import('@/lib/chunker');
+
+      // Set up mocks for generatePaperEmbeddings flow
+      (storage.getParsedContent as jest.Mock).mockResolvedValue('Test content');
+      (chunkPaper as jest.Mock).mockReturnValue([{ id: 'chunk_0', page: 1, section: '', text: 'Test content' }]);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [{ index: 0, embedding: [0.1, 0.2] }] }),
+      });
 
       await triggerEmbeddingGeneration('paper-123');
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/embed/paper-123'),
-        expect.objectContaining({ method: 'POST' })
-      );
+      // Wait for async fire-and-forget
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(storage.updateMetadata).toHaveBeenCalledWith('paper-123', { embeddingStatus: 'generating' });
+      expect(storage.getParsedContent).toHaveBeenCalledWith('paper-123');
     });
 
     it('should handle errors silently', async () => {
+      const { storage } = await import('@/lib/storage');
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      (storage.getParsedContent as jest.Mock).mockRejectedValue(new Error('Storage error'));
 
       await triggerEmbeddingGeneration('paper-123');
+
+      // Wait for async fire-and-forget
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       expect(consoleSpy).toHaveBeenCalledWith('Embedding generation failed:', expect.any(Error));
       consoleSpy.mockRestore();
