@@ -115,6 +115,15 @@ export default function HomePage() {
     });
   };
 
+  const handleCancelQueue = async (paperId: string) => {
+    try {
+      await fetch(`/api/analyze/queue?paperId=${paperId}`, { method: 'DELETE' });
+      await fetchPapers();
+    } catch (error) {
+      console.error('Failed to cancel queue:', error);
+    }
+  };
+
   // Filter and sort papers
   const filtered = papers.filter(p => {
     if (selectedFolderId && p.folderId !== selectedFolderId) return false;
@@ -340,6 +349,7 @@ export default function HomePage() {
               onClick={() => setSelectedPaperId(paper.id)}
               onDoubleClick={() => router.push(`/paper/${paper.id}`)}
               onToggleStar={() => handleToggleStar(paper.id)}
+              onCancelQueue={() => handleCancelQueue(paper.id)}
             />
           ))}
         </div>
