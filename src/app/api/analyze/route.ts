@@ -109,7 +109,16 @@ async function runAnalysis(paperId: string, config: AIConfig, send: SendFn): Pro
 
     for (const section of ['summary', 'contributions', 'methodology', 'experiments', 'conclusions'] as const) {
       const sectionData = analysis[section];
-      send({ section, content: 'content' in sectionData ? sectionData.content : JSON.stringify(sectionData.items) });
+      // Handle both object format {content: string} and raw string format
+      let content: string;
+      if (typeof sectionData === 'string') {
+        content = sectionData;
+      } else if (sectionData && typeof sectionData === 'object') {
+        content = 'content' in sectionData ? String(sectionData.content) : JSON.stringify(sectionData);
+      } else {
+        content = String(sectionData || '');
+      }
+      send({ section, content });
     }
 
     // Completion: remove analysisProgress, set status to 'analyzed'

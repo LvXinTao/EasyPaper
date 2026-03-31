@@ -90,6 +90,25 @@ All under `src/app/api/`. Streaming endpoints (`/analyze`, `/chat`) use SSE with
 - `/api/prompts` — Custom prompts CRUD
 - `/api/settings` — AI settings CRUD
 
+### RAG Context Optimization
+
+When users chat with a paper, the system uses RAG (Retrieval-Augmented Generation) to reduce token consumption:
+
+1. **Embedding Generation**: After analysis, the parsed markdown is chunked and embedded via API
+2. **Storage**: Embeddings stored in `~/.easypaper/papers/{id}/embeddings.json`
+3. **Chat Query**: Query is embedded, top-k relevant chunks retrieved + analysis summary sent as context
+4. **Fallback**: If no embeddings exist, falls back to full text temporarily
+
+New modules:
+- `src/lib/chunker.ts` — Paper chunking logic
+- `src/lib/embedding.ts` — Embedding API calls
+- `src/lib/retrieval.ts` — Vector similarity search
+
+New API endpoints:
+- `POST /api/embed/{id}` — Generate embeddings for a paper
+- `GET /api/embed/{id}` — Get embedding status
+- `POST /api/embed/regenerate-all` — Regenerate all paper embeddings
+
 ## Tech Stack
 
 - Next.js 16 (App Router), React 19, TypeScript 5 (strict mode)

@@ -3,15 +3,18 @@ import { createAIClient } from '@/lib/ai-client';
 import { createErrorResponse } from '@/lib/errors';
 import { CHAT_PROMPT, buildQuoteContext } from '@/lib/prompts';
 import { getAIConfig } from '@/lib/ai-config';
+import { search, buildRAGContext, ensureQuoteIncluded, LOW_CONFIDENCE_THRESHOLD } from '@/lib/retrieval';
+import { getEmbeddingConfig, triggerEmbeddingGeneration } from '@/lib/embedding';
 import type { ChatSession, TextSelection } from '@/types';
 
 export async function POST(request: Request) {
   try {
-    const { paperId, sessionId, message, quote } = await request.json() as {
+    const { paperId, sessionId, message, quote, expandContext } = await request.json() as {
       paperId: string;
       sessionId?: string;
       message: string;
       quote?: TextSelection;
+      expandContext?: boolean;
     };
     if (!paperId) return createErrorResponse('VALIDATION_ERROR', 'paperId is required');
     if (!message) return createErrorResponse('VALIDATION_ERROR', 'message is required');
@@ -31,7 +34,8 @@ export async function POST(request: Request) {
     const { apiKey, baseUrl, model } = await getAIConfig();
     if (!apiKey) return createErrorResponse('API_KEY_MISSING', 'API key is not configured');
 
-    const parsedContent = await storage.getParsedContent(paperId);
+    const analysis = await storage.getAnalysis(paperId);
+    const embeddings = await storage.getEmbeddings(paperId);
     const historyStr = session.messages.map((m) => `${m.role}: ${m.content}`).join('\n');
     const quoteContext = buildQuoteContext(quote);
     const promptSettings = await storage.getPromptSettings();
@@ -47,8 +51,39 @@ export async function POST(request: Request) {
       }
     }
 
+    // Determine context content: use RAG if embeddings exist, otherwise fallback to full text
+    let contextContent: string;
+    let lowConfidence = false;
+    console.log(`[chat] Paper ${paperId}: embeddings status =`, embeddings ? 'exists' : 'missing');
+    if (!embeddings) {
+      // Fallback: trigger async generation, use full text for this query
+      console.log(`[chat] Paper ${paperId}: Triggering embedding generation, using full text fallback`);
+      triggerEmbeddingGeneration(paperId);
+      const parsedContent = await storage.getParsedContent(paperId);
+      contextContent = parsedContent || '';
+    } else {
+      // Use RAG context
+      console.log(`[chat] Paper ${paperId}: Using RAG with ${embeddings.chunks.length} chunks`);
+      const topK = expandContext ? 8 : 3;
+      const config = await getEmbeddingConfig();
+      let relevantChunks = await search(message, embeddings, topK, {
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        model: config.embeddingModel
+      });
+
+      if (quote) {
+        relevantChunks = ensureQuoteIncluded(relevantChunks, quote, embeddings.chunks);
+      }
+
+      lowConfidence = relevantChunks.length > 0 &&
+        (relevantChunks[0].similarity || 0) < LOW_CONFIDENCE_THRESHOLD;
+
+      contextContent = buildRAGContext(analysis, relevantChunks);
+    }
+
     const prompt = chatPromptTemplate
-      .replaceAll('{content}', parsedContent || '')
+      .replaceAll('{content}', contextContent)
       .replaceAll('{history}', historyStr)
       .replaceAll('{quoteContext}', quoteContext)
       .replaceAll('{question}', message);
@@ -76,7 +111,11 @@ export async function POST(request: Request) {
           }
           session.messages.push({ role: 'assistant', content: fullResponse });
           await storage.saveChatSession(paperId, session);
-          send({ done: true, sessionId: session.id });
+          if (lowConfidence) {
+            send({ done: true, sessionId: session.id, lowConfidence: true });
+          } else {
+            send({ done: true, sessionId: session.id });
+          }
         } catch (error) { send({ error: error instanceof Error ? error.message : 'Chat failed' }); }
         finally { try { controller.close(); } catch { /* already closed */ } }
       },
