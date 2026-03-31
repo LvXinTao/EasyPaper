@@ -337,15 +337,10 @@ export const analysisQueue = {
 
     // Check for queued papers and trigger the next one
     const queuedPapers = await this.getQueuedPapers();
-    if (queuedPapers.length > 0) {
-      const next = queuedPapers[0];
-
+    for (const next of queuedPapers) {
       // Verify paper still exists
       const exists = await storage.paperExists(next.id);
-      if (!exists) {
-        // Skip deleted paper, recursively check next
-        return this.release(paperId);
-      }
+      if (!exists) continue; // Skip deleted, continue to next
 
       // Acquire slot for the queued paper
       const acquired = await this.tryAcquire(next.id);
@@ -368,6 +363,7 @@ export const analysisQueue = {
       // Start analysis in background (don't await)
       const config = await getAIConfig();
       runAnalysisCore(next.id, config, undefined, () => this.release(next.id)).catch(console.error);
+      return; // Started one paper, done
     }
   },
 
@@ -668,12 +664,12 @@ Edit lines 66-73 to include queued styling:
                 background: status.className === 'analyzed' ? 'var(--green-subtle)' :
                             status.className === 'error' ? 'var(--rose-subtle)' :
                             status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue-subtle)' :
-                            status.className === 'queued' ? 'var(--gray-subtle)' :
+                            status.className === 'queued' ? 'var(--amber-subtle)' :
                             'var(--amber-subtle)',
                 color: status.className === 'analyzed' ? 'var(--green)' :
                        status.className === 'error' ? 'var(--rose)' :
                        status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue)' :
-                       status.className === 'queued' ? 'var(--gray)' :
+                       status.className === 'queued' ? 'var(--amber)' :
                        'var(--amber)',
               }}
 ```
@@ -976,9 +972,72 @@ git commit -m "feat(settings): add maxConcurrent configuration option"
 
 ---
 
+### Task 10: Update Settings API Route
+
+**Files:**
+- Modify: `src/app/api/settings/route.ts`
+
+- [ ] **Step 1: Add maxConcurrent to GET response**
+
+Edit lines 8-18 to include maxConcurrent in default response:
+
+```typescript
+  return NextResponse.json({
+    baseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
+    model: process.env.AI_MODEL || 'gpt-4o',
+    visionModel: process.env.AI_VISION_MODEL || 'gpt-4o',
+    hasApiKey: !!process.env.AI_API_KEY,
+    embeddingModel: process.env.AI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    useSameApiForEmbedding: true,
+    embeddingBaseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
+    hasEmbeddingApiKey: false,
+    theme: { preset: 'dark-minimal', customAccent: null },
+    maxConcurrent: 3,
+  });
+```
+
+Edit lines 20-30 to include maxConcurrent in existing settings response:
+
+```typescript
+  return NextResponse.json({
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    visionModel: settings.visionModel,
+    hasApiKey: !!(settings.apiKeyEncrypted || process.env.AI_API_KEY),
+    embeddingModel: settings.embeddingModel || 'text-embedding-3-small',
+    useSameApiForEmbedding: settings.useSameApiForEmbedding !== undefined ? settings.useSameApiForEmbedding : true,
+    embeddingBaseUrl: settings.embeddingBaseUrl || settings.baseUrl || 'https://api.openai.com/v1',
+    hasEmbeddingApiKey: !!(settings.embeddingApiKeyEncrypted || (settings.useSameApiForEmbedding ? settings.apiKeyEncrypted : false)),
+    theme: settings.theme || { preset: 'dark-minimal', customAccent: null },
+    maxConcurrent: settings.maxConcurrent || 3,
+  });
+```
+
+- [ ] **Step 2: Add maxConcurrent to POST handler**
+
+Add after line 48 (after embeddingBaseUrl):
+
+```typescript
+if (body.maxConcurrent !== undefined) merged.maxConcurrent = body.maxConcurrent;
+```
+
+- [ ] **Step 3: Run lint to verify**
+
+Run: `npm run lint`
+Expected: No errors
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/api/settings/route.ts
+git commit -m "feat(api): persist maxConcurrent setting"
+```
+
+---
+
 ## Chunk 6: Testing and Verification
 
-### Task 10: Manual Testing
+### Task 11: Manual Testing
 
 - [ ] **Step 1: Start dev server**
 
@@ -1011,7 +1070,7 @@ Navigate to `/settings`, verify maxConcurrent input exists and saves correctly.
 
 ---
 
-### Task 11: Final Verification
+### Task 12: Final Verification
 
 - [ ] **Step 1: Run build**
 
