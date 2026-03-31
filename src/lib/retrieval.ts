@@ -98,13 +98,22 @@ export function buildRAGContext(
 ): string {
   const parts: string[] = [];
 
+  // Helper to get content from section (handles both object and string format)
+  const getSectionContent = (section: unknown): string => {
+    if (typeof section === 'string') return section;
+    if (section && typeof section === 'object' && 'content' in section) {
+      return String((section as { content: string }).content);
+    }
+    return String(section || '');
+  };
+
   // Macro: Analysis summary
   if (analysis) {
     parts.push('[论文摘要]');
-    parts.push(`- 核心思想：${analysis.summary.content}`);
-    parts.push(`- 方法论：${analysis.methodology.content}`);
-    parts.push(`- 实验：${analysis.experiments.content}`);
-    parts.push(`- 结论：${analysis.conclusions.content}`);
+    parts.push(`- 核心思想：${getSectionContent(analysis.summary)}`);
+    parts.push(`- 方法论：${getSectionContent(analysis.methodology)}`);
+    parts.push(`- 实验：${getSectionContent(analysis.experiments)}`);
+    parts.push(`- 结论：${getSectionContent(analysis.conclusions)}`);
     parts.push('');
   }
 
