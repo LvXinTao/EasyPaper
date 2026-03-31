@@ -52,11 +52,18 @@ export async function generateEmbeddings(
   texts: string[],
   baseUrl: string,
   apiKey: string,
-  model: string
+  model: string,
+  options?: { logPrefix?: string }
 ): Promise<number[][]> {
+  const prefix = options?.logPrefix || '[embed]';
   if (!apiKey) {
     throw new Error('API key is not configured for embedding generation');
   }
+
+  console.log(`${prefix} Calling embedding API...`);
+  console.log(`${prefix}   URL: ${baseUrl}/embeddings`);
+  console.log(`${prefix}   Model: ${model}`);
+  console.log(`${prefix}   Batch size: ${texts.length} texts`);
 
   const response = await fetch(`${baseUrl}/embeddings`, {
     method: 'POST',
@@ -72,13 +79,17 @@ export async function generateEmbeddings(
 
   if (!response.ok) {
     const error = await response.text();
+    console.error(`${prefix} API error: ${response.status} - ${error}`);
     throw new Error(`Embedding API error: ${response.status} - ${error}`);
   }
 
   const data = await response.json();
   if (!data.data || !Array.isArray(data.data)) {
+    console.error(`${prefix} Unexpected response: ${JSON.stringify(data).slice(0, 200)}`);
     throw new Error(`Unexpected embedding API response: ${JSON.stringify(data).slice(0, 200)}`);
   }
+
+  console.log(`${prefix} API success: ${data.data.length} embeddings returned`);
   return data.data
     .sort((a: { index: number }, b: { index: number }) => a.index - b.index)
     .map((item: { embedding: number[] }) => item.embedding);
@@ -88,6 +99,7 @@ export async function generateEmbeddings(
  * Generate embeddings for a paper and save to storage.
  */
 export async function generatePaperEmbeddings(paperId: string): Promise<EmbeddingsData> {
+  console.log(`[embed] Paper ${paperId}: Starting embedding generation`);
   await storage.updateMetadata(paperId, { embeddingStatus: 'generating' });
 
   try {
@@ -95,21 +107,28 @@ export async function generatePaperEmbeddings(paperId: string): Promise<Embeddin
     if (!parsedContent) {
       throw new Error('No parsed content available');
     }
+    console.log(`[embed] Paper ${paperId}: Parsed content loaded (${parsedContent.length} chars)`);
 
     const chunks = chunkPaper(parsedContent);
+    console.log(`[embed] Paper ${paperId}: Chunked into ${chunks.length} chunks`);
     const config = await getEmbeddingConfig();
+    console.log(`[embed] Paper ${paperId}: Config loaded - model: ${config.embeddingModel}`);
 
     const BATCH_SIZE = 100;
     const allEmbeddings: number[][] = [];
+    const totalBatches = Math.ceil(chunks.length / BATCH_SIZE);
 
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batchIndex = Math.floor(i / BATCH_SIZE) + 1;
       const batch = chunks.slice(i, i + BATCH_SIZE);
       const texts = batch.map(c => c.text);
+      console.log(`[embed] Paper ${paperId}: Processing batch ${batchIndex}/${totalBatches}`);
       const embeddings = await generateEmbeddings(
         texts,
         config.baseUrl,
         config.apiKey,
-        config.embeddingModel
+        config.embeddingModel,
+        { logPrefix: `[embed] Paper ${paperId}: Batch ${batchIndex}` }
       );
       allEmbeddings.push(...embeddings);
     }
@@ -128,9 +147,11 @@ export async function generatePaperEmbeddings(paperId: string): Promise<Embeddin
       embeddingError: undefined,
     });
 
+    console.log(`[embed] Paper ${paperId}: Embeddings generated successfully (${chunks.length} chunks)`);
     return embeddingsData;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[embed] Paper ${paperId}: Error - ${errorMessage}`);
     await storage.updateMetadata(paperId, {
       embeddingStatus: 'error',
       embeddingError: errorMessage,
