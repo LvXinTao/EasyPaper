@@ -177,6 +177,7 @@ describe('embedding', () => {
       const { storage } = await import('@/lib/storage');
       const { chunkPaper } = await import('@/lib/chunker');
 
+      process.env.AI_API_KEY = 'test-api-key';
       (storage.getParsedContent as jest.Mock).mockResolvedValue('parsed content');
       (chunkPaper as jest.Mock).mockReturnValue([
         { id: 'chunk_0', page: 1, section: 'Intro', text: 'Text 1' },
@@ -222,6 +223,7 @@ describe('embedding', () => {
       const { storage } = await import('@/lib/storage');
       const { chunkPaper } = await import('@/lib/chunker');
 
+      process.env.AI_API_KEY = 'test-api-key';
       const manyChunks = Array.from({ length: 150 }, (_, i) => ({
         id: `chunk_${i}`,
         page: Math.floor(i / 10) + 1,
@@ -253,6 +255,7 @@ describe('embedding', () => {
       const { storage } = await import('@/lib/storage');
       const { chunkPaper } = await import('@/lib/chunker');
 
+      process.env.AI_API_KEY = 'test-api-key';
       (storage.getParsedContent as jest.Mock).mockResolvedValue('parsed content');
       (chunkPaper as jest.Mock).mockReturnValue([
         { id: 'chunk_0', page: 1, section: 'Intro', text: 'Text 1' },
@@ -278,6 +281,7 @@ describe('embedding', () => {
       const { storage } = await import('@/lib/storage');
       const { chunkPaper } = await import('@/lib/chunker');
 
+      process.env.AI_API_KEY = 'test-api-key';
       // Set up mocks for generatePaperEmbeddings flow
       (storage.getParsedContent as jest.Mock).mockResolvedValue('Test content');
       (chunkPaper as jest.Mock).mockReturnValue([{ id: 'chunk_0', page: 1, section: '', text: 'Test content' }]);

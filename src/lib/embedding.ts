@@ -54,6 +54,10 @@ export async function generateEmbeddings(
   apiKey: string,
   model: string
 ): Promise<number[][]> {
+  if (!apiKey) {
+    throw new Error('API key is not configured for embedding generation');
+  }
+
   const response = await fetch(`${baseUrl}/embeddings`, {
     method: 'POST',
     headers: {
@@ -72,6 +76,9 @@ export async function generateEmbeddings(
   }
 
   const data = await response.json();
+  if (!data.data || !Array.isArray(data.data)) {
+    throw new Error(`Unexpected embedding API response: ${JSON.stringify(data).slice(0, 200)}`);
+  }
   return data.data
     .sort((a: { index: number }, b: { index: number }) => a.index - b.index)
     .map((item: { embedding: number[] }) => item.embedding);
