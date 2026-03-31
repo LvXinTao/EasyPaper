@@ -32,6 +32,7 @@ export async function POST(
   context: RouteContext
 ) {
   const { id: paperId } = await context.params;
+  console.log(`[embed] Paper ${paperId}: Starting embedding generation`);
 
   const exists = await storage.paperExists(paperId);
   if (!exists) {
@@ -39,18 +40,30 @@ export async function POST(
   }
 
   const metadata = await storage.getMetadata(paperId);
+  console.log(`[embed] Paper ${paperId}: Current embedding status = ${metadata.embeddingStatus || 'pending'}`);
 
-  // Check if already generating or generated
+  // Check if already generating
   if (metadata.embeddingStatus === 'generating') {
+    console.log(`[embed] Paper ${paperId}: Already generating, skipping`);
     return Response.json({ status: 'generating', message: 'Embeddings are being generated' });
   }
 
-  if (metadata.embeddingStatus === 'generated') {
+  // Check if force regenerate is requested via URL param
+  const url = new URL(request.url);
+  const force = url.searchParams.get('force') === 'true';
+
+  if (metadata.embeddingStatus === 'generated' && !force) {
+    console.log(`[embed] Paper ${paperId}: Already generated, skipping (use ?force=true to regenerate)`);
     return Response.json({ status: 'generated', message: 'Embeddings already exist' });
+  }
+
+  if (force) {
+    console.log(`[embed] Paper ${paperId}: Force regenerating embeddings`);
   }
 
   try {
     // Generate embeddings (this function handles getting parsed content internally)
+    console.log(`[embed] Paper ${paperId}: Calling generatePaperEmbeddings...`);
     const embeddingsData = await generatePaperEmbeddings(paperId);
 
     // Update metadata to generated
@@ -60,6 +73,7 @@ export async function POST(
       embeddingError: undefined,
     });
 
+    console.log(`[embed] Paper ${paperId}: Embeddings generated successfully (${embeddingsData.chunks.length} chunks)`);
     return Response.json({
       status: 'generated',
       chunksCount: embeddingsData.chunks.length,
@@ -68,6 +82,7 @@ export async function POST(
   } catch (error) {
     // Update status to error
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[embed] Paper ${paperId}: Error - ${errorMessage}`);
     await storage.updateMetadata(paperId, {
       embeddingStatus: 'error' as EmbeddingStatus,
       embeddingError: errorMessage,

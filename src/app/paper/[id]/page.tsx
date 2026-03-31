@@ -978,10 +978,46 @@ export default function PaperDetailPage() {
                 <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm flex items-center justify-between">
                   <span>索引建立失败：{data?.metadata?.embeddingError || '未知错误'}</span>
                   <button
-                    onClick={() => fetch(`/api/embed/${paperId}`, { method: 'POST' })}
+                    onClick={async () => {
+                      await fetch(`/api/embed/${paperId}`, { method: 'POST' });
+                      refetch();
+                    }}
                     className="ml-2 px-2 py-1 text-xs bg-red-100 dark:bg-red-800 rounded hover:bg-red-200 dark:hover:bg-red-700"
                   >
                     重试
+                  </button>
+                </div>
+              )}
+              {data?.metadata?.embeddingStatus === 'generated' && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    论文索引已建立，使用RAG检索加速对话
+                  </span>
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/embed/${paperId}?force=true`, { method: 'POST' });
+                      refetch();
+                    }}
+                    className="ml-2 px-2 py-1 text-xs bg-green-100 dark:bg-green-800 rounded hover:bg-green-200 dark:hover:bg-green-700"
+                  >
+                    重新生成
+                  </button>
+                </div>
+              )}
+              {data?.metadata?.status === 'analyzed' && !data?.metadata?.embeddingStatus && (
+                <div className="mb-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-900/20 text-gray-700 dark:text-gray-300 text-sm flex items-center justify-between">
+                  <span>论文索引未建立，对话将使用全文</span>
+                  <button
+                    onClick={async () => {
+                      await fetch(`/api/embed/${paperId}`, { method: 'POST' });
+                      refetch();
+                    }}
+                    className="ml-2 px-2 py-1 text-xs bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                  >
+                    生成索引
                   </button>
                 </div>
               )}

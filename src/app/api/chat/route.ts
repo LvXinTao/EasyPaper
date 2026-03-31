@@ -54,13 +54,16 @@ export async function POST(request: Request) {
     // Determine context content: use RAG if embeddings exist, otherwise fallback to full text
     let contextContent: string;
     let lowConfidence = false;
+    console.log(`[chat] Paper ${paperId}: embeddings status =`, embeddings ? 'exists' : 'missing');
     if (!embeddings) {
       // Fallback: trigger async generation, use full text for this query
+      console.log(`[chat] Paper ${paperId}: Triggering embedding generation, using full text fallback`);
       triggerEmbeddingGeneration(paperId);
       const parsedContent = await storage.getParsedContent(paperId);
       contextContent = parsedContent || '';
     } else {
       // Use RAG context
+      console.log(`[chat] Paper ${paperId}: Using RAG with ${embeddings.chunks.length} chunks`);
       const topK = expandContext ? 8 : 3;
       const config = await getEmbeddingConfig();
       let relevantChunks = await search(message, embeddings, topK, {
