@@ -15,22 +15,22 @@
 | File | Responsibility |
 |------|---------------|
 | `src/lib/analysis-queue.ts` | 内存队列管理：init, tryAcquire, release, cancelQueued |
-| `src/lib/analysis-runner.ts` | 分析核心逻辑：从 route 抽取，支持可选 onProgress 回调 |
+| `src/lib/analysis-runner.ts` | 分析核心逻辑：从 route 抽取，支持可选 onProgress 和 onComplete 回调 |
 | `src/app/api/analyze/route.ts` | 集成队列检查：幂等性、排队状态返回、SSE stream |
 | `src/app/api/analyze/queue/route.ts` | 队列 API：GET 查询状态、DELETE 取消排队 |
 | `src/types/index.ts` | 类型定义：添加 'queued' status，更新 AnalysisProgress |
-| `src/components/paper-row.tsx` | 前端：显示 'queued' 状态标签 |
+| `src/components/paper-row.tsx` | 前端：显示 'queued' 状态标签和取消按钮 |
 | `src/hooks/use-analysis-polling.ts` | 前端：轮询时处理 'queued' 状态 |
 | `src/components/settings-form.tsx` | 前端：添加 maxConcurrent 配置项 |
 
 ---
 
-## Chunk 1: Types and Storage
+## Chunk 1: Types
 
 ### Task 1: Update Type Definitions
 
 **Files:**
-- Modify: `src/types/index.ts:1-42`
+- Modify: `src/types/index.ts`
 
 - [ ] **Step 1: Update PaperStatus type**
 
@@ -86,159 +86,22 @@ git commit -m "feat(types): add 'queued' status and queuePosition for analysis c
 
 ---
 
-## Chunk 2: Analysis Queue Module
+## Chunk 2: Analysis Runner (No Circular Dependency)
 
-### Task 2: Create Analysis Queue Module
-
-**Files:**
-- Create: `src/lib/analysis-queue.ts`
-
-- [ ] **Step 1: Write the module skeleton**
-
-```typescript
-import { storage } from '@/lib/storage';
-import { getAIConfig } from '@/lib/ai-config';
-import { runAnalysisCore } from '@/lib/analysis-runner';
-
-type AIConfig = Awaited<ReturnType<typeof getAIConfig>>;
-
-interface QueueState {
-  activeCount: number;
-  activePaperIds: Set<string>;
-  maxConcurrent: number;
-  initPromise: Promise<void> | null;
-  lock: Promise<void>;
-}
-
-const state: QueueState = {
-  activeCount: 0,
-  activePaperIds: new Set(),
-  maxConcurrent: 3,
-  initPromise: null,
-  lock: Promise.resolve(),
-};
-
-export const analysisQueue = {
-  async init(): Promise<void> {
-    if (state.initPromise) return state.initPromise;
-    state.initPromise = doInit();
-    return state.initPromise;
-  },
-
-  async tryAcquire(paperId: string): Promise<boolean> {
-    await state.lock;
-    let resolveLock: () => void;
-    state.lock = new Promise<void>((resolve) => { resolveLock = resolve; });
-    try {
-      if (state.activeCount < state.maxConcurrent) {
-        state.activeCount++;
-        state.activePaperIds.add(paperId);
-        return true;
-      }
-      return false;
-    } finally {
-      resolveLock!();
-    }
-  },
-
-  async release(paperId: string): Promise<void> {
-    state.activePaperIds.delete(paperId);
-    state.activeCount--;
-
-    const queuedPapers = await getQueuedPapers();
-    if (queuedPapers.length > 0) {
-      const next = queuedPapers[0];
-      const exists = await storage.paperExists(next.id);
-      if (!exists) {
-        return this.release(paperId);
-      }
-      await this.tryAcquire(next.id);
-      runAnalysisCore(next.id, await getAIConfig()).catch(console.error);
-    }
-  },
-
-  async getQueuedPapers(): Promise<{ id: string; queuedAt: string }[]> {
-    const papers = await storage.listPapers();
-    const queued: { id: string; queuedAt: string }[] = [];
-    for (const paper of papers) {
-      const meta = await storage.getMetadata(paper.id);
-      if (meta?.status === 'queued' && meta.analysisProgress?.step === 'queued') {
-        queued.push({ id: paper.id, queuedAt: meta.analysisProgress.updatedAt });
-      }
-    }
-    return queued.sort((a, b) => new Date(a.queuedAt).getTime() - new Date(b.queuedAt).getTime());
-  },
-
-  getStatus(): { active: number; max: number; queued: number } {
-    return {
-      active: state.activeCount,
-      max: state.maxConcurrent,
-      queued: state.activePaperIds.size,
-    };
-  },
-
-  async cancelQueued(paperId: string): Promise<boolean> {
-    const meta = await storage.getMetadata(paperId);
-    if (meta?.status !== 'queued') return false;
-    await storage.updateMetadata(paperId, { status: 'pending', analysisProgress: undefined });
-    return true;
-  },
-};
-
-async function doInit(): Promise<void> {
-  const settings = await storage.getSettings();
-  state.maxConcurrent = (settings?.maxConcurrent as number) || 3;
-
-  const papers = await storage.listPapers();
-  const staleThresholdMs = ((settings?.staleThresholdMinutes as number) || 10) * 60 * 1000;
-
-  for (const paper of papers) {
-    const meta = await storage.getMetadata(paper.id);
-    if (meta?.status === 'parsing' || meta?.status === 'analyzing') {
-      const updatedAt = new Date(meta.analysisProgress?.updatedAt || 0).getTime();
-      const ageMs = Date.now() - updatedAt;
-
-      if (ageMs > staleThresholdMs) {
-        await storage.updateMetadata(paper.id, { status: 'pending' });
-      } else {
-        state.activePaperIds.add(paper.id);
-        state.activeCount++;
-      }
-    }
-  }
-}
-```
-
-- [ ] **Step 2: Run lint to verify**
-
-Run: `npm run lint`
-Expected: No errors
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add src/lib/analysis-queue.ts
-git commit -m "feat(queue): add analysis queue module for concurrency control"
-```
-
----
-
-### Task 3: Create Analysis Runner Module
+### Task 2: Create Analysis Runner Module
 
 **Files:**
 - Create: `src/lib/analysis-runner.ts`
-- Modify: `src/app/api/analyze/route.ts` (reference only)
 
-- [ ] **Step 1: Extract runAnalysis logic from route.ts**
+**Design Note:** To avoid circular dependency, `runAnalysisCore` accepts an `onComplete` callback instead of importing `analysisQueue`. The caller (route.ts or queue trigger) is responsible for passing the release callback.
 
-Create `src/lib/analysis-runner.ts` with the extracted logic:
+- [ ] **Step 1: Write the runner module**
 
 ```typescript
 import { storage } from '@/lib/storage';
 import { parsePdfWithVision } from '@/lib/pdf-parser';
 import { createAIClient } from '@/lib/ai-client';
 import { ANALYSIS_PROMPT } from '@/lib/prompts';
-import { analysisQueue } from '@/lib/analysis-queue';
 import type { PaperAnalysis } from '@/types';
 
 type AIConfig = Awaited<ReturnType<typeof import('@/lib/ai-config').getAIConfig>>;
@@ -247,7 +110,8 @@ type SendFn = (data: Record<string, unknown>) => void;
 export async function runAnalysisCore(
   paperId: string,
   config: AIConfig,
-  onProgress?: SendFn
+  onProgress?: SendFn,
+  onComplete?: () => Promise<void>
 ): Promise<void> {
   const send: SendFn = onProgress || (() => {});
   const { apiKey, baseUrl, model, visionModel } = config;
@@ -366,7 +230,10 @@ export async function runAnalysisCore(
     }
     send({ error: error instanceof Error ? error.message : 'Analysis failed' });
   } finally {
-    await analysisQueue.release(paperId);
+    // Always call onComplete to release the slot
+    if (onComplete) {
+      await onComplete();
+    }
   }
 }
 ```
@@ -380,12 +247,169 @@ Expected: No errors
 
 ```bash
 git add src/lib/analysis-runner.ts
-git commit -m "feat(runner): extract analysis core logic from route for reuse"
+git commit -m "feat(runner): extract analysis core logic with onComplete callback"
 ```
 
 ---
 
-## Chunk 3: API Routes
+## Chunk 3: Analysis Queue Module
+
+### Task 3: Create Analysis Queue Module
+
+**Files:**
+- Create: `src/lib/analysis-queue.ts`
+
+- [ ] **Step 1: Write the queue module**
+
+```typescript
+import { storage } from '@/lib/storage';
+import { getAIConfig } from '@/lib/ai-config';
+import { runAnalysisCore } from '@/lib/analysis-runner';
+
+type AIConfig = Awaited<ReturnType<typeof getAIConfig>>;
+
+interface QueueState {
+  activeCount: number;
+  activePaperIds: Set<string>;
+  maxConcurrent: number;
+  initPromise: Promise<void> | null;
+  lock: Promise<void>;
+}
+
+const state: QueueState = {
+  activeCount: 0,
+  activePaperIds: new Set(),
+  maxConcurrent: 3,
+  initPromise: null,
+  lock: Promise.resolve(),
+};
+
+export const analysisQueue = {
+  async init(): Promise<void> {
+    if (state.initPromise) return state.initPromise;
+    state.initPromise = doInit();
+    return state.initPromise;
+  },
+
+  async tryAcquire(paperId: string): Promise<boolean> {
+    await state.lock;
+    let resolveLock: () => void;
+    state.lock = new Promise<void>((resolve) => { resolveLock = resolve; });
+    try {
+      if (state.activeCount < state.maxConcurrent) {
+        state.activeCount++;
+        state.activePaperIds.add(paperId);
+        return true;
+      }
+      return false;
+    } finally {
+      resolveLock!();
+    }
+  },
+
+  async release(paperId: string): Promise<void> {
+    state.activePaperIds.delete(paperId);
+    state.activeCount--;
+
+    // Check for queued papers and trigger the next one
+    const queuedPapers = await this.getQueuedPapers();
+    if (queuedPapers.length > 0) {
+      const next = queuedPapers[0];
+
+      // Verify paper still exists
+      const exists = await storage.paperExists(next.id);
+      if (!exists) {
+        // Skip deleted paper, recursively check next
+        return this.release(paperId);
+      }
+
+      // Acquire slot for the queued paper
+      const acquired = await this.tryAcquire(next.id);
+      if (!acquired) {
+        console.warn(`[queue] Failed to acquire slot for queued paper ${next.id}`);
+        return;
+      }
+
+      // Update metadata: clear queued status before starting analysis
+      await storage.updateMetadata(next.id, {
+        status: 'pending',
+        analysisProgress: undefined,
+      });
+
+      // Start analysis in background (don't await)
+      const config = await getAIConfig();
+      runAnalysisCore(next.id, config, undefined, () => this.release(next.id)).catch(console.error);
+    }
+  },
+
+  async getQueuedPapers(): Promise<{ id: string; queuedAt: string }[]> {
+    const papers = await storage.listPapers();
+    const queued: { id: string; queuedAt: string }[] = [];
+    for (const paper of papers) {
+      const meta = await storage.getMetadata(paper.id);
+      if (meta?.status === 'queued' && meta.analysisProgress?.step === 'queued') {
+        queued.push({ id: paper.id, queuedAt: meta.analysisProgress.updatedAt });
+      }
+    }
+    return queued.sort((a, b) => new Date(a.queuedAt).getTime() - new Date(b.queuedAt).getTime());
+  },
+
+  async getStatus(): Promise<{ active: number; max: number; queued: number }> {
+    const queuedPapers = await this.getQueuedPapers();
+    return {
+      active: state.activeCount,
+      max: state.maxConcurrent,
+      queued: queuedPapers.length,
+    };
+  },
+
+  async cancelQueued(paperId: string): Promise<boolean> {
+    const meta = await storage.getMetadata(paperId);
+    if (meta?.status !== 'queued') return false;
+    await storage.updateMetadata(paperId, { status: 'pending', analysisProgress: undefined });
+    return true;
+  },
+};
+
+async function doInit(): Promise<void> {
+  const settings = await storage.getSettings();
+  state.maxConcurrent = (settings?.maxConcurrent as number) || 3;
+
+  const papers = await storage.listPapers();
+  const staleThresholdMs = ((settings?.staleThresholdMinutes as number) || 10) * 60 * 1000;
+
+  for (const paper of papers) {
+    const meta = await storage.getMetadata(paper.id);
+    if (meta?.status === 'parsing' || meta?.status === 'analyzing') {
+      const updatedAt = new Date(meta.analysisProgress?.updatedAt || 0).getTime();
+      const ageMs = Date.now() - updatedAt;
+
+      if (ageMs > staleThresholdMs) {
+        await storage.updateMetadata(paper.id, { status: 'pending' });
+      } else {
+        state.activePaperIds.add(paper.id);
+        state.activeCount++;
+      }
+    }
+  }
+}
+```
+
+- [ ] **Step 2: Run lint to verify**
+
+Run: `npm run lint`
+Expected: No errors
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/lib/analysis-queue.ts
+git commit -m "feat(queue): add analysis queue module with proper release flow"
+```
+
+---
+
+## Chunk 4: API Routes
 
 ### Task 4: Modify Analyze Route
 
@@ -425,11 +449,17 @@ export async function POST(request: Request) {
     // Check current status for idempotency
     const metadata = await storage.getMetadata(paperId);
     if (metadata?.status === 'queued') {
-      const queuedPapers = await analysisQueue.getQueuedPapers();
-      const position = queuedPapers.findIndex(p => p.id === paperId) + 1;
-      return new Response(JSON.stringify({ status: 'already_queued', queuePosition: position }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      // Handle force re-analyze for queued papers
+      if (force) {
+        await analysisQueue.cancelQueued(paperId);
+        // Continue to tryAcquire below
+      } else {
+        const queuedPapers = await analysisQueue.getQueuedPapers();
+        const position = queuedPapers.findIndex(p => p.id === paperId) + 1;
+        return new Response(JSON.stringify({ status: 'already_queued', queuePosition: position }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     if (metadata && (metadata.status === 'parsing' || metadata.status === 'analyzing') && metadata.analysisProgress) {
@@ -454,8 +484,8 @@ export async function POST(request: Request) {
 
     // Try to acquire slot
     if (!(await analysisQueue.tryAcquire(paperId))) {
-      const status = analysisQueue.getStatus();
-      const queuePosition = status.queued + 1;
+      const queueStatus = await analysisQueue.getStatus();
+      const queuePosition = queueStatus.queued + 1;
       await storage.updateMetadata(paperId, {
         status: 'queued',
         analysisProgress: {
@@ -479,7 +509,7 @@ export async function POST(request: Request) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
           } catch {}
         };
-        await runAnalysisCore(paperId, config, send);
+        await runAnalysisCore(paperId, config, send, () => analysisQueue.release(paperId));
         try { controller.close(); } catch {}
       },
     });
@@ -510,7 +540,7 @@ Expected: No errors
 
 ```bash
 git add src/app/api/analyze/route.ts
-git commit -m "feat(analyze): integrate queue for concurrency control"
+git commit -m "feat(analyze): integrate queue with force re-analyze support"
 ```
 
 ---
@@ -520,7 +550,7 @@ git commit -m "feat(analyze): integrate queue for concurrency control"
 **Files:**
 - Create: `src/app/api/analyze/queue/route.ts`
 
-- [ ] **Step 1: Write GET handler for queue status**
+- [ ] **Step 1: Write GET and DELETE handlers**
 
 ```typescript
 import { analysisQueue } from '@/lib/analysis-queue';
@@ -528,7 +558,7 @@ import { createErrorResponse } from '@/lib/errors';
 
 export async function GET() {
   await analysisQueue.init();
-  const status = analysisQueue.getStatus();
+  const status = await analysisQueue.getStatus();
   const queuedPapers = await analysisQueue.getQueuedPapers();
 
   return new Response(JSON.stringify({
@@ -576,12 +606,12 @@ git commit -m "feat(api): add queue status and cancel endpoints"
 
 ---
 
-## Chunk 4: Frontend Updates
+## Chunk 5: Frontend Updates
 
 ### Task 6: Update PaperRow Component
 
 **Files:**
-- Modify: `src/components/paper-row.tsx:14-20`
+- Modify: `src/components/paper-row.tsx`
 
 - [ ] **Step 1: Add 'queued' to statusConfig**
 
@@ -619,24 +649,174 @@ Edit lines 66-73 to include queued styling:
               }}
 ```
 
-- [ ] **Step 3: Run lint to verify**
+- [ ] **Step 3: Add cancel button for queued status**
+
+Edit the component to add an `onCancelQueue` prop and button. Update the interface (lines 6-12):
+
+```typescript
+interface PaperRowProps {
+  paper: PaperListItem;
+  isActive: boolean;
+  onClick: () => void;
+  onDoubleClick?: () => void;
+  onToggleStar?: () => void;
+  onCancelQueue?: () => void;
+}
+```
+
+Update the function signature and add cancel button after the status badge (around line 77):
+
+```typescript
+export function PaperRow({ paper, isActive, onClick, onDoubleClick, onToggleStar, onCancelQueue }: PaperRowProps) {
+  const status = statusConfig[paper.status] || statusConfig.pending;
+  const isStarred = paper.starred === true;
+
+  const handleStarClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleStar?.();
+  };
+
+  const handleCancelClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCancelQueue?.();
+  };
+
+  return (
+    <div
+      data-paper-id={paper.id}
+      onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      className="cursor-pointer rounded-lg transition-colors"
+      style={{
+        padding: '10px',
+        marginBottom: '2px',
+        background: isActive ? 'var(--accent-subtle)' : isStarred ? 'rgba(251, 191, 36, 0.08)' : 'transparent',
+        border: isActive ? '1px solid rgba(157,157,181,0.08)' : '1px solid transparent',
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <button
+          onClick={handleStarClick}
+          className="flex-shrink-0 mt-0.5 cursor-pointer"
+          style={{ fontSize: '15px', color: isStarred ? 'var(--amber)' : 'var(--text-tertiary)', opacity: isStarred ? 1 : 0.4 }}
+          title={isStarred ? 'Remove from starred' : 'Add to starred'}
+        >
+          {isStarred ? '★' : '☆'}
+        </button>
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.35 }}>
+            {paper.title}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '3px' }}>
+            {formatRelativeTime(paper.createdAt)}
+          </div>
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+            <span
+              className="rounded"
+              style={{
+                fontSize: '10px',
+                padding: '1px 6px',
+                background: status.className === 'analyzed' ? 'var(--green-subtle)' :
+                            status.className === 'error' ? 'var(--rose-subtle)' :
+                            status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue-subtle)' :
+                            status.className === 'queued' ? 'var(--gray-subtle)' :
+                            'var(--amber-subtle)',
+                color: status.className === 'analyzed' ? 'var(--green)' :
+                       status.className === 'error' ? 'var(--rose)' :
+                       status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue)' :
+                       status.className === 'queued' ? 'var(--gray)' :
+                       'var(--amber)',
+              }}
+            >
+              {status.label}
+            </span>
+            {paper.status === 'queued' && onCancelQueue && (
+              <button
+                onClick={handleCancelClick}
+                className="rounded text-xs px-2 py-0.5 cursor-pointer"
+                style={{
+                  background: 'var(--glass)',
+                  border: '1px solid var(--glass-border)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Run lint to verify**
 
 Run: `npm run lint`
 Expected: No errors
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/components/paper-row.tsx
-git commit -m "feat(ui): add 'queued' status display in paper row"
+git commit -m "feat(ui): add queued status display and cancel button"
 ```
 
 ---
 
-### Task 7: Update Analysis Polling Hook
+### Task 7: Update Page Component to Handle Cancel
 
 **Files:**
-- Modify: `src/hooks/use-analysis-polling.ts:52-63, 116-127`
+- Modify: `src/app/page.tsx`
+
+- [ ] **Step 1: Find where PaperRow is used and add onCancelQueue handler**
+
+Look for the PaperRow component usage and add the cancel handler. The handler should call `DELETE /api/analyze/queue?paperId=xxx` and refresh the paper list.
+
+```typescript
+const handleCancelQueue = async (paperId: string) => {
+  try {
+    await fetch(`/api/analyze/queue?paperId=${paperId}`, { method: 'DELETE' });
+    // Refresh paper list
+    await fetchPapers();
+  } catch (error) {
+    console.error('Failed to cancel queue:', error);
+  }
+};
+```
+
+Then pass it to PaperRow:
+
+```typescript
+<PaperRow
+  paper={paper}
+  isActive={selectedPaper?.id === paper.id}
+  onClick={() => setSelectedPaper(paper)}
+  onDoubleClick={() => router.push(`/paper/${paper.id}`)}
+  onToggleStar={() => handleToggleStar(paper.id)}
+  onCancelQueue={() => handleCancelQueue(paper.id)}
+/>
+```
+
+- [ ] **Step 2: Run lint to verify**
+
+Run: `npm run lint`
+Expected: No errors
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/app/page.tsx
+git commit -m "feat(ui): wire up cancel queue functionality"
+```
+
+---
+
+### Task 8: Update Analysis Polling Hook
+
+**Files:**
+- Modify: `src/hooks/use-analysis-polling.ts`
 
 - [ ] **Step 1: Add 'queued' to auto-start polling condition**
 
@@ -645,7 +825,6 @@ Edit lines 116-127 to include queued status:
 ```typescript
   useEffect(() => {
     if ((initialStatus === 'queued' || initialStatus === 'parsing' || initialStatus === 'analyzing') && !activeRef.current) {
-      // Start polling inline to avoid setState-in-effect warning
       activeRef.current = true;
       setState(prev => ({
         ...prev,
@@ -659,16 +838,12 @@ Edit lines 116-127 to include queued status:
   }, [initialStatus, poll]);
 ```
 
-- [ ] **Step 2: Update completion check to handle queued->parsing transition**
-
-Edit lines 52-63, no change needed - the existing logic already handles the transition correctly (when status changes from queued to parsing, polling continues).
-
-- [ ] **Step 3: Run lint to verify**
+- [ ] **Step 2: Run lint to verify**
 
 Run: `npm run lint`
 Expected: No errors
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add src/hooks/use-analysis-polling.ts
@@ -677,14 +852,14 @@ git commit -m "feat(hook): auto-start polling for queued status"
 
 ---
 
-### Task 8: Add maxConcurrent to Settings Form
+### Task 9: Add maxConcurrent to Settings Form
 
 **Files:**
-- Modify: `src/components/settings-form.tsx:6-27, 91-96`
+- Modify: `src/components/settings-form.tsx`
 
 - [ ] **Step 1: Add maxConcurrent to SettingsData interface**
 
-Edit lines 6-15 to add maxConcurrent:
+Edit lines 6-15:
 
 ```typescript
 interface SettingsData {
@@ -702,7 +877,7 @@ interface SettingsData {
 
 - [ ] **Step 2: Add maxConcurrent to initial state**
 
-Edit lines 17-27 to add maxConcurrent:
+Edit lines 17-27:
 
 ```typescript
   const [settings, setSettings] = useState<SettingsData>({
@@ -720,7 +895,7 @@ Edit lines 17-27 to add maxConcurrent:
 
 - [ ] **Step 3: Add maxConcurrent to handleSave body**
 
-Edit lines 51-66 to include maxConcurrent:
+Edit lines 51-66:
 
 ```typescript
       const body: Record<string, string | boolean | number> = {
@@ -735,7 +910,7 @@ Edit lines 51-66 to include maxConcurrent:
 
 - [ ] **Step 4: Add maxConcurrent input field in UI**
 
-Add after line 155 (after Vision Model input):
+Add after Vision Model input (around line 155):
 
 ```typescript
       <div>
@@ -772,9 +947,9 @@ git commit -m "feat(settings): add maxConcurrent configuration option"
 
 ---
 
-## Chunk 5: Testing and Verification
+## Chunk 6: Testing and Verification
 
-### Task 9: Manual Testing
+### Task 10: Manual Testing
 
 - [ ] **Step 1: Start dev server**
 
@@ -784,20 +959,22 @@ Expected: Server starts on localhost:3000
 - [ ] **Step 2: Test queue behavior**
 
 1. Upload 4+ papers
-2. Click "Analyze" on first paper → should start immediately
-3. Click "Analyze" on second paper → should start immediately (if maxConcurrent=3)
-4. Click "Analyze" on fourth paper → should return `{ status: 'queued', queuePosition: 1 }`
-5. Wait for one analysis to complete → queued paper should auto-start
+2. Click "Analyze" on first 3 papers → should all start immediately
+3. Click "Analyze" on fourth paper → should return `{ status: 'queued', queuePosition: 1 }`
+4. Verify "Queued..." status and "Cancel" button appear
+5. Click "Cancel" button → status should change to "Pending"
+6. Re-analyze → should queue again
+7. Wait for one analysis to complete → queued paper should auto-start
 
-- [ ] **Step 3: Test queue status API**
+- [ ] **Step 3: Test force re-analyze queued paper**
+
+1. Queue a paper
+2. Call analyze with `force: true` → should cancel queue and start immediately if slot available
+
+- [ ] **Step 4: Test queue status API**
 
 Run: `curl http://localhost:3000/api/analyze/queue`
 Expected: JSON with active, max, queued counts
-
-- [ ] **Step 4: Test cancel queued**
-
-Run: `curl -X DELETE "http://localhost:3000/api/analyze/queue?paperId=<queued_paper_id>"`
-Expected: `{ status: 'cancelled' }`
 
 - [ ] **Step 5: Test settings UI**
 
@@ -805,9 +982,9 @@ Navigate to `/settings`, verify maxConcurrent input exists and saves correctly.
 
 ---
 
-### Task 10: Final Commit
+### Task 11: Final Verification
 
-- [ ] **Step 1: Run build to verify**
+- [ ] **Step 1: Run build**
 
 Run: `npm run build`
 Expected: Build succeeds without errors
@@ -817,9 +994,12 @@ Expected: Build succeeds without errors
 Run: `npm run lint`
 Expected: No errors
 
-- [ ] **Step 3: Create summary commit if needed**
+- [ ] **Step 3: Run tests**
 
-If there are uncommitted changes:
+Run: `npm test`
+Expected: All tests pass
+
+- [ ] **Step 4: Create summary commit if needed**
 
 ```bash
 git add -A
@@ -832,7 +1012,9 @@ git commit -m "feat: complete global analysis concurrency limit implementation"
 
 This plan implements:
 - Memory-based queue with Promise lock for atomic operations
-- Automatic queue triggering on task completion
-- SSE reconnection via polling for queued papers
+- No circular dependency: runner uses `onComplete` callback pattern
+- `getStatus()` returns actual queued count via async `getQueuedPapers()`
+- Proper metadata update before starting queued paper
+- Force re-analyze support for queued papers
+- Cancel button in UI for queued papers
 - Settings UI for maxConcurrent configuration
-- Queue status and cancel API endpoints
