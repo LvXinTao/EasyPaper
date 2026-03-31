@@ -16,6 +16,21 @@ jest.mock('@/lib/storage', () => ({
   },
 }));
 jest.mock('@/lib/pdf-parser', () => ({ parsePdfWithVision: jest.fn() }));
+jest.mock('@/lib/analysis-queue', () => ({
+  analysisQueue: {
+    init: jest.fn().mockResolvedValue(undefined),
+    tryAcquire: jest.fn().mockResolvedValue(true),
+    release: jest.fn().mockResolvedValue(undefined),
+    cancelQueued: jest.fn().mockResolvedValue(true),
+    getQueuedPapers: jest.fn().mockResolvedValue([]),
+    getStatus: jest.fn().mockResolvedValue({ active: 0, max: 3, queued: 0 }),
+  },
+}));
+jest.mock('@/lib/analysis-runner', () => ({
+  runAnalysisCore: jest.fn().mockImplementation(async (_paperId, _config, _send, onComplete) => {
+    if (onComplete) await onComplete();
+  }),
+}));
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
