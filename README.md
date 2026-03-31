@@ -102,7 +102,7 @@ All data is stored locally in `~/.easypaper/`.
 ## Roadmap
 
 - [x] Support sentence-level notes with PDF text selection
-- [ ] Support asking AI questions about specific sentences
+- [x] Support asking AI questions about specific sentences
 - [ ] Support more file formats (currently only PDF)
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers
