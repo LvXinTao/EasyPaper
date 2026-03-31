@@ -113,7 +113,7 @@ export function useAnalysisPolling(paperId: string, initialStatus: PaperStatus |
   // setState is intentional here to start the polling state machine
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if ((initialStatus === 'parsing' || initialStatus === 'analyzing') && !activeRef.current) {
+    if ((initialStatus === 'queued' || initialStatus === 'parsing' || initialStatus === 'analyzing') && !activeRef.current) {
       // Start polling inline to avoid setState-in-effect warning
       activeRef.current = true;
       setState(prev => ({
