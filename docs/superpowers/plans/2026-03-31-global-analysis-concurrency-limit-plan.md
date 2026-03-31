@@ -72,16 +72,37 @@ export type AnalyzeEvent =
   | { error: string };
 ```
 
-- [ ] **Step 4: Run lint to verify**
+- [ ] **Step 4: Update AppSettings interface for new settings**
+
+Edit `AppSettings` interface (lines 85-96) to add new settings:
+
+```typescript
+export interface AppSettings {
+  baseUrl: string;
+  apiKeyEncrypted: string;
+  apiKeyIV: string;
+  model: string;
+  visionModel: string;
+  embeddingModel?: string;
+  useSameApiForEmbedding?: boolean;
+  embeddingBaseUrl?: string;
+  embeddingApiKeyEncrypted?: string;
+  embeddingApiKeyIV?: string;
+  maxConcurrent?: number;
+  staleThresholdMinutes?: number;
+}
+```
+
+- [ ] **Step 5: Run lint to verify**
 
 Run: `npm run lint`
 Expected: No errors
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/types/index.ts
-git commit -m "feat(types): add 'queued' status and queuePosition for analysis concurrency"
+git commit -m "feat(types): add 'queued' status, queuePosition, and settings types"
 ```
 
 ---
@@ -292,9 +313,12 @@ export const analysisQueue = {
   },
 
   async tryAcquire(paperId: string): Promise<boolean> {
-    await state.lock;
+    // Chain new lock BEFORE awaiting to ensure mutual exclusion
+    const oldLock = state.lock;
     let resolveLock: () => void;
-    state.lock = new Promise<void>((resolve) => { resolveLock = resolve; });
+    state.lock = oldLock.then(() => new Promise<void>((resolve) => { resolveLock = resolve; }));
+
+    await oldLock;
     try {
       if (state.activeCount < state.maxConcurrent) {
         state.activeCount++;
@@ -330,10 +354,15 @@ export const analysisQueue = {
         return;
       }
 
-      // Update metadata: clear queued status before starting analysis
+      // Update metadata: set to 'analyzing' since queued papers may have cached content
+      // and won't trigger 'parsing' status update
       await storage.updateMetadata(next.id, {
-        status: 'pending',
-        analysisProgress: undefined,
+        status: 'analyzing',
+        analysisProgress: {
+          step: 'analyzing',
+          message: 'Starting analysis...',
+          updatedAt: new Date().toISOString(),
+        },
       });
 
       // Start analysis in background (don't await)
