@@ -14,7 +14,8 @@ export async function GET() {
       useSameApiForEmbedding: true,
       embeddingBaseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
       hasEmbeddingApiKey: false,
-      theme: { preset: 'dark-minimal', customAccent: null }
+      theme: { preset: 'dark-minimal', customAccent: null },
+      maxConcurrent: 3
     });
   }
   return NextResponse.json({
@@ -26,7 +27,8 @@ export async function GET() {
     useSameApiForEmbedding: settings.useSameApiForEmbedding !== undefined ? settings.useSameApiForEmbedding : true,
     embeddingBaseUrl: settings.embeddingBaseUrl || settings.baseUrl || 'https://api.openai.com/v1',
     hasEmbeddingApiKey: !!(settings.embeddingApiKeyEncrypted || (settings.useSameApiForEmbedding ? settings.apiKeyEncrypted : false)),
-    theme: settings.theme || { preset: 'dark-minimal', customAccent: null }
+    theme: settings.theme || { preset: 'dark-minimal', customAccent: null },
+    maxConcurrent: settings.maxConcurrent || 3
   });
 }
 
@@ -65,6 +67,12 @@ export async function POST(request: Request) {
 
   // Update theme if provided
   if (body.theme !== undefined) merged.theme = body.theme;
+
+  // Update maxConcurrent if provided (1-10, default 3)
+  if (body.maxConcurrent !== undefined) {
+    const val = parseInt(body.maxConcurrent);
+    merged.maxConcurrent = (val >= 1 && val <= 10) ? val : 3;
+  }
 
   await storage.saveSettings(merged);
   return NextResponse.json({ success: true });
