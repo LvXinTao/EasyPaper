@@ -91,7 +91,7 @@ export async function runAnalysisCore(
       clearInterval(heartbeat);
     }
 
-    // Step 3: Save results
+    // Step 3: Save results and mark as analyzed
     send({ step: 'saving', message: 'Saving results...' });
     await storage.updateMetadata(paperId, {
       analysisProgress: { step: 'saving', message: 'Saving results...', updatedAt: new Date().toISOString() },
@@ -100,6 +100,16 @@ export async function runAnalysisCore(
     const analysis: PaperAnalysis = { ...JSON.parse(result), generatedAt: new Date().toISOString() };
     await storage.saveAnalysis(paperId, analysis);
 
+    // Mark as analyzed IMMEDIATELY after successful save
+    // This prevents subsequent failures (like SSE send errors) from corrupting the status
+    const savedMeta = await storage.getMetadata(paperId);
+    if (savedMeta) {
+      savedMeta.status = 'analyzed';
+      delete savedMeta.analysisProgress;
+      await storage.saveMetadata(paperId, savedMeta);
+    }
+
+    // Send sections to client (status is already 'analyzed', so failures here won't affect it)
     for (const section of ['summary', 'contributions', 'methodology', 'experiments', 'conclusions'] as const) {
       const sectionData = analysis[section];
       let content: string;
@@ -113,20 +123,15 @@ export async function runAnalysisCore(
       send({ section, content });
     }
 
-    const finalMeta = await storage.getMetadata(paperId);
-    if (finalMeta) {
-      delete finalMeta.analysisProgress;
-      finalMeta.status = 'analyzed';
-      await storage.saveMetadata(paperId, finalMeta);
-    }
     send({ done: true });
   } catch (error) {
     console.error(`[analyze] Paper ${paperId}: Error -`, error instanceof Error ? error.message : error);
-    const errMeta = await storage.getMetadata(paperId);
-    if (errMeta) {
-      delete errMeta.analysisProgress;
-      errMeta.status = 'error';
-      await storage.saveMetadata(paperId, errMeta);
+    // Only set error status if analysis wasn't already saved successfully
+    const currentMeta = await storage.getMetadata(paperId);
+    if (currentMeta && currentMeta.status !== 'analyzed') {
+      delete currentMeta.analysisProgress;
+      currentMeta.status = 'error';
+      await storage.saveMetadata(paperId, currentMeta);
     }
     send({ error: error instanceof Error ? error.message : 'Analysis failed' });
   } finally {
