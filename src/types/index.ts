@@ -1,4 +1,4 @@
-export type PaperStatus = 'pending' | 'parsing' | 'analyzing' | 'analyzed' | 'error';
+export type PaperStatus = 'pending' | 'queued' | 'parsing' | 'analyzing' | 'analyzed' | 'error';
 
 export type EmbeddingStatus = 'pending' | 'generating' | 'generated' | 'error';
 
@@ -28,9 +28,10 @@ export interface PaperMetadata {
   sortIndex?: number;
   starred?: boolean;
   analysisProgress?: {
-    step: 'parsing' | 'analyzing' | 'saving';
+    step: 'queued' | 'parsing' | 'analyzing' | 'saving';
     message: string;
     updatedAt: string;
+    queuePosition?: number;
     batchesDone?: number;
     totalBatches?: number;
   };
@@ -93,6 +94,8 @@ export interface AppSettings {
   embeddingBaseUrl?: string;
   embeddingApiKeyEncrypted?: string;
   embeddingApiKeyIV?: string;
+  maxConcurrent?: number;
+  staleThresholdMinutes?: number;
 }
 
 export interface ApiError {
@@ -104,6 +107,7 @@ export interface ApiError {
 }
 
 export type AnalyzeEvent =
+  | { step: 'queued'; message?: string; queuePosition?: number }
   | { step: 'parsing'; message?: string }
   | { step: 'analyzing'; message?: string }
   | { step: 'saving'; message?: string }
