@@ -9,23 +9,30 @@ interface PaperRowProps {
   onClick: () => void;
   onDoubleClick?: () => void;
   onToggleStar?: () => void;
+  onCancelQueue?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   analyzed: { label: '✓ Analyzed', className: 'analyzed' },
   pending: { label: 'Pending', className: 'pending' },
+  queued: { label: 'Queued...', className: 'queued' },
   parsing: { label: 'Parsing...', className: 'parsing' },
   analyzing: { label: 'Analyzing...', className: 'analyzing' },
   error: { label: 'Error', className: 'error' },
 };
 
-export function PaperRow({ paper, isActive, onClick, onDoubleClick, onToggleStar }: PaperRowProps) {
+export function PaperRow({ paper, isActive, onClick, onDoubleClick, onToggleStar, onCancelQueue }: PaperRowProps) {
   const status = statusConfig[paper.status] || statusConfig.pending;
   const isStarred = paper.starred === true;
 
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleStar?.();
+  };
+
+  const handleCancelClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onCancelQueue?.();
   };
 
   return (
@@ -66,15 +73,30 @@ export function PaperRow({ paper, isActive, onClick, onDoubleClick, onToggleStar
                 background: status.className === 'analyzed' ? 'var(--green-subtle)' :
                             status.className === 'error' ? 'var(--rose-subtle)' :
                             status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue-subtle)' :
+                            status.className === 'queued' ? 'var(--amber-subtle)' :
                             'var(--amber-subtle)',
                 color: status.className === 'analyzed' ? 'var(--green)' :
                        status.className === 'error' ? 'var(--rose)' :
                        status.className === 'parsing' || status.className === 'analyzing' ? 'var(--blue)' :
+                       status.className === 'queued' ? 'var(--amber)' :
                        'var(--amber)',
               }}
             >
               {status.label}
             </span>
+            {paper.status === 'queued' && onCancelQueue && (
+              <button
+                onClick={handleCancelClick}
+                className="rounded text-xs px-2 py-0.5 cursor-pointer"
+                style={{
+                  background: 'var(--glass)',
+                  border: '1px solid var(--glass-border)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
       </div>

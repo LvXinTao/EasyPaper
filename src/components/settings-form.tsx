@@ -12,6 +12,7 @@ interface SettingsData {
   useSameApiForEmbedding: boolean;
   embeddingBaseUrl: string;
   hasEmbeddingApiKey: boolean;
+  maxConcurrent: number;
 }
 
 export function SettingsForm() {
@@ -24,6 +25,7 @@ export function SettingsForm() {
     useSameApiForEmbedding: true,
     embeddingBaseUrl: 'https://api.openai.com/v1',
     hasEmbeddingApiKey: false,
+    maxConcurrent: 3,
   });
   const [apiKey, setApiKey] = useState('');
   const [embeddingApiKey, setEmbeddingApiKey] = useState('');
@@ -48,12 +50,13 @@ export function SettingsForm() {
     setMessage(null);
 
     try {
-      const body: Record<string, string | boolean> = {
+      const body: Record<string, string | boolean | number> = {
         baseUrl: settings.baseUrl,
         model: settings.model,
         visionModel: settings.visionModel,
         embeddingModel: settings.embeddingModel,
         useSameApiForEmbedding: settings.useSameApiForEmbedding,
+        maxConcurrent: settings.maxConcurrent,
       };
       if (apiKey) {
         body.apiKey = apiKey;
@@ -152,6 +155,29 @@ export function SettingsForm() {
           style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
           placeholder="gpt-4o"
         />
+      </div>
+
+      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
+          Analysis Concurrency
+        </h3>
+        <div>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            Max Concurrent Analyses
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="10"
+            value={settings.maxConcurrent}
+            onChange={(e) => setSettings({ ...settings, maxConcurrent: parseInt(e.target.value) || 3 })}
+            className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+            style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+          />
+          <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+            Number of papers that can be analyzed simultaneously (1-10). Default: 3
+          </p>
+        </div>
       </div>
 
       <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
