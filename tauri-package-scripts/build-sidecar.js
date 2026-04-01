@@ -130,14 +130,69 @@ function createStartScript(serverDir) {
 /**
  * Production entry point for Tauri sidecar
  * Runs Next.js standalone server and outputs ready signal
+ * Logs to ~/.easypaper/logs/server.log
  */
 
 const net = require('net');
-const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { spawn } = require('child_process');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const READY_SIGNAL = process.argv.includes('--ready-signal');
+
+// Setup logging
+const LOG_DIR = path.join(os.homedir(), '.easypaper', 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'server.log');
+let logStream = null;
+
+function setupLogging() {
+  try {
+    if (!fs.existsSync(LOG_DIR)) {
+      fs.mkdirSync(LOG_DIR, { recursive: true });
+    }
+    // Rotate old logs (keep last 3)
+    rotateLogs();
+    logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+  } catch (e) {
+    // Fallback if logging setup fails
+    console.error('Failed to setup logging:', e.message);
+  }
+}
+
+function rotateLogs() {
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      const stats = fs.statSync(LOG_FILE);
+      // Rotate if file is larger than 5MB
+      if (stats.size > 5 * 1024 * 1024) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const rotatedFile = path.join(LOG_DIR, \`server-\${timestamp}.log\`);
+        fs.renameSync(LOG_FILE, rotatedFile);
+        // Clean up old rotated logs (keep last 3)
+        const rotatedLogs = fs.readdirSync(LOG_DIR)
+          .filter(f => f.startsWith('server-') && f.endsWith('.log'))
+          .sort()
+          .reverse();
+        rotatedLogs.slice(3).forEach(f => {
+          try { fs.unlinkSync(path.join(LOG_DIR, f)); } catch (e) {}
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const line = \`[\${timestamp}] \${message}\\n\`;
+  // Write to log file
+  if (logStream) {
+    logStream.write(line);
+  }
+  // Also write to stderr for Tauri to capture
+  process.stderr.write(line);
+}
 
 // Find available port
 async function findAvailablePort(startPort) {
@@ -158,15 +213,21 @@ async function findAvailablePort(startPort) {
 }
 
 async function main() {
+  setupLogging();
+  log('Starting EasyPaper server...');
+
   // Find available port if in ready-signal mode
   let port = PORT;
   if (READY_SIGNAL) {
     port = await findAvailablePort(PORT);
     if (!port) {
+      log('ERROR: Port 3000-3100 all occupied');
       console.log('EASYPAPER_ERROR:Port 3000-3100 all occupied');
+      if (logStream) logStream.end();
       process.exit(1);
     }
   }
+  log(\`Using port: \${port}\`);
 
   const serverPath = path.join(__dirname, 'server.js');
 
@@ -186,51 +247,68 @@ async function main() {
 
   // Store child PID for cleanup
   const childPid = child.pid;
+  log(\`Server process started with PID: \${childPid}\`);
 
   if (READY_SIGNAL) {
     let serverReady = false;
     const timeout = setTimeout(() => {
       if (!serverReady) {
+        log('ERROR: Server startup timeout after 10s');
         console.log('EASYPAPER_ERROR:Server startup timeout');
         child.kill('SIGTERM');
+        if (logStream) logStream.end();
         process.exit(1);
       }
     }, 10000);
 
     child.stdout.on('data', (data) => {
       const output = data.toString();
+      // Log all stdout
+      log(\`[stdout] \${output.trim()}\`);
       // Next.js outputs "Ready" when server starts
       if (!serverReady && (output.includes('Ready') || output.includes('Local:'))) {
         serverReady = true;
         clearTimeout(timeout);
+        log(\`Server ready on port \${port}\`);
         console.log('EASYPAPER_READY:' + port);
       }
-      process.stderr.write(output);
     });
 
     child.stderr.on('data', (data) => {
-      process.stderr.write(data.toString());
+      const output = data.toString();
+      log(\`[stderr] \${output.trim()}\`);
     });
   } else {
-    child.stdout.on('data', (data) => process.stdout.write(data));
-    child.stderr.on('data', (data) => process.stderr.write(data));
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      log(\`[stdout] \${output.trim()}\`);
+    });
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      log(\`[stderr] \${output.trim()}\`);
+    });
   }
 
   child.on('error', (err) => {
+    log(\`ERROR: \${err.message}\`);
     if (READY_SIGNAL) {
       console.log('EASYPAPER_ERROR:' + err.message);
     } else {
       console.error('Error: ' + err.message);
     }
+    if (logStream) logStream.end();
     process.exit(1);
   });
 
   child.on('exit', (code) => {
+    log(\`Server process exited with code: \${code}\`);
+    if (logStream) logStream.end();
     process.exit(code ?? 0);
   });
 
   // Handle shutdown signals - forward to child and kill process tree
   const shutdown = (signal) => {
+    log(\`Received \${signal}, shutting down...\`);
     // Kill the entire process group (including grandchildren)
     // Negative PID means kill the process group
     try {
@@ -240,6 +318,7 @@ async function main() {
     }
     // Also kill direct child as fallback
     child.kill(signal);
+    if (logStream) logStream.end();
   };
 
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
@@ -258,11 +337,13 @@ async function main() {
 }
 
 main().catch((err) => {
+  log(\`ERROR: \${err.message}\`);
   if (READY_SIGNAL) {
     console.log('EASYPAPER_ERROR:' + err.message);
   } else {
     console.error('Error: ' + err.message);
   }
+  if (logStream) logStream.end();
   process.exit(1);
 });
 `;
