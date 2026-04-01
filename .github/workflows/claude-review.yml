@@ -82,17 +82,30 @@ jobs:
           ')
 
           REVIEW_COUNT=0
+          TOTAL_CHARS=0
           while IFS= read -r review; do
             if [ -n "$review" ]; then
-              # Clean the review content (remove header, truncate to 4000 chars each)
-              cleaned=$(echo "$review" | sed '1,2d' | sed '/^$/d' | head -c 4000)
+              # Remove only the specific Claude header line, keep rest intact
+              cleaned=$(echo "$review" | sed '/^🤖 \*\*Claude Code Review\*\*$/d' | sed '/^$/d' | head -c 4000)
               if [ -n "$cleaned" ]; then
+                TOTAL_CHARS=$((TOTAL_CHARS + ${#cleaned}))
+                # Stop if cumulative content exceeds 10000 chars (~2500 tokens)
+                if [ $TOTAL_CHARS -gt 10000 ]; then
+                  echo "Warning: History truncated at 10000 chars to avoid token limits" >> $GITHUB_STEP_SUMMARY
+                  break
+                fi
                 jq --arg assistant "$cleaned" '. + [{role: "assistant", content: $assistant}]' \
                   conversation_history.json > tmp.json && mv tmp.json conversation_history.json
                 REVIEW_COUNT=$((REVIEW_COUNT + 1))
               fi
             fi
           done <<< "$CLAUDE_REVIEWS"
+
+          # Validate JSON file before output
+          if ! jq empty conversation_history.json 2>/dev/null; then
+            echo "::warning::Invalid conversation history JSON, resetting"
+            jq -n '[]' > conversation_history.json
+          fi
 
           if [ -s conversation_history.json ] && [ "$(cat conversation_history.json)" != "[]" ]; then
             echo "has_history=true" >> $GITHUB_OUTPUT
