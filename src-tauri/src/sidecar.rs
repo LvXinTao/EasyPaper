@@ -32,11 +32,11 @@ pub async fn start_and_wait(app: &AppHandle) -> Result<(u16, CommandChild), Side
         .sidecar("easypaper-server")
         .map_err(|e| SidecarError::SpawnError(e.to_string()))?;
 
+    // Don't override DATA_DIR/CONFIG_DIR — let the Node.js server use its
+    // built-in default (~/.easypaper/) so CLI and desktop share the same path.
     let (mut rx, child) = sidecar
         .args(["--ready-signal"])
         .env("PORT", "3000")
-        .env("DATA_DIR", get_data_dir())
-        .env("CONFIG_DIR", get_config_dir())
         .spawn()
         .map_err(|e| {
             log::error!("Failed to spawn sidecar: {}", e);
@@ -111,22 +111,4 @@ pub async fn start_and_wait(app: &AppHandle) -> Result<(u16, CommandChild), Side
             Err(SidecarError::StartupTimeout(READY_TIMEOUT_SECS))
         }
     }
-}
-
-fn get_data_dir() -> String {
-    dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join(".easypaper")
-        .join("data")
-        .to_string_lossy()
-        .to_string()
-}
-
-fn get_config_dir() -> String {
-    dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
-        .join(".easypaper")
-        .join("config")
-        .to_string_lossy()
-        .to_string()
 }
