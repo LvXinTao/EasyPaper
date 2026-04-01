@@ -260,16 +260,45 @@ async function main() {
       }
     }, 10000);
 
+    // HTTP health check to verify server is actually responding
+    const http = require('http');
+    const checkHealth = () => {
+      const req = http.request({
+        hostname: 'localhost',
+        port: port,
+        path: '/api/health',
+        method: 'HEAD',
+        timeout: 500,
+      }, (res) => {
+        if (res.headers['x-app'] === 'EasyPaper' && !serverReady) {
+          serverReady = true;
+          clearTimeout(timeout);
+          log(\`Server verified via health check on port \${port}\`);
+          console.log('EASYPAPER_READY:' + port);
+        }
+      });
+      req.on('error', () => {}); // Ignore errors, will retry
+      req.end();
+    };
+
     child.stdout.on('data', (data) => {
       const output = data.toString();
       // Log all stdout
       log(\`[stdout] \${output.trim()}\`);
-      // Next.js outputs "Ready" when server starts
+      // Next.js outputs "Ready" or "Local:" when server starts
+      // Start health check polling after detecting startup indicator
       if (!serverReady && (output.includes('Ready') || output.includes('Local:'))) {
-        serverReady = true;
-        clearTimeout(timeout);
-        log(\`Server ready on port \${port}\`);
-        console.log('EASYPAPER_READY:' + port);
+        log('Detected server startup, verifying with health check...');
+        // Poll health endpoint until it responds or timeout
+        const healthInterval = setInterval(() => {
+          if (serverReady) {
+            clearInterval(healthInterval);
+            return;
+          }
+          checkHealth();
+        }, 200);
+        // Stop polling after 5 seconds (timeout will catch overall failure)
+        setTimeout(() => clearInterval(healthInterval), 5000);
       }
     });
 

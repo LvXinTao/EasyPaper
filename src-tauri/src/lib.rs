@@ -116,11 +116,15 @@ pub fn run() {
 
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let url = format!("http://localhost:{}", port);
-                            // Use Tauri's navigation API instead of eval (avoids shell injection)
-                            // WebviewWindow::navigate is not available, so we use WebviewWindow::eval
-                            // with a safe URL construction (port is numeric, url is controlled)
-                            // SAFETY: port is a u16 from Tauri's port detection, url is format! with no user input
-                            let _ = window.eval(&format!("window.location.replace('{}')", url));
+                            // Navigate the webview to the sidecar URL
+                            // SAFETY: This uses eval() for navigation because Tauri 2.x WebviewWindow
+                            // doesn't have a native navigate() method. The URL is constructed safely:
+                            // - port is a u16 (numeric, controlled by Tauri's port detection)
+                            // - URL format is hardcoded: "http://localhost:{port}"
+                            // - No user input is interpolated into the JavaScript
+                            // - window.location.replace() is used instead of href to avoid history pollution
+                            let js = format!("window.location.replace('{}')", url);
+                            let _ = window.eval(&js);
                             let _ = window.show();
 
                             // Setup window close handler to kill sidecar
