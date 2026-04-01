@@ -94,7 +94,7 @@ export default function HomePage() {
 
   // Compute visible papers with filtering and sorting
   const visiblePapers = useMemo(() => {
-    let filtered = papers.filter(p => {
+    const filtered = papers.filter(p => {
       // Search filter
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       // Status filter
