@@ -188,8 +188,20 @@ async function main() {
     process.exit(code ?? 0);
   });
 
+  // Track shutdown state to prevent double-exit race conditions
+  let isShuttingDown = false;
+
+  const handleShutdown = (signal) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    // Forward signal to child process
+    // The child's exit will trigger our process.exit() via the 'exit' handler above
+    child.kill(signal);
+  };
+
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => child.kill(signal));
+    process.on(signal, () => handleShutdown(signal));
   }
 }
 
