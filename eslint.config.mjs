@@ -14,6 +14,12 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // CLI entry point is CommonJS, not TypeScript
     "bin/**",
+    // Tauri package scripts are CommonJS Node.js scripts
+    "tauri-package-scripts/**",
+    // Generated sidecar output (Next.js standalone build)
+    "sidecar-dist/**",
+    // Tauri Rust build artifacts
+    "src-tauri/target/**",
     // Vendored minified files
     "public/pdf.worker.min.mjs",
   ]),
