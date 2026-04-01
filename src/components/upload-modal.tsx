@@ -184,10 +184,10 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
     if (success > 0) {
       const lastId = uploadedIds[uploadedIds.length - 1];
       setTimeout(() => {
-        handleClose();
         if (onUploadComplete && lastId) {
           onUploadComplete(lastId);
         }
+        handleClose();
       }, 2000);
     }
   }, [selectedFiles, targetFolderId, handleClose, onUploadComplete]);
