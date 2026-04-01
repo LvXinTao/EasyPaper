@@ -62,35 +62,32 @@ jobs:
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
 
-          # Get all comments on the PR (both issue comments and review comments)
-          # Filter for Claude's reviews and user replies
-          gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments --paginate 2>/dev/null | \
-            jq -r '.[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review")) | .body' > claude_reviews.txt 2>/dev/null || true
+          # Fetch all Claude reviews in a single API call where possible
+          # Get reviews (submitted review events) which contain the full review body
+          REVIEWS_JSON=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews --paginate 2>/dev/null || echo '[]')
 
-          # Get review comments (inline code comments from reviews)
-          gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/comments --paginate 2>/dev/null | \
-            jq -r '.[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review")) | .body' >> claude_reviews.txt 2>/dev/null || true
+          # Filter for Claude reviews and build proper conversation history
+          # Each review is an assistant message; we need to pair them with implied user context
+          jq -n '[]' > conversation_history.json
 
-          # Also get the review body from submitted reviews
-          gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews --paginate 2>/dev/null | \
-            jq -r '.[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review")) | .body' >> claude_reviews.txt 2>/dev/null || true
-
-          # Build conversation history JSON
-          if [ -s claude_reviews.txt ]; then
-            # Clean up reviews: remove the header line and extract content
-            # Store previous Claude responses as assistant messages
-            jq -n '[]' > conversation_history.json
-
-            while IFS= read -r review; do
-              # Remove the "🤖 **Claude Code Review**" header and empty lines at start
-              cleaned=$(echo "$review" | sed '1,2d' | sed '/^$/d' | head -c 8000)
+          # Extract Claude reviews sorted by time (oldest first for proper conversation order)
+          echo "$REVIEWS_JSON" | jq -r 'sort_by(.submitted_at) | .[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review"; "i")) | .body' | while IFS= read -r review; do
+            if [ -n "$review" ]; then
+              # Clean the review content (remove header)
+              cleaned=$(echo "$review" | sed '1,2d' | sed '/^$/d' | head -c 6000)
               if [ -n "$cleaned" ]; then
-                jq --arg content "$cleaned" '. + [{role: "assistant", content: $content}]' conversation_history.json > tmp.json && mv tmp.json conversation_history.json
+                # Add a synthetic user message indicating a review was requested
+                jq --arg user "Please review the changes in this PR." --arg assistant "$cleaned" \
+                  '. + [{role: "user", content: $user}, {role: "assistant", content: $assistant}]' \
+                  conversation_history.json > tmp.json && mv tmp.json conversation_history.json
               fi
-            done < claude_reviews.txt
+            fi
+          done
 
-            echo "Has previous conversation history"
+          if [ -s conversation_history.json ] && [ "$(cat conversation_history.json)" != "[]" ]; then
+            echo "Found previous Claude reviews"
             echo "has_history=true" >> $GITHUB_OUTPUT
+            echo "History message count: $(jq 'length' conversation_history.json)" >> $GITHUB_STEP_SUMMARY
           else
             echo "No previous conversation history"
             jq -n '[]' > conversation_history.json
@@ -113,18 +110,16 @@ jobs:
           USER_PROMPT="Review this pull request:\n\n**Title:** $TITLE\n**Author:** @$AUTHOR\n**Files Changed:** $FILES\n\n**Diff:**\n\`\`\`diff\n$DIFF\n\`\`\`\n\nProvide a concise review with your verdict. If this is a follow-up review after changes, acknowledge what was fixed and focus on remaining issues."
 
           # Build messages array with conversation history
-          # Start with history, then add current prompt
+          # History contains alternating user/assistant messages, add current prompt at end
           if [ -s conversation_history.json ] && [ "$(cat conversation_history.json)" != "[]" ]; then
-            # Has history - prepend it to the current message
+            # Has history - append current review request
             HISTORY=$(cat conversation_history.json)
-            # Add context about this being a follow-up
-            FOLLOWUP_MSG="This is a follow-up review. The PR has been updated. Please review the new diff and continue the conversation."
-            MESSAGES=$(echo "$HISTORY" | jq --arg followup "$FOLLOWUP_MSG" --arg user "$USER_PROMPT" \
-              '. + [{role: "user", content: $followup}, {role: "user", content: $user}]')
+            MESSAGES=$(echo "$HISTORY" | jq --arg user "$USER_PROMPT" '. + [{role: "user", content: $user}]')
+            echo "Using conversation history with $(echo "$HISTORY" | jq 'length') previous messages"
           else
             # No history - just current message
-            MESSAGES='[{role: "user", content: "Review this pull request:\n\n**Title:** Test\n**Diff:** test"}]'
             MESSAGES=$(jq -n --arg user "$USER_PROMPT" '[{role: "user", content: $user}]')
+            echo "No conversation history, starting fresh"
           fi
 
           PAYLOAD=$(jq -n \
