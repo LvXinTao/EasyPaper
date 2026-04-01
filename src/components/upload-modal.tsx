@@ -232,6 +232,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
             >
               <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple onChange={handleFileSelect} className="hidden" />
               <input ref={folderInputRef} type="file" {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>} onChange={handleFolderSelect} className="hidden" />
