@@ -55,6 +55,66 @@ jobs:
           echo "author=$PR_AUTHOR" >> $GITHUB_OUTPUT
           echo "files=$PR_FILES" >> $GITHUB_OUTPUT
 
+      - name: Get Conversation History
+        id: history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ steps.pr.outputs.number }}"
+
+          # Fetch reviews (submitted review events) which contain the full review body
+          # GitHub API may return a single object or an array depending on count
+          REVIEWS_JSON=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews -F per_page=50 2>/dev/null || echo '[]')
+
+          # Build conversation history from Claude reviews
+          # Only store assistant messages (Claude's actual reviews)
+          # Limit to last 3 reviews to avoid token limits
+          jq -n '[]' > conversation_history.json
+
+          # Normalize to array (GitHub returns single object when only 1 review exists)
+          # Then extract last 3 Claude reviews, sorted by time (oldest first)
+          CLAUDE_REVIEWS=$(echo "$REVIEWS_JSON" | jq -r '
+            if type == "object" then [.] else . end |
+            sort_by(.submitted_at) |
+            [.[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review"; "i"))] |
+            .[-3:] |
+            .[].body
+          ')
+
+          REVIEW_COUNT=0
+          TOTAL_CHARS=0
+          while IFS= read -r review; do
+            if [ -n "$review" ]; then
+              # Remove only the specific Claude header line, keep rest intact
+              cleaned=$(echo "$review" | sed '/^🤖 \*\*Claude Code Review\*\*$/d' | sed '/^$/d' | head -c 4000)
+              if [ -n "$cleaned" ]; then
+                TOTAL_CHARS=$((TOTAL_CHARS + ${#cleaned}))
+                # Stop if cumulative content exceeds 10000 chars (~2500 tokens)
+                if [ $TOTAL_CHARS -gt 10000 ]; then
+                  echo "Warning: History truncated at 10000 chars to avoid token limits" >> $GITHUB_STEP_SUMMARY
+                  break
+                fi
+                jq --arg assistant "$cleaned" '. + [{role: "assistant", content: $assistant}]' \
+                  conversation_history.json > tmp.json && mv tmp.json conversation_history.json
+                REVIEW_COUNT=$((REVIEW_COUNT + 1))
+              fi
+            fi
+          done <<< "$CLAUDE_REVIEWS"
+
+          # Validate JSON file before output
+          if ! jq empty conversation_history.json 2>/dev/null; then
+            echo "::warning::Invalid conversation history JSON, resetting"
+            jq -n '[]' > conversation_history.json
+          fi
+
+          if [ -s conversation_history.json ] && [ "$(cat conversation_history.json)" != "[]" ]; then
+            echo "has_history=true" >> $GITHUB_OUTPUT
+            echo "Using $REVIEW_COUNT previous Claude reviews as context" >> $GITHUB_STEP_SUMMARY
+          else
+            jq -n '[]' > conversation_history.json
+            echo "has_history=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run Claude Review
         id: review
         run: |
@@ -66,15 +126,28 @@ jobs:
           AUTHOR="${{ steps.pr.outputs.author }}"
           FILES="${{ steps.pr.outputs.files }}"
 
-          SYSTEM_PROMPT="You are a senior code reviewer. Review pull requests and provide actionable feedback. Be concise and focus on important issues: bugs, security vulnerabilities, performance problems, architectural concerns, and breaking changes. Ignore minor style issues. Output your review in markdown format. End your review with exactly one of these verdicts: **Verdict: APPROVE**, **Verdict: REQUEST_CHANGES**, or **Verdict: COMMENT**."
+          SYSTEM_PROMPT="You are a senior code reviewer. Review pull requests and provide actionable feedback. Be concise and focus on important issues: bugs, security vulnerabilities, performance problems, architectural concerns, and breaking changes. Ignore minor style issues. Output your review in markdown format. End your review with exactly one of these verdicts: **Verdict: APPROVE**, **Verdict: REQUEST_CHANGES**, or **Verdict: COMMENT**. If there are previous reviews in the conversation, reference them and continue the discussion rather than starting fresh."
 
-          USER_PROMPT="Review this pull request:\n\n**Title:** $TITLE\n**Author:** @$AUTHOR\n**Files Changed:** $FILES\n\n**Diff:**\n\`\`\`diff\n$DIFF\n\`\`\`\n\nProvide a concise review with your verdict."
+          USER_PROMPT="Review this pull request:\n\n**Title:** $TITLE\n**Author:** @$AUTHOR\n**Files Changed:** $FILES\n\n**Diff:**\n\`\`\`diff\n$DIFF\n\`\`\`\n\nProvide a concise review with your verdict. If this is a follow-up review after changes, acknowledge what was fixed and focus on remaining issues."
+
+          # Build messages array with conversation history
+          # For follow-up reviews: [previous assistant messages] + [current user request]
+          # Claude API handles this pattern correctly for multi-turn conversations
+          if [ -s conversation_history.json ] && [ "$(cat conversation_history.json)" != "[]" ]; then
+            HISTORY=$(cat conversation_history.json)
+            # Prepend context indicator for follow-up
+            FOLLOWUP_CONTEXT="This is a follow-up review after PR updates. Here are your previous reviews for reference:"
+            MESSAGES=$(jq -n --arg ctx "$FOLLOWUP_CONTEXT" --argjson history "$HISTORY" --arg user "$USER_PROMPT" \
+              '[{role: "user", content: $ctx}] + $history + [{role: "user", content: $user}]')
+          else
+            MESSAGES=$(jq -n --arg user "$USER_PROMPT" '[{role: "user", content: $user}]')
+          fi
 
           PAYLOAD=$(jq -n \
             --arg model "$CLAUDE_MODEL" \
             --arg system "$SYSTEM_PROMPT" \
-            --arg user "$USER_PROMPT" \
-            '{model: $model, max_tokens: 4096, system: $system, messages: [{role: "user", content: $user}]}')
+            --argjson messages "$MESSAGES" \
+            '{model: $model, max_tokens: 4096, system: $system, messages: $messages}')
 
           RESPONSE=$(curl -s -w "\n%{http_code}" "$API_URL" \
             -H "x-api-key: $CLAUDE_API_KEY" \
@@ -87,16 +160,12 @@ jobs:
 
           if [ "$HTTP_CODE" != "200" ]; then
             echo "::error::API call failed with status $HTTP_CODE"
-            echo "Response: $BODY"
+            # Only show error type, not full response body
+            echo "$BODY" | jq -r '.error.type // .error.message // "Unknown error"' 2>/dev/null || echo "Request failed"
             exit 1
           fi
 
           # Extract text from response (handle both Anthropic and OpenRouter formats)
-          # OpenRouter may return multiple content types (thinking, text, redacted_thinking)
-          echo "DEBUG: Response structure:" >> $GITHUB_STEP_SUMMARY
-          echo "$BODY" | jq '.content | map({type: .type})' >> $GITHUB_STEP_SUMMARY
-
-          # Try text content first (Anthropic format)
           REVIEW=$(echo "$BODY" | jq -r '[.content[] | select(.type == "text")][0].text // empty')
 
           # If no text, try thinking content (some models like mimo only return thinking)
@@ -111,7 +180,6 @@ jobs:
 
           if [ -z "$REVIEW" ] || [ "$REVIEW" = "null" ]; then
             echo "::error::Failed to extract review from API response"
-            echo "Response: $BODY"
             exit 1
           fi
 
