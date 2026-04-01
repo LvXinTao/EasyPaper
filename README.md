@@ -119,6 +119,7 @@ All data is stored locally in `~/.easypaper/`.
 
 - [x] Support sentence-level notes with PDF text selection
 - [x] Support asking AI questions about specific sentences
+- [x] Desktop app (macOS/Windows/Linux) via Tauri
 - [ ] Support more file formats (currently only PDF)
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers
