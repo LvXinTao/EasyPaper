@@ -83,24 +83,6 @@ export default function HomePage() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [fetchPapers]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape to clear selection
-      if (e.key === 'Escape' && selectedPaperIds.size > 0) {
-        setSelectedPaperIds(new Set());
-        setContextMenu(c => ({ ...c, isOpen: false }));
-      }
-      // Ctrl+A to select all visible papers
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && visiblePapers.length > 0) {
-        e.preventDefault();
-        setSelectedPaperIds(new Set(visiblePapers.map(p => p.id)));
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPaperIds, visiblePapers]);
-
   // Compute stats
   const stats = useMemo(() => ({
     total: papers.length,
@@ -140,6 +122,24 @@ export default function HomePage() {
 
     return filtered;
   }, [papers, searchQuery, statusFilter, starredOnly, sortMode]);
+
+  // Keyboard shortcuts (must be after visiblePapers declaration)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape to clear selection
+      if (e.key === 'Escape' && selectedPaperIds.size > 0) {
+        setSelectedPaperIds(new Set());
+        setContextMenu(c => ({ ...c, isOpen: false }));
+      }
+      // Ctrl+A to select all visible papers
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && visiblePapers.length > 0) {
+        e.preventDefault();
+        setSelectedPaperIds(new Set(visiblePapers.map(p => p.id)));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPaperIds, visiblePapers]);
 
   // Single paper handlers
   const handleDelete = async (id: string) => {
