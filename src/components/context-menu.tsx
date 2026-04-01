@@ -54,20 +54,20 @@ export function ContextMenu({
       }}
     >
       <button onClick={() => { onDelete(); onClose(); }} style={menuItemStyle('var(--rose)')}>
-        删除选中项 ({selectedCount})
+        Delete ({selectedCount})
       </button>
       <button onClick={() => { onMove(); onClose(); }} style={menuItemStyle()}>
-        移动到文件夹...
+        Move to folder...
       </button>
       <button onClick={() => { onStar(); onClose(); }} style={menuItemStyle()}>
-        添加星标
+        Add star
       </button>
       <button onClick={() => { onUnstar(); onClose(); }} style={menuItemStyle()}>
-        移除星标
+        Remove star
       </button>
       <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />
       <button onClick={() => { onClear(); onClose(); }} style={menuItemStyle('var(--text-tertiary)')}>
-        取消选择
+        Clear selection
       </button>
     </div>
   );

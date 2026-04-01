@@ -68,8 +68,8 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
   if (multiSelectCount && multiSelectCount > 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
-        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>已选中 {multiSelectCount} 项</div>
-        <div style={{ fontSize: '11px' }}>使用右键菜单或底部工具栏进行批量操作</div>
+        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{multiSelectCount} papers selected</div>
+        <div style={{ fontSize: '11px' }}>Use right-click menu or bottom toolbar for batch actions</div>
       </div>
     );
   }

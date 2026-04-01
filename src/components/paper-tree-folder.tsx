@@ -44,7 +44,6 @@ export function PaperTreeFolder({
   const [isDragOver, setIsDragOver] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close context menu on outside click or escape key
   useEffect(() => {
     if (!showMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -63,7 +62,6 @@ export function PaperTreeFolder({
     };
   }, [showMenu]);
 
-  // Memoize calculations to avoid unnecessary re-computation
   const childFolders = useMemo(() => allFolders.filter(f => f.parentId === folder.id), [allFolders, folder.id]);
   const folderPapers = useMemo(() => papers.filter(p => p.folderId === folder.id), [papers, folder.id]);
   const totalPapers = useMemo(() => papers.filter(p => {
@@ -90,39 +88,49 @@ export function PaperTreeFolder({
   return (
     <div>
       <div
-        style={{ display: 'flex', alignItems: 'center', padding: '4px 6px', paddingLeft: `${6 + depth * 14}px`,
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '5px 8px',
+          paddingLeft: `${8 + depth * 16}px`,
           background: isDragOver ? 'var(--accent-subtle)' : 'transparent',
-          outline: isDragOver ? '2px solid var(--accent)' : undefined, outlineOffset: '-2px',
-          borderRadius: '4px', cursor: 'pointer', gap: '4px', position: 'relative' }}
+          outline: isDragOver ? '2px solid var(--accent)' : undefined,
+          outlineOffset: '-2px',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          gap: '6px',
+          position: 'relative',
+          margin: '2px 4px',
+        }}
         onClick={() => setExpanded(!expanded)}
         onDragOver={e => { if (e.dataTransfer.types.includes('application/x-paper-id')) { e.preventDefault(); setIsDragOver(true); } }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={e => { e.preventDefault(); setIsDragOver(false); const paperId = e.dataTransfer.getData('application/x-paper-id'); if (paperId) onDropPaper(paperId, folder.id); }}
       >
-        <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '12px', fontSize: '9px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
-        <span style={{ fontSize: '11px' }}>📁</span>
+        <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '14px', fontSize: '10px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
+        <span style={{ fontSize: '13px' }}>📁</span>
         {isRenaming ? (
-          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={handleRename} onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); } }} style={{ flex: 1, fontSize: '11px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '2px 4px' }} onClick={e => e.stopPropagation()} />
+          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={handleRename} onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); } }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '3px 5px' }} onClick={e => e.stopPropagation()} />
         ) : (
-          <span style={{ flex: 1, fontSize: '11px', fontWeight: 500, color: 'var(--text-primary)' }}>{folder.name}</span>
+          <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{folder.name}</span>
         )}
-        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{totalPapers}</span>
-        <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} style={{ fontSize: '12px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>⋯</button>
+        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{totalPapers}</span>
+        <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} style={{ fontSize: '14px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>⋯</button>
         {showMenu && (
           <div ref={menuRef} style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', width: '160px', borderRadius: '8px', padding: '4px 0', background: 'var(--bg)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 50 }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>📁 新建子文件夹</button>
-            <button onClick={() => { setShowMenu(false); setIsRenaming(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>✏️ 重命名</button>
-            <button onClick={() => { setShowMenu(false); onDeleteFolder(folder.id); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--rose)', background: 'none', border: 'none', cursor: 'pointer' }}>🗑️ 删除文件夹</button>
+            <button onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>📁 New Subfolder</button>
+            <button onClick={() => { setShowMenu(false); setIsRenaming(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>✏️ Rename</button>
+            <button onClick={() => { setShowMenu(false); onDeleteFolder(folder.id); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '12px', color: 'var(--rose)', background: 'none', border: 'none', cursor: 'pointer' }}>🗑️ Delete</button>
           </div>
         )}
       </div>
 
       {expanded && (
-        <div style={{ marginLeft: `${14 + depth * 14}px`, borderLeft: depth > 0 ? '1px solid var(--border)' : undefined }}>
+        <div style={{ marginLeft: `${16 + depth * 16}px`, borderLeft: depth > 0 ? '1px solid var(--border)' : undefined }}>
           {isCreatingChild && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 6px' }}>
-              <span style={{ fontSize: '11px' }}>📁</span>
-              <input autoFocus placeholder="文件夹名称" value={newChildName} onChange={e => setNewChildName(e.target.value)} onBlur={handleCreateChild} onKeyDown={e => { if (e.key === 'Enter') handleCreateChild(); if (e.key === 'Escape') setIsCreatingChild(false); }} style={{ flex: 1, fontSize: '11px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '2px 4px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px' }}>
+              <span style={{ fontSize: '13px' }}>📁</span>
+              <input autoFocus placeholder="Folder name" value={newChildName} onChange={e => setNewChildName(e.target.value)} onBlur={handleCreateChild} onKeyDown={e => { if (e.key === 'Enter') handleCreateChild(); if (e.key === 'Escape') setIsCreatingChild(false); }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '3px 5px' }} />
             </div>
           )}
           {childFolders.map(child => (
