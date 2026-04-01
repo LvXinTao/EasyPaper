@@ -242,7 +242,6 @@ async function main() {
     cwd: __dirname,
     env,
     stdio: ['inherit', 'pipe', 'pipe'],
-    detached: true, // Create new process group so we can kill all descendants
   });
 
   // Store child PID for cleanup
@@ -306,32 +305,27 @@ async function main() {
     process.exit(code ?? 0);
   });
 
-  // Handle shutdown signals - forward to child and kill process tree
+  // Handle shutdown signals - forward to child
+  // Note: setsid (in shell wrapper) puts us in a new session
+  // When session leader dies, OS sends SIGHUP to all processes in session
+  // We still explicitly kill child to ensure clean shutdown
   const shutdown = (signal) => {
     log(\`Received \${signal}, shutting down...\`);
-    // Kill the entire process group (including grandchildren)
-    // Negative PID means kill the process group
-    try {
-      process.kill(-childPid, signal);
-    } catch (e) {
-      // Process might already be dead
-    }
-    // Also kill direct child as fallback
     child.kill(signal);
     if (logStream) logStream.end();
+    process.exit(0);
   };
 
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.on(signal, () => {
       shutdown(signal);
-      process.exit(0);
     });
   }
 
   // Handle parent death (if parent exits, we should too)
   process.on('exit', () => {
     try {
-      process.kill(-childPid, 'SIGTERM');
+      child.kill('SIGTERM');
     } catch (e) {}
   });
 }
@@ -405,9 +399,10 @@ if [[ -z "$NODE_PATH" ]]; then
   NODE_PATH="node"
 fi
 
-# Create new process group (setsid) so we can kill all children on exit
+# Use setsid to create a new session/process group
 # This ensures that when Tauri kills this process, all Node.js children die too
-exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
+# (in a new session, killing the session leader kills all processes in the session)
+exec setsid "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
 `;
     fs.writeFileSync(wrapperPath, shContent);
     fs.chmodSync(wrapperPath, 0o755);
