@@ -1,25 +1,44 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderTree } from '@/components/folder-tree';
-import { PaperRow } from '@/components/paper-row';
+import { PaperTree } from '@/components/paper-tree';
+import { FilterPanel } from '@/components/filter-panel';
+import { ContextMenu } from '@/components/context-menu';
+import { ConfirmModal } from '@/components/confirm-modal';
+import { FolderPickerModal } from '@/components/folder-picker-modal';
+import { Toast } from '@/components/toast';
 import { PreviewPanel } from '@/components/preview-panel';
 import { UploadModal } from '@/components/upload-modal';
+import { useToast } from '@/hooks/use-toast';
 import type { PaperListItem, Folder } from '@/types';
 
 export default function HomePage() {
+  const router = useRouter();
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterStarred, setFilterStarred] = useState(false);
+  const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
-  const router = useRouter();
+
+  // New state for modals and filters
+  const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number; paperId: string | null }>({
+    isOpen: false, x: 0, y: 0, paperId: null
+  });
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({
+    isOpen: false, title: '', message: '', onConfirm: () => {}
+  });
+  const [folderPickerModal, setFolderPickerModal] = useState<{ isOpen: boolean; paperIds: string[] }>({
+    isOpen: false, paperIds: []
+  });
+  const [statusFilter, setStatusFilter] = useState<'all' | 'analyzed' | 'pending' | 'error'>('all');
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred'>('recent');
+
+  const { toasts, showToast, dismissToast } = useToast();
 
   const fetchPapers = useCallback(async () => {
     try {
@@ -44,74 +63,100 @@ export default function HomePage() {
   // Listen for paper upload events from navbar's UploadModal
   useEffect(() => {
     const handlePaperUploaded = (e: CustomEvent<{ paperId: string }>) => {
-      setSelectedFolderId(null);
       fetchPapers().then(() => setSelectedPaperId(e.detail.paperId));
     };
     window.addEventListener('paperUploaded', handlePaperUploaded as EventListener);
     return () => window.removeEventListener('paperUploaded', handlePaperUploaded as EventListener);
   }, [fetchPapers]);
 
-  // Refresh papers when page becomes visible again (e.g., returning from detail page)
-  // Also reset folder filter to show all papers (new uploads have folderId=null)
+  // Refresh papers when page becomes visible again
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         fetchPapers();
-        // Reset folder filter so newly uploaded papers are visible
-        setSelectedFolderId(null);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [fetchPapers]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this paper?')) return;
-    await fetch(`/api/paper/${id}`, { method: 'DELETE' });
-    setPapers(prev => prev.filter(p => p.id !== id));
-    if (selectedPaperId === id) setSelectedPaperId(null);
-  };
-
-  const handleUploadComplete = (paperId: string) => {
-    setDroppedFiles(null);
-    // Reset folder filter so newly uploaded papers are visible
-    setSelectedFolderId(null);
-    fetchPapers().then(() => setSelectedPaperId(paperId));
-  };
-
-  // Folder CRUD handlers
-  const handleCreateFolder = async (name: string, parentId: string | null) => {
-    await fetch('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, parentId }) });
-    await fetchFolders();
-  };
-  const handleRenameFolder = async (folderId: string, name: string) => {
-    await fetch(`/api/folders/${folderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    await fetchFolders();
-  };
-  const handleDeleteFolder = async (folderId: string) => {
-    await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
-    await fetchFolders();
-    if (selectedFolderId === folderId) setSelectedFolderId(null);
-  };
-  const handleMovePaper = async (paperId: string, folderId: string | null) => {
-    await fetch(`/api/paper/${paperId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
-    await fetchPapers();
-  };
-  const handleReorderPapers = async (orders: { id: string; sortIndex: number }[]) => {
-    // Optimistic update
-    setPapers(prev => {
-      const updated = [...prev];
-      for (const order of orders) {
-        const paper = updated.find(p => p.id === order.id);
-        if (paper) paper.sortIndex = order.sortIndex;
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape to clear selection
+      if (e.key === 'Escape' && selectedPaperIds.size > 0) {
+        setSelectedPaperIds(new Set());
+        setContextMenu(c => ({ ...c, isOpen: false }));
       }
-      return updated;
+      // Ctrl+A to select all
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && selectedPaperIds.size > 0) {
+        e.preventDefault();
+        setSelectedPaperIds(new Set(visiblePapers.map(p => p.id)));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPaperIds]);
+
+  // Compute stats
+  const stats = useMemo(() => ({
+    total: papers.length,
+    analyzed: papers.filter(p => p.status === 'analyzed').length,
+    pending: papers.filter(p => ['pending', 'parsing', 'analyzing', 'queued'].includes(p.status)).length,
+    error: papers.filter(p => p.status === 'error').length,
+    starred: papers.filter(p => p.starred).length,
+  }), [papers]);
+
+  // Compute visible papers with filtering and sorting
+  const visiblePapers = useMemo(() => {
+    let filtered = papers.filter(p => {
+      // Search filter
+      if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      // Status filter
+      if (statusFilter === 'analyzed' && p.status !== 'analyzed') return false;
+      if (statusFilter === 'pending' && !['pending', 'parsing', 'analyzing', 'queued'].includes(p.status)) return false;
+      if (statusFilter === 'error' && p.status !== 'error') return false;
+      // Starred filter
+      if (starredOnly && !p.starred) return false;
+      return true;
     });
-    await fetch('/api/papers/reorder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orders }) });
-  };
-  const handleRename = async (id: string, title: string) => {
-    await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
-    await fetchPapers();
+
+    // Sort
+    filtered.sort((a, b) => {
+      if (sortMode === 'name') return a.title.localeCompare(b.title);
+      if (sortMode === 'starred') {
+        if (a.starred && !b.starred) return -1;
+        if (!a.starred && b.starred) return 1;
+      }
+      // Recent (default)
+      if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+      if (a.sortIndex != null) return -1;
+      if (b.sortIndex != null) return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return filtered;
+  }, [papers, searchQuery, statusFilter, starredOnly, sortMode]);
+
+  // Single paper handlers
+  const handleDelete = async (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: '删除论文',
+      message: '确定要删除这篇论文吗？此操作不可撤销。',
+      onConfirm: async () => {
+        await fetch(`/api/paper/${id}`, { method: 'DELETE' });
+        setPapers(prev => prev.filter(p => p.id !== id));
+        if (selectedPaperId === id) setSelectedPaperId(null);
+        setSelectedPaperIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+        setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+        showToast('论文已删除', 'success');
+      }
+    });
   };
 
   const handleToggleStar = async (paperId: string) => {
@@ -125,40 +170,125 @@ export default function HomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ starred: newStarred }),
     });
+    showToast(newStarred ? '已添加星标' : '已移除星标', 'info');
   };
 
-  const handleCancelQueue = async (paperId: string) => {
-    try {
-      await fetch(`/api/analyze/queue?paperId=${paperId}`, { method: 'DELETE' });
-      await fetchPapers();
-    } catch (error) {
-      console.error('Failed to cancel queue:', error);
+  const handleMovePaper = async (paperId: string, folderId: string | null) => {
+    await fetch(`/api/paper/${paperId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
+    await fetchPapers();
+    showToast('论文已移动', 'success');
+  };
+
+  const handleRename = async (id: string, title: string) => {
+    await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    await fetchPapers();
+    showToast('论文已重命名', 'success');
+  };
+
+  // Folder handlers
+  const handleCreateFolder = async (name: string, parentId: string | null) => {
+    await fetch('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, parentId }) });
+    await fetchFolders();
+    showToast('文件夹已创建', 'success');
+  };
+
+  const handleRenameFolder = async (folderId: string, name: string) => {
+    await fetch(`/api/folders/${folderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    await fetchFolders();
+    showToast('文件夹已重命名', 'success');
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: '删除文件夹',
+      message: '确定要删除此文件夹吗？文件夹内的论文将移至根目录。',
+      onConfirm: async () => {
+        await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
+        await fetchFolders();
+        setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+        showToast('文件夹已删除', 'success');
+      }
+    });
+  };
+
+  // Batch operation handlers
+  const handleBatchDelete = (paperIds: string[]) => {
+    setConfirmModal({
+      isOpen: true,
+      title: '批量删除',
+      message: `确定要删除 ${paperIds.length} 篇论文吗？此操作不可撤销。`,
+      onConfirm: async () => {
+        for (const id of paperIds) {
+          await fetch(`/api/paper/${id}`, { method: 'DELETE' });
+        }
+        setPapers(prev => prev.filter(p => !paperIds.includes(p.id)));
+        setSelectedPaperIds(new Set());
+        if (paperIds.includes(selectedPaperId || '')) setSelectedPaperId(null);
+        setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+        showToast(`已删除 ${paperIds.length} 篇论文`, 'success');
+      }
+    });
+  };
+
+  const handleBatchMove = (paperIds: string[], folderId: string | null) => {
+    if (paperIds.length === 0) return;
+    setFolderPickerModal({ isOpen: true, paperIds });
+  };
+
+  const handleBatchMoveConfirm = async (folderId: string | null) => {
+    const paperIds = folderPickerModal.paperIds;
+    for (const id of paperIds) {
+      await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
     }
+    await fetchPapers();
+    setSelectedPaperIds(new Set());
+    setFolderPickerModal({ isOpen: false, paperIds: [] });
+    showToast(`已移动 ${paperIds.length} 篇论文`, 'success');
   };
 
-  // Filter and sort papers
-  const filtered = papers.filter(p => {
-    if (selectedFolderId && p.folderId !== selectedFolderId) return false;
-    if (filterStatus === 'analyzed' && p.status !== 'analyzed') return false;
-    if (filterStatus === 'pending' && !['pending', 'parsing', 'analyzing'].includes(p.status)) return false;
-    if (filterStatus === 'error' && p.status !== 'error') return false;
-    if (filterStarred && !p.starred) return false;
-    if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  }).sort((a, b) => {
-    if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
-    if (a.sortIndex != null) return -1;
-    if (b.sortIndex != null) return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  const handleBatchStar = async (paperIds: string[], starred: boolean) => {
+    for (const id of paperIds) {
+      await fetch(`/api/paper/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starred }),
+      });
+    }
+    setPapers(prev => prev.map(p => paperIds.includes(p.id) ? { ...p, starred } : p));
+    setSelectedPaperIds(new Set());
+    showToast(starred ? `已添加 ${paperIds.length} 个星标` : `已移除 ${paperIds.length} 个星标`, 'success');
+  };
 
-  const selectedPaper = papers.find(p => p.id === selectedPaperId) || null;
-  const filters = [
-    { key: 'all', label: 'All' },
-    { key: 'analyzed', label: 'Analyzed' },
-    { key: 'pending', label: 'Pending' },
-    { key: 'error', label: 'Error' },
-  ];
+  const handleCheckboxToggle = (paperId: string) => {
+    setSelectedPaperIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(paperId)) {
+        newSet.delete(paperId);
+      } else {
+        newSet.add(paperId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleContextMenuOpen = (e: React.MouseEvent, paperId: string) => {
+    e.preventDefault();
+    // If right-clicking on a paper not in selection, add it to selection
+    if (!selectedPaperIds.has(paperId)) {
+      setSelectedPaperIds(new Set([paperId]));
+    }
+    setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY, paperId });
+  };
+
+  const handlePaperClick = (paperId: string) => {
+    setSelectedPaperId(paperId);
+  };
+
+  const handleUploadComplete = (paperId: string) => {
+    setDroppedFiles(null);
+    fetchPapers().then(() => setSelectedPaperId(paperId));
+  };
 
   // Drag-and-drop on Column 2 to trigger upload
   const handleCol2Drop = (e: React.DragEvent) => {
@@ -172,207 +302,59 @@ export default function HomePage() {
     }
   };
 
-  const handleCompactPaperClick = (paperId: string) => {
-    setSelectedFolderId(null);
-    setFilterStatus('all');
-    setSearchQuery('');
-    setSelectedPaperId(paperId);
-    setTimeout(() => {
-      document.querySelector(`[data-paper-id="${paperId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 50);
-  };
+  const selectedPaper = papers.find(p => p.id === selectedPaperId) || null;
 
   return (
     <div className="flex" style={{ height: 'calc(100vh - 44px)' }}>
-      {/* Column 1: Folder Sidebar */}
+      {/* Column 1: Paper Tree */}
       <div
-        className="flex flex-col overflow-y-auto"
-        style={{ width: '15%', minWidth: '180px', padding: '14px 10px', borderRight: '1px solid var(--border)', background: 'rgba(255,255,255,0.012)' }}
-      >
-        <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', padding: '8px 10px 5px', fontWeight: 600 }}>
-          Library
-        </div>
-        <div
-          onClick={() => setSelectedFolderId(null)}
-          onDragOver={(e) => {
-            if (e.dataTransfer.types.includes('application/x-paper-id')) {
-              e.preventDefault();
-            }
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            const paperId = e.dataTransfer.getData('application/x-paper-id');
-            if (paperId) handleMovePaper(paperId, null);
-          }}
-          className="cursor-pointer rounded-lg flex items-center gap-2 transition-colors"
-          style={{
-            padding: '6px 10px', fontSize: '12px',
-            background: !selectedFolderId ? 'var(--accent-subtle)' : 'transparent',
-            color: !selectedFolderId ? 'var(--accent)' : 'var(--text-secondary)',
-          }}
-        >
-          All Papers
-          <span className="ml-auto" style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{papers.length}</span>
-        </div>
-        <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', padding: '12px 10px 5px', fontWeight: 600 }}>
-          Folders
-        </div>
-        <FolderTree
-          folders={folders}
-          papers={papers}
-          currentPaperId={''}
-          searchQuery={''}
-          onClose={() => {}}
-          onCreateFolder={handleCreateFolder}
-          onRenameFolder={handleRenameFolder}
-          onDeleteFolder={handleDeleteFolder}
-          onMovePaper={handleMovePaper}
-          onDeletePaper={handleDelete}
-          onReorderPapers={handleReorderPapers}
-          onSelectFolder={setSelectedFolderId}
-          selectedFolderId={selectedFolderId}
-        />
-        {papers.length > 0 && (
-          <>
-            <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', padding: '12px 10px 5px', fontWeight: 600 }}>
-              Papers
-            </div>
-            <div className="flex-1 overflow-y-auto" style={{ padding: '0 4px' }}>
-              {[...papers].sort((a, b) => {
-                if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
-                if (a.sortIndex != null) return -1;
-                if (b.sortIndex != null) return 1;
-                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-              }).map(paper => (
-                <div
-                  key={paper.id}
-                  onClick={() => handleCompactPaperClick(paper.id)}
-                  className="cursor-pointer rounded transition-colors"
-                  style={{
-                    padding: '4px 6px',
-                    marginBottom: '1px',
-                    fontSize: '11px',
-                    color: paper.id === selectedPaperId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    background: paper.id === selectedPaperId ? 'var(--accent-subtle)' : 'transparent',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={paper.title}
-                >
-                  {paper.title}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Column 2: Paper List */}
-      <div
-        className="flex flex-col"
-        style={{ width: '25%', minWidth: '280px', borderRight: '1px solid var(--border)' }}
+        className="flex flex-col overflow-hidden"
+        style={{ width: '20%', minWidth: '220px', borderRight: '1px solid var(--border)', background: 'rgba(255,255,255,0.012)' }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleCol2Drop}
       >
-        <div className="flex items-center justify-between" style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            {selectedFolderId ? 'Folder' : 'All Papers'}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{filtered.length} papers</div>
-        </div>
-        <div style={{ margin: '8px 10px' }}>
-          <input
-            type="text"
-            placeholder="Search papers..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg"
-            style={{
-              height: '32px', padding: '0 10px', fontSize: '12px',
-              background: 'var(--glass)', border: '1px solid var(--glass-border)',
-              color: 'var(--text-primary)', outline: 'none',
-            }}
-          />
-        </div>
-        <div className="flex gap-1" style={{ padding: '0 10px 8px' }}>
-          {filters.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilterStatus(f.key)}
-              className="cursor-pointer rounded-full"
-              style={{
-                padding: '3px 9px', fontSize: '10px',
-                background: filterStatus === f.key ? 'var(--text-primary)' : 'var(--glass)',
-                color: filterStatus === f.key ? 'var(--bg)' : 'var(--text-tertiary)',
-                border: filterStatus === f.key ? 'none' : '1px solid var(--glass-border)',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-          <button
-            onClick={() => setFilterStarred(!filterStarred)}
-            className="cursor-pointer rounded-full"
-            style={{
-              padding: '3px 9px', fontSize: '10px',
-              background: filterStarred ? 'var(--amber-subtle)' : 'var(--glass)',
-              color: filterStarred ? 'var(--amber)' : 'var(--text-tertiary)',
-              border: filterStarred ? '1px solid var(--amber)' : '1px solid var(--glass-border)',
-            }}
-          >
-            ★ Starred
-          </button>
-        </div>
+        <PaperTree
+          papers={visiblePapers}
+          folders={folders}
+          selectedPaperId={selectedPaperId}
+          selectedPaperIds={selectedPaperIds}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          onPaperClick={handlePaperClick}
+          onCheckboxToggle={handleCheckboxToggle}
+          onBatchDelete={handleBatchDelete}
+          onBatchMove={handleBatchMove}
+          onBatchStar={handleBatchStar}
+          onMovePaper={handleMovePaper}
+          onClearSelection={() => setSelectedPaperIds(new Set())}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
+          onContextMenuOpen={handleContextMenuOpen}
+        />
+      </div>
 
-        {/* Paper list or empty state */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: '4px 8px' }}>
-          {loading && (
-            <div className="text-center" style={{ padding: '32px 0', color: 'var(--text-tertiary)', fontSize: '12px' }}>
-              Loading papers...
-            </div>
-          )}
-          {!loading && filtered.length === 0 && papers.length === 0 && (
-            <div className="flex flex-col items-center justify-center text-center gap-3" style={{ padding: '48px 16px', color: 'var(--text-tertiary)' }}>
-              <div className="rounded-2xl flex items-center justify-center" style={{ width: '48px', height: '48px', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              <div style={{ fontSize: '13px', fontWeight: 500 }}>Upload your first paper</div>
-              <div style={{ fontSize: '11px' }}>Drag a PDF here or click the button</div>
-              <button
-                onClick={() => setUploadOpen(true)}
-                className="cursor-pointer rounded-lg"
-                style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 500, background: 'var(--text-primary)', color: 'var(--bg)', border: 'none', marginTop: '4px' }}
-              >
-                + Upload
-              </button>
-            </div>
-          )}
-          {!loading && filtered.length === 0 && papers.length > 0 && (
-            <div className="text-center" style={{ padding: '32px 0', color: 'var(--text-tertiary)', fontSize: '12px' }}>
-              No papers match this filter
-            </div>
-          )}
-          {filtered.map(paper => (
-            <PaperRow
-              key={paper.id}
-              paper={paper}
-              isActive={paper.id === selectedPaperId}
-              onClick={() => setSelectedPaperId(paper.id)}
-              onDoubleClick={() => router.push(`/paper/${paper.id}`)}
-              onToggleStar={() => handleToggleStar(paper.id)}
-              onCancelQueue={() => handleCancelQueue(paper.id)}
-            />
-          ))}
-        </div>
+      {/* Column 2: Filter Panel */}
+      <div
+        className="flex flex-col overflow-hidden"
+        style={{ width: '20%', minWidth: '200px', borderRight: '1px solid var(--border)' }}
+      >
+        <FilterPanel
+          statusFilter={statusFilter}
+          starredOnly={starredOnly}
+          sortMode={sortMode}
+          stats={stats}
+          onStatusFilterChange={setStatusFilter}
+          onStarredOnlyChange={setStarredOnly}
+          onSortModeChange={setSortMode}
+        />
       </div>
 
       {/* Column 3: Preview Panel */}
       <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'rgba(255,255,255,0.006)' }}>
         <PreviewPanel
           paper={selectedPaper}
+          multiSelectCount={selectedPaperIds.size}
           onDelete={handleDelete}
           onMovePaper={handleMovePaper}
           onRename={handleRename}
@@ -388,6 +370,45 @@ export default function HomePage() {
         onUploadComplete={handleUploadComplete}
         initialFiles={droppedFiles}
       />
+
+      {/* Context Menu */}
+      {contextMenu.isOpen && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          selectedCount={selectedPaperIds.size}
+          onClose={() => setContextMenu({ isOpen: false, x: 0, y: 0, paperId: null })}
+          onDelete={() => handleBatchDelete(Array.from(selectedPaperIds))}
+          onMove={() => handleBatchMove(Array.from(selectedPaperIds), null)}
+          onStar={() => handleBatchStar(Array.from(selectedPaperIds), true)}
+          onUnstar={() => handleBatchStar(Array.from(selectedPaperIds), false)}
+          onClear={() => setSelectedPaperIds(new Set())}
+        />
+      )}
+
+      {/* Confirm Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel="确认"
+        cancelLabel="取消"
+        danger={true}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} })}
+      />
+
+      {/* Folder Picker Modal */}
+      <FolderPickerModal
+        isOpen={folderPickerModal.isOpen}
+        folders={folders}
+        selectedFolderId={null}
+        onSelect={handleBatchMoveConfirm}
+        onCancel={() => setFolderPickerModal({ isOpen: false, paperIds: [] })}
+      />
+
+      {/* Toast notifications */}
+      <Toast toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

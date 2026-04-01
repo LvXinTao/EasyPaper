@@ -7,6 +7,7 @@ import { MarkdownContent } from '@/components/markdown-content';
 
 interface PreviewPanelProps {
   paper: PaperListItem | null;
+  multiSelectCount?: number;
   onDelete?: (id: string) => void;
   onAnalyze?: (id: string) => void;
   onMovePaper?: (paperId: string, folderId: string | null) => void;
@@ -15,7 +16,7 @@ interface PreviewPanelProps {
   folders?: { id: string; name: string }[];
 }
 
-export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename, onToggleStar, folders }: PreviewPanelProps) {
+export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onMovePaper, onRename, onToggleStar, folders }: PreviewPanelProps) {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -62,6 +63,16 @@ export function PreviewPanel({ paper, onDelete, onAnalyze, onMovePaper, onRename
     setIsRenaming(false);
   }, [paper]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Multi-select message - show when multiple papers are selected
+  if (multiSelectCount && multiSelectCount > 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3" style={{ color: 'var(--text-tertiary)' }}>
+        <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>已选中 {multiSelectCount} 项</div>
+        <div style={{ fontSize: '11px' }}>使用右键菜单或底部工具栏进行批量操作</div>
+      </div>
+    );
+  }
 
   if (!paper) {
     return (
