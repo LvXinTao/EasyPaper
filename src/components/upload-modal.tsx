@@ -58,6 +58,11 @@ const collectPdfFilesFromEntries = async (items: DataTransferItemList): Promise<
 
 export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }: UploadModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // Use ref to avoid stale closure in setTimeout
+  const onUploadCompleteRef = useRef(onUploadComplete);
+  useEffect(() => {
+    onUploadCompleteRef.current = onUploadComplete;
+  }, [onUploadComplete]);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -183,14 +188,16 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
 
     if (success > 0) {
       const lastId = uploadedIds[uploadedIds.length - 1];
+      // Dispatch custom event for any listeners (e.g., page.tsx)
+      window.dispatchEvent(new CustomEvent('paperUploaded', { detail: { paperId: lastId } }));
       setTimeout(() => {
-        if (onUploadComplete && lastId) {
-          onUploadComplete(lastId);
+        if (onUploadCompleteRef.current && lastId) {
+          onUploadCompleteRef.current(lastId);
         }
         handleClose();
       }, 2000);
     }
-  }, [selectedFiles, targetFolderId, handleClose, onUploadComplete]);
+  }, [selectedFiles, targetFolderId, handleClose]);
 
   if (!isOpen) return null;
 

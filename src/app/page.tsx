@@ -41,6 +41,16 @@ export default function HomePage() {
   // Initial load on mount
   useEffect(() => { fetchPapers(); fetchFolders(); }, [fetchPapers, fetchFolders]);
 
+  // Listen for paper upload events from navbar's UploadModal
+  useEffect(() => {
+    const handlePaperUploaded = (e: CustomEvent<{ paperId: string }>) => {
+      setSelectedFolderId(null);
+      fetchPapers().then(() => setSelectedPaperId(e.detail.paperId));
+    };
+    window.addEventListener('paperUploaded', handlePaperUploaded as EventListener);
+    return () => window.removeEventListener('paperUploaded', handlePaperUploaded as EventListener);
+  }, [fetchPapers]);
+
   // Refresh papers when page becomes visible again (e.g., returning from detail page)
   // Also reset folder filter to show all papers (new uploads have folderId=null)
   useEffect(() => {
@@ -64,6 +74,8 @@ export default function HomePage() {
 
   const handleUploadComplete = (paperId: string) => {
     setDroppedFiles(null);
+    // Reset folder filter so newly uploaded papers are visible
+    setSelectedFolderId(null);
     fetchPapers().then(() => setSelectedPaperId(paperId));
   };
 
