@@ -63,7 +63,7 @@ jobs:
           PR_NUMBER="${{ steps.pr.outputs.number }}"
 
           # Fetch reviews (submitted review events) which contain the full review body
-          # Limit pagination to avoid fetching excessive data
+          # GitHub API may return a single object or an array depending on count
           REVIEWS_JSON=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews -F per_page=50 2>/dev/null || echo '[]')
 
           # Build conversation history from Claude reviews
@@ -71,11 +71,13 @@ jobs:
           # Limit to last 3 reviews to avoid token limits
           jq -n '[]' > conversation_history.json
 
-          # Extract last 3 Claude reviews, sorted by time (oldest first for conversation order)
+          # Normalize to array (GitHub returns single object when only 1 review exists)
+          # Then extract last 3 Claude reviews, sorted by time (oldest first)
           CLAUDE_REVIEWS=$(echo "$REVIEWS_JSON" | jq -r '
+            if type == "object" then [.] else . end |
             sort_by(.submitted_at) |
             [.[] | select(.body | test("🤖.*Claude.*Review|Claude Code Review"; "i"))] |
-            .[-3:] |  # Keep only last 3
+            .[-3:] |
             .[].body
           ')
 
