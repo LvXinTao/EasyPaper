@@ -7,9 +7,17 @@ use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind, RotationStrategy};
 use tauri_plugin_shell::process::CommandChild;
+use nix::sys::signal::{kill, Signal};
+use nix::unistd::Pid;
 
 /// Stores the sidecar child process for cleanup on app exit
-pub struct SidecarProcess(pub Mutex<Option<CommandChild>>);
+pub struct SidecarProcess(pub Mutex<Option<SidecarInfo>>);
+
+/// Holds both the CommandChild (for Tauri's internal tracking) and the PID (for graceful shutdown)
+pub struct SidecarInfo {
+    pub child: CommandChild,
+    pub pid: u32,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -61,8 +69,14 @@ pub fn run() {
                     Ok((port, child)) => {
                         log::info!("Sidecar ready on port {}", port);
 
+                        // Get PID before storing (for graceful shutdown)
+                        let pid = child.pid();
+
                         // Store child handle in app state for cleanup on exit
-                        app_handle.manage(SidecarProcess(std::sync::Mutex::new(Some(child))));
+                        app_handle.manage(SidecarProcess(std::sync::Mutex::new(Some(SidecarInfo {
+                            child,
+                            pid,
+                        }))));
 
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let url = format!("http://localhost:{}", port);
@@ -77,8 +91,16 @@ pub fn run() {
                                     log::info!("Window closing, killing sidecar...");
                                     if let Some(state) = app_h.try_state::<SidecarProcess>() {
                                         if let Ok(mut guard) = state.0.lock() {
-                                            if let Some(c) = guard.take() {
-                                                let _ = c.kill();
+                                            if let Some(info) = guard.take() {
+                                                // Send SIGTERM for graceful shutdown
+                                                let pid = Pid::from_raw(info.pid as i32);
+                                                match kill(pid, Signal::SIGTERM) {
+                                                    Ok(_) => log::info!("Sent SIGTERM to sidecar (PID: {})", info.pid),
+                                                    Err(e) => {
+                                                        log::warn!("Failed to send SIGTERM: {}, falling back to kill()", e);
+                                                        let _ = info.child.kill();
+                                                    }
+                                                }
                                             }
                                         }
                                     }
