@@ -18,7 +18,7 @@ export default function HomePage() {
   const [filterStarred, setFilterStarred] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [droppedFile, setDroppedFile] = useState<File | null>(null);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   const router = useRouter();
 
   const fetchPapers = useCallback(async () => {
@@ -40,6 +40,16 @@ export default function HomePage() {
 
   // Initial load on mount
   useEffect(() => { fetchPapers(); fetchFolders(); }, [fetchPapers, fetchFolders]);
+
+  // Listen for paper upload events from navbar's UploadModal
+  useEffect(() => {
+    const handlePaperUploaded = (e: CustomEvent<{ paperId: string }>) => {
+      setSelectedFolderId(null);
+      fetchPapers().then(() => setSelectedPaperId(e.detail.paperId));
+    };
+    window.addEventListener('paperUploaded', handlePaperUploaded as EventListener);
+    return () => window.removeEventListener('paperUploaded', handlePaperUploaded as EventListener);
+  }, [fetchPapers]);
 
   // Refresh papers when page becomes visible again (e.g., returning from detail page)
   // Also reset folder filter to show all papers (new uploads have folderId=null)
@@ -63,7 +73,9 @@ export default function HomePage() {
   };
 
   const handleUploadComplete = (paperId: string) => {
-    setDroppedFile(null);
+    setDroppedFiles(null);
+    // Reset folder filter so newly uploaded papers are visible
+    setSelectedFolderId(null);
     fetchPapers().then(() => setSelectedPaperId(paperId));
   };
 
@@ -151,9 +163,11 @@ export default function HomePage() {
   // Drag-and-drop on Column 2 to trigger upload
   const handleCol2Drop = (e: React.DragEvent) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && (file.type === 'application/pdf' || file.name.endsWith('.pdf'))) {
-      setDroppedFile(file);
+    const pdfFiles = Array.from(e.dataTransfer.files).filter(
+      f => f.type === 'application/pdf' || f.name.endsWith('.pdf')
+    );
+    if (pdfFiles.length > 0) {
+      setDroppedFiles(pdfFiles);
       setUploadOpen(true);
     }
   };
@@ -370,9 +384,9 @@ export default function HomePage() {
       {/* Upload Modal */}
       <UploadModal
         isOpen={uploadOpen}
-        onClose={() => { setUploadOpen(false); setDroppedFile(null); }}
+        onClose={() => { setUploadOpen(false); setDroppedFiles(null); }}
         onUploadComplete={handleUploadComplete}
-        initialFile={droppedFile}
+        initialFiles={droppedFiles}
       />
     </div>
   );
