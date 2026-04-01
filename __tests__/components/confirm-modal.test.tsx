@@ -64,8 +64,31 @@ describe('ConfirmModal', () => {
         onCancel={onCancel}
       />
     );
+    // Click cancel button
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    onCancel.mockClear();
+
     // Click backdrop
     fireEvent.click(screen.getByText('Test').parentElement?.parentElement!);
-    expect(onCancel).toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies danger styling when danger prop is true', () => {
+    render(
+      <ConfirmModal
+        isOpen={true}
+        title="Delete"
+        message="Are you sure?"
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        danger={true}
+        onConfirm={jest.fn()}
+        onCancel={jest.fn()}
+      />
+    );
+    const confirmButton = screen.getByRole('button', { name: 'Delete' });
+    expect(confirmButton).toHaveStyle({ background: 'var(--rose)' });
   });
 });
