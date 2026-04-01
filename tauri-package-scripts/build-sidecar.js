@@ -117,7 +117,130 @@ function buildServerDirectory(serverDir) {
     copyDirectory(publicSrc, publicDest);
   }
 
+  // Create start.js entry point that handles ready signal
+  createStartScript(serverDir);
+
   console.log(`  -> ${serverDir}`);
+}
+
+function createStartScript(serverDir) {
+  console.log('  Creating start.js entry point...');
+  const startJs = `#!/usr/bin/env node
+
+/**
+ * Production entry point for Tauri sidecar
+ * Runs Next.js standalone server and outputs ready signal
+ */
+
+const net = require('net');
+const { spawn } = require('child_process');
+const path = require('path');
+
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const READY_SIGNAL = process.argv.includes('--ready-signal');
+
+// Find available port
+async function findAvailablePort(startPort) {
+  const maxPort = 3100;
+  for (let port = startPort; port <= maxPort; port++) {
+    const available = await new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => {
+        server.close();
+        resolve(true);
+      });
+      server.listen(port);
+    });
+    if (available) return port;
+  }
+  return null;
+}
+
+async function main() {
+  // Find available port if in ready-signal mode
+  let port = PORT;
+  if (READY_SIGNAL) {
+    port = await findAvailablePort(PORT);
+    if (!port) {
+      console.log('EASYPAPER_ERROR:Port 3000-3100 all occupied');
+      process.exit(1);
+    }
+  }
+
+  const serverPath = path.join(__dirname, 'server.js');
+
+  // Start the Next.js server
+  const env = {
+    ...process.env,
+    PORT: port.toString(),
+    NODE_ENV: 'production',
+  };
+
+  const child = spawn(process.execPath, [serverPath], {
+    cwd: __dirname,
+    env,
+    stdio: ['inherit', 'pipe', 'pipe'],
+  });
+
+  if (READY_SIGNAL) {
+    let serverReady = false;
+    const timeout = setTimeout(() => {
+      if (!serverReady) {
+        console.log('EASYPAPER_ERROR:Server startup timeout');
+        child.kill();
+        process.exit(1);
+      }
+    }, 10000);
+
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      // Next.js outputs "Ready" when server starts
+      if (!serverReady && (output.includes('Ready') || output.includes('Local:'))) {
+        serverReady = true;
+        clearTimeout(timeout);
+        console.log('EASYPAPER_READY:' + port);
+      }
+      process.stderr.write(output);
+    });
+
+    child.stderr.on('data', (data) => {
+      process.stderr.write(data.toString());
+    });
+  } else {
+    child.stdout.on('data', (data) => process.stdout.write(data));
+    child.stderr.on('data', (data) => process.stderr.write(data));
+  }
+
+  child.on('error', (err) => {
+    if (READY_SIGNAL) {
+      console.log('EASYPAPER_ERROR:' + err.message);
+    } else {
+      console.error('Error: ' + err.message);
+    }
+    process.exit(1);
+  });
+
+  child.on('exit', (code) => {
+    process.exit(code ?? 0);
+  });
+
+  // Handle shutdown signals
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => child.kill(signal));
+  }
+}
+
+main().catch((err) => {
+  if (READY_SIGNAL) {
+    console.log('EASYPAPER_ERROR:' + err.message);
+  } else {
+    console.error('Error: ' + err.message);
+  }
+  process.exit(1);
+});
+`;
+  fs.writeFileSync(path.join(serverDir, 'start.js'), startJs);
 }
 
 function createPlatformWrapper(platform, serverDir) {
@@ -143,10 +266,11 @@ node "%RESOURCES_DIR%\\server\\server.js" --ready-signal %*
     fs.writeFileSync(wrapperPath, batContent);
     console.log(`  -> ${wrapperPath}`);
   } else {
-    // Unix: create shell script
+    // Unix: create shell script with robust node detection
     // For macOS: Resources are at ../Resources relative to MacOS
     // For Linux: Resources are at ../resources relative to the binary
     const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
+    // Shell wrapper that finds node from common locations
     const shContent = `#!/bin/bash
 # Get the Resources directory (macOS) or resources directory (Linux)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -154,7 +278,27 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 else
   RESOURCES_DIR="$(cd "$(dirname "$0")/../resources" && pwd)"
 fi
-exec node "$RESOURCES_DIR/server/server.js" --ready-signal "$@"
+
+# Find node - check common locations in order
+NODE_PATH=""
+for candidate in \\
+  "/opt/homebrew/bin/node" \\
+  "/usr/local/bin/node" \\
+  "/usr/bin/node" \\
+  "$HOME/.nvm/versions/node/*/bin/node" \\
+  "$HOME/.cargo/bin/node"; do
+  if [[ -x "$candidate" ]]; then
+    NODE_PATH="$candidate"
+    break
+  fi
+done
+
+# Fall back to node in PATH
+if [[ -z "$NODE_PATH" ]]; then
+  NODE_PATH="node"
+fi
+
+exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
 `;
     fs.writeFileSync(wrapperPath, shContent);
     fs.chmodSync(wrapperPath, 0o755);
