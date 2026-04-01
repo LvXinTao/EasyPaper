@@ -81,12 +81,12 @@ function checkPortAvailable(port) {
 async function main() {
   const preferredPort = values.port;
   const pkgDir = path.resolve(__dirname, '..');
-  const easypeperDir = path.join(os.homedir(), '.easypaper');
-  const dataDir = path.join(easypeperDir, 'data');
-  const configDir = path.join(easypeperDir, 'config');
+  const easypaperDir = path.join(os.homedir(), '.easypaper');
+  const dataDir = path.join(easypaperDir, 'data');
+  const configDir = path.join(easypaperDir, 'config');
 
   // Load ~/.easypaper/.env
-  const dotenvPath = path.join(easypeperDir, '.env');
+  const dotenvPath = path.join(easypaperDir, '.env');
   try {
     const dotenvContent = fs.readFileSync(dotenvPath, 'utf-8');
     for (const line of dotenvContent.split('\n')) {
@@ -134,12 +134,17 @@ async function main() {
     console.log();
   }
 
-  const child = spawn(nextBin, ['start', '-p', port], {
+  // Prepare spawn options - set up listeners BEFORE spawning to avoid race condition
+  const spawnOptions = {
     cwd: pkgDir,
     env,
     stdio: values.readySignal ? ['inherit', 'pipe', 'pipe'] : 'inherit',
-  });
+  };
 
+  const child = spawn(nextBin, ['start', '-p', port], spawnOptions);
+
+  // Set up stdout/stderr listeners immediately after spawn (before next event loop tick)
+  // This prevents missing any early output from the child process
   if (values.readySignal) {
     let serverReady = false;
     const readyTimeout = setTimeout(() => {
@@ -150,6 +155,8 @@ async function main() {
       }
     }, 10000);
 
+    // Attach listeners immediately - Node.js event loop won't process I/O
+    // until the current synchronous code completes, so this is safe
     child.stdout.on('data', (data) => {
       const output = data.toString();
       if (output.includes('Ready') || output.includes('Local:')) {
