@@ -35,6 +35,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run build:sidecar && tauri build",
+    "build:sidecar": "node tauri-package-scripts/build-sidecar.js",
     "prepublishOnly": "npm test && npm run build"
   },
   "dependencies": {
