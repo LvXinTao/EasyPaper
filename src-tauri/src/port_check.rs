@@ -8,7 +8,7 @@ pub fn is_port_in_use(port: u16) -> bool {
 }
 
 /// Verify if the server on the given port is EasyPaper
-/// Sends an HTTP request and checks for EasyPaper-specific response header
+/// Sends an HTTP request to /api/health and checks for EasyPaper-specific response
 fn is_easypaper_server(port: u16) -> bool {
     // Try to connect with timeout
     let addr = format!("127.0.0.1:{}", port);
@@ -19,8 +19,11 @@ fn is_easypaper_server(port: u16) -> bool {
         return false;
     };
 
-    // Send a HEAD request to a known EasyPaper API endpoint
-    let request = "HEAD /api/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    // Send a HEAD request to EasyPaper health endpoint
+    let request = format!(
+        "HEAD /api/health HTTP/1.1\r\nHost: localhost:{}\r\nConnection: close\r\n\r\n",
+        port
+    );
     if stream.write_all(request.as_bytes()).is_err() {
         return false;
     }
@@ -33,14 +36,10 @@ fn is_easypaper_server(port: u16) -> bool {
 
     let response_str = String::from_utf8_lossy(&response[..n]);
 
-    // Check for EasyPaper-specific markers:
-    // 1. Our API returns 200 or 404 (endpoint may not exist, but server responds)
-    // 2. Check for "EasyPaper" in Server header or response
-    response_str.contains("HTTP/1.")
-        && (response_str.contains("EasyPaper")
-            || response_str.contains("Next.js")  // Next.js server used by EasyPaper
-            || response_str.contains("200")
-            || response_str.contains("404"))
+    // Check for EasyPaper-specific response:
+    // Our /api/health endpoint returns X-App: EasyPaper header
+    // This is specific to EasyPaper and won't match other services
+    response_str.contains("HTTP/1.") && response_str.contains("X-App: EasyPaper")
 }
 
 /// Detect if EasyPaper CLI is already running
