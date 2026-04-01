@@ -7,7 +7,7 @@
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "npm run build:sidecar",
-    "frontendDist": "../.next/standalone"
+    "frontendDist": "../tauri-frontend"
   },
   "app": {
     "windows": [
@@ -19,8 +19,7 @@
         "minHeight": 600,
         "resizable": true,
         "center": true,
-        "visible": false,
-        "url": "http://localhost:3000"
+        "visible": false
       }
     ],
     "security": {
@@ -37,8 +36,11 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "sidecar-dist/easypaper-server"
+      "../sidecar-dist/easypaper-server"
     ],
+    "resources": {
+      "../sidecar-dist/easypaper-server": "server/"
+    },
     "macOS": {
       "minimumSystemVersion": "10.15"
     }

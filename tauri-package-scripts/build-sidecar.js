@@ -5,12 +5,14 @@
  *
  * This script:
  * 1. Runs next build (standalone output)
- * 2. Creates sidecar directory with shell wrapper script
+ * 2. Creates sidecar directory structure:
+ *    - sidecar-dist/easypaper-server/  (contains server.js, node_modules, etc.)
+ *    - sidecar-dist/easypaper-server-{target} (shell wrapper executable)
  * 3. Copies necessary files (server.js, node_modules, native modules)
  * 4. Generates version.json
  *
- * IMPORTANT: Tauri externalBin requires an EXECUTABLE file, not a directory.
- * We create a shell script wrapper that executes Node.js to run server.js.
+ * IMPORTANT: Tauri externalBin requires an EXECUTABLE file at the specified path.
+ * We create a shell script wrapper that references the server directory.
  */
 
 const fs = require('node:fs');
@@ -45,11 +47,15 @@ function main() {
   // Step 2: Create sidecar-dist directory
   fs.mkdirSync(SIDECAR_DIST, { recursive: true });
 
-  // Step 3: Build for current platform
-  const currentPlatform = detectCurrentPlatform();
-  buildForPlatform(currentPlatform);
+  // Step 3: Create the server directory (contains all the actual files)
+  const serverDir = path.join(SIDECAR_DIST, 'easypaper-server');
+  buildServerDirectory(serverDir);
 
-  // Step 4: Generate version.json
+  // Step 4: Create platform-specific wrapper executable
+  const currentPlatform = detectCurrentPlatform();
+  createPlatformWrapper(currentPlatform, serverDir);
+
+  // Step 5: Generate version.json
   const packageJson = require(path.join(PROJECT_ROOT, 'package.json'));
   fs.writeFileSync(
     path.join(SIDECAR_DIST, 'version.json'),
@@ -78,28 +84,25 @@ function detectCurrentPlatform() {
   throw new Error(`Unsupported platform: ${platform}-${arch}`);
 }
 
-function buildForPlatform(platform) {
-  const targetTriple = PLATFORMS[platform];
-  const outputDir = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
+function buildServerDirectory(serverDir) {
+  console.log('Building server directory...');
 
-  console.log(`Building for ${platform} (${targetTriple})...`);
-
-  // Remove existing output
-  if (fs.existsSync(outputDir)) {
-    fs.rmSync(outputDir, { recursive: true });
+  // Remove existing directory
+  if (fs.existsSync(serverDir)) {
+    fs.rmSync(serverDir, { recursive: true });
   }
-  fs.mkdirSync(outputDir, { recursive: true });
+  fs.mkdirSync(serverDir, { recursive: true });
 
   // Copy standalone Next.js files
   console.log('  Copying Next.js standalone...');
-  copyDirectory(NEXT_STANDALONE, outputDir);
+  copyDirectory(NEXT_STANDALONE, serverDir);
 
   // Copy native modules (mupdf)
-  copyNativeModules(outputDir);
+  copyNativeModules(serverDir);
 
-  // Copy static files (from .next/static to standalone/.next/static)
+  // Copy static files (from .next/static to server/.next/static)
   const staticSrc = path.join(PROJECT_ROOT, '.next', 'static');
-  const staticDest = path.join(outputDir, '.next', 'static');
+  const staticDest = path.join(serverDir, '.next', 'static');
   if (fs.existsSync(staticSrc)) {
     console.log('  Copying static files...');
     fs.mkdirSync(path.dirname(staticDest), { recursive: true });
@@ -108,38 +111,54 @@ function buildForPlatform(platform) {
 
   // Copy public folder
   const publicSrc = path.join(PROJECT_ROOT, 'public');
-  const publicDest = path.join(outputDir, 'public');
+  const publicDest = path.join(serverDir, 'public');
   if (fs.existsSync(publicSrc)) {
     console.log('  Copying public files...');
     copyDirectory(publicSrc, publicDest);
   }
 
-  // Create executable shell wrapper (THIS IS THE KEY)
-  // Tauri expects the sidecar binary to be executable
-  // We create a shell script that runs: node server.js --ready-signal "$@"
-  createShellWrapper(outputDir, platform);
-
-  console.log(`  -> ${outputDir}`);
+  console.log(`  -> ${serverDir}`);
 }
 
-function createShellWrapper(outputDir, platform) {
-  console.log('  Creating executable shell wrapper...');
+function createPlatformWrapper(platform, serverDir) {
+  const targetTriple = PLATFORMS[platform];
+  console.log(`Creating wrapper for ${platform} (${targetTriple})...`);
+
+  // The wrapper sits at the same level as the server directory
+  // sidecar-dist/
+  //   easypaper-server/           <- server directory (will be bundled to Resources/server/)
+  //   easypaper-server-aarch64-apple-darwin  <- wrapper executable (will be bundled to MacOS)
+
+  // In the final app bundle:
+  //   MacOS/easypaper-server      <- wrapper
+  //   Resources/server/           <- server directory
 
   if (platform === 'windows-x64') {
     // Windows: create a .bat file
+    const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.bat`);
     const batContent = `@echo off
-node "%~dp0server.js" --ready-signal %*
+set RESOURCES_DIR=%~dp0..\\resources
+node "%RESOURCES_DIR%\\server\\server.js" --ready-signal %*
 `;
-    fs.writeFileSync(path.join(outputDir, 'easypaper-server-x86_64-pc-windows-msvc.bat'), batContent);
+    fs.writeFileSync(wrapperPath, batContent);
+    console.log(`  -> ${wrapperPath}`);
   } else {
     // Unix: create shell script
+    // For macOS: Resources are at ../Resources relative to MacOS
+    // For Linux: Resources are at ../resources relative to the binary
+    const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
     const shContent = `#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$SCRIPT_DIR/server.js" --ready-signal "$@"
+# Get the Resources directory (macOS) or resources directory (Linux)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  RESOURCES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
+else
+  RESOURCES_DIR="$(cd "$(dirname "$0")/../resources" && pwd)"
+fi
+exec node "$RESOURCES_DIR/server/server.js" --ready-signal "$@"
 `;
-    const wrapperPath = path.join(outputDir, `easypaper-server-${PLATFORMS[platform]}`);
     fs.writeFileSync(wrapperPath, shContent);
     fs.chmodSync(wrapperPath, 0o755);
+    console.log(`  -> ${wrapperPath}`);
   }
 }
 
