@@ -35,12 +35,11 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle().clone();
 
-            // In dev mode, beforeDevCommand already started the Next.js dev server
-            // and WebView is configured to connect to devUrl directly.
-            // Skip sidecar startup and CLI detection in dev mode.
-            let is_dev_mode = app.config().build.dev_url.is_some();
-
-            if is_dev_mode {
+            // Use compile-time detection for dev mode
+            // In debug builds, beforeDevCommand runs the Next.js dev server
+            // In release builds, we need to start the sidecar ourselves
+            #[cfg(debug_assertions)]
+            {
                 log::info!("Running in dev mode - skipping sidecar startup");
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.show();
@@ -48,6 +47,7 @@ pub fn run() {
                 return Ok(());
             }
 
+            #[cfg(not(debug_assertions))]
             tauri::async_runtime::spawn(async move {
                 // Check if CLI is already running (only in production mode)
                 if let Some(port) = port_check::detect_cli_running() {
