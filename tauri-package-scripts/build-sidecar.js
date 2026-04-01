@@ -306,9 +306,8 @@ async function main() {
   });
 
   // Handle shutdown signals - forward to child
-  // Note: setsid (in shell wrapper) puts us in a new session
-  // When session leader dies, OS sends SIGHUP to all processes in session
-  // We still explicitly kill child to ensure clean shutdown
+  // When start.js receives SIGTERM from Tauri, we forward it to server.js
+  // Both processes are in same process group (no detached), so signal propagation works
   const shutdown = (signal) => {
     log(\`Received \${signal}, shutting down...\`);
     child.kill(signal);
@@ -399,10 +398,10 @@ if [[ -z "$NODE_PATH" ]]; then
   NODE_PATH="node"
 fi
 
-# Use setsid to create a new session/process group
-# This ensures that when Tauri kills this process, all Node.js children die too
-# (in a new session, killing the session leader kills all processes in the session)
-exec setsid "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
+# Run start.js directly (no setsid - not available on macOS)
+# Process tree: wrapper(exec) -> start.js -> server.js
+# All in same process group - when parent gets SIGTERM, signal propagates to all
+exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
 `;
     fs.writeFileSync(wrapperPath, shContent);
     fs.chmodSync(wrapperPath, 0o755);
