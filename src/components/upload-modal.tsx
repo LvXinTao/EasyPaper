@@ -109,6 +109,15 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
     }
   }, [filteredInitialFiles]);
 
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   const handleClose = useCallback(() => {
     // Cancel any ongoing upload
     if (abortControllerRef.current) {
