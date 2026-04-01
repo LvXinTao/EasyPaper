@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Folder, PaperListItem } from '@/types';
 import { PaperTreeItem } from './paper-tree-item';
 
@@ -42,17 +42,38 @@ export function PaperTreeFolder({
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const childFolders = allFolders.filter(f => f.parentId === folder.id);
-  const folderPapers = papers.filter(p => p.folderId === folder.id);
-  const totalPapers = papers.filter(p => {
+  // Close context menu on outside click or escape key
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowMenu(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showMenu]);
+
+  // Memoize calculations to avoid unnecessary re-computation
+  const childFolders = useMemo(() => allFolders.filter(f => f.parentId === folder.id), [allFolders, folder.id]);
+  const folderPapers = useMemo(() => papers.filter(p => p.folderId === folder.id), [papers, folder.id]);
+  const totalPapers = useMemo(() => papers.filter(p => {
     const checkFolder = (fid: string | null): boolean => {
       if (fid === folder.id) return true;
       const parent = allFolders.find(f => f.id === fid);
       return parent ? checkFolder(parent.parentId) : false;
     };
     return checkFolder(p.folderId ?? null);
-  }).length;
+  }).length, [papers, folder.id, allFolders]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -88,7 +109,7 @@ export function PaperTreeFolder({
         <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>{totalPapers}</span>
         <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} style={{ fontSize: '12px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>⋯</button>
         {showMenu && (
-          <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', width: '160px', borderRadius: '8px', padding: '4px 0', background: 'var(--bg)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 50 }} onClick={e => e.stopPropagation()}>
+          <div ref={menuRef} style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', width: '160px', borderRadius: '8px', padding: '4px 0', background: 'var(--bg)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 50 }} onClick={e => e.stopPropagation()}>
             <button onClick={() => { setShowMenu(false); setIsCreatingChild(true); setExpanded(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>📁 新建子文件夹</button>
             <button onClick={() => { setShowMenu(false); setIsRenaming(true); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}>✏️ 重命名</button>
             <button onClick={() => { setShowMenu(false); onDeleteFolder(folder.id); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '11px', color: 'var(--rose)', background: 'none', border: 'none', cursor: 'pointer' }}>🗑️ 删除文件夹</button>
