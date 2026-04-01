@@ -18,6 +18,7 @@ interface PaperTreeFolderProps {
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onCreateChildFolder: (name: string, parentId: string) => void;
+  onToggleStar: (paperId: string) => void;
 }
 
 export function PaperTreeFolder({
@@ -34,6 +35,7 @@ export function PaperTreeFolder({
   onRenameFolder,
   onDeleteFolder,
   onCreateChildFolder,
+  onToggleStar,
 }: PaperTreeFolderProps) {
   const [expanded, setExpanded] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -91,16 +93,16 @@ export function PaperTreeFolder({
         style={{
           display: 'flex',
           alignItems: 'center',
-          padding: '5px 8px',
-          paddingLeft: `${8 + depth * 16}px`,
+          padding: '6px 10px',
+          paddingLeft: `${10 + depth * 16}px`,
           background: isDragOver ? 'var(--accent-subtle)' : 'transparent',
           outline: isDragOver ? '2px solid var(--accent)' : undefined,
           outlineOffset: '-2px',
-          borderRadius: '6px',
+          borderRadius: '8px',
           cursor: 'pointer',
           gap: '6px',
           position: 'relative',
-          margin: '2px 4px',
+          marginBottom: '2px',
         }}
         onClick={() => setExpanded(!expanded)}
         onDragOver={e => { if (e.dataTransfer.types.includes('application/x-paper-id')) { e.preventDefault(); setIsDragOver(true); } }}
@@ -108,9 +110,9 @@ export function PaperTreeFolder({
         onDrop={e => { e.preventDefault(); setIsDragOver(false); const paperId = e.dataTransfer.getData('application/x-paper-id'); if (paperId) onDropPaper(paperId, folder.id); }}
       >
         <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '14px', fontSize: '10px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
-        <span style={{ fontSize: '13px' }}>📁</span>
+        <span style={{ fontSize: '14px' }}>📁</span>
         {isRenaming ? (
-          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={handleRename} onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); } }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '3px 5px' }} onClick={e => e.stopPropagation()} />
+          <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)} onBlur={handleRename} onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') { setRenameValue(folder.name); setIsRenaming(false); } }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '3px 6px' }} onClick={e => e.stopPropagation()} />
         ) : (
           <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{folder.name}</span>
         )}
@@ -126,19 +128,19 @@ export function PaperTreeFolder({
       </div>
 
       {expanded && (
-        <div style={{ marginLeft: `${16 + depth * 16}px`, borderLeft: depth > 0 ? '1px solid var(--border)' : undefined }}>
+        <div style={{ marginLeft: `${12 + depth * 16}px`, borderLeft: depth > 0 ? '1px solid var(--border)' : undefined }}>
           {isCreatingChild && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px' }}>
-              <span style={{ fontSize: '13px' }}>📁</span>
-              <input autoFocus placeholder="Folder name" value={newChildName} onChange={e => setNewChildName(e.target.value)} onBlur={handleCreateChild} onKeyDown={e => { if (e.key === 'Enter') handleCreateChild(); if (e.key === 'Escape') setIsCreatingChild(false); }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '3px 5px' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 10px' }}>
+              <span style={{ fontSize: '14px' }}>📁</span>
+              <input autoFocus placeholder="Folder name" value={newChildName} onChange={e => setNewChildName(e.target.value)} onBlur={handleCreateChild} onKeyDown={e => { if (e.key === 'Enter') handleCreateChild(); if (e.key === 'Escape') setIsCreatingChild(false); }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '4px 6px' }} />
             </div>
           )}
           {childFolders.map(child => (
-            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onDropPaper={onDropPaper} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} />
+            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onDropPaper={onDropPaper} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
           ))}
           {folderPapers.map(paper => (
             <div key={paper.id} draggable onDragStart={e => e.dataTransfer.setData('application/x-paper-id', paper.id)}>
-              <PaperTreeItem paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} />
+              <PaperTreeItem paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
             </div>
           ))}
         </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { PaperTree } from '@/components/paper-tree';
+import { ResizablePanels } from '@/components/resizable-panels';
 import { ContextMenu } from '@/components/context-menu';
 import { ConfirmModal } from '@/components/confirm-modal';
 import { FolderPickerModal } from '@/components/folder-picker-modal';
@@ -257,55 +258,68 @@ export default function HomePage() {
 
   const selectedPaper = papers.find(p => p.id === selectedPaperId) || null;
 
-  return (
-    <div className="flex" style={{ height: 'calc(100vh - 44px)' }}>
-      {/* Left Column: Paper Tree with integrated filters */}
-      <div
-        className="flex flex-col overflow-hidden"
-        style={{ width: '280px', minWidth: '260px', borderRight: '1px solid var(--border)', background: 'rgba(255,255,255,0.012)' }}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleDrop}
-      >
-        <PaperTree
-          papers={visiblePapers}
-          folders={folders}
-          selectedPaperId={selectedPaperId}
-          selectedPaperIds={selectedPaperIds}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          onPaperClick={(id) => setSelectedPaperId(id)}
-          onCheckboxToggle={handleCheckboxToggle}
-          onBatchDelete={handleBatchDelete}
-          onBatchMove={handleBatchMove}
-          onBatchStar={handleBatchStar}
-          onMovePaper={handleMovePaper}
-          onClearSelection={() => setSelectedPaperIds(new Set())}
-          onCreateFolder={handleCreateFolder}
-          onRenameFolder={handleRenameFolder}
-          onDeleteFolder={handleDeleteFolder}
-          onContextMenuOpen={handleContextMenuOpen}
-          statusFilter={statusFilter}
-          starredOnly={starredOnly}
-          sortMode={sortMode}
-          stats={stats}
-          onStatusFilterChange={setStatusFilter}
-          onStarredOnlyChange={setStarredOnly}
-          onSortModeChange={setSortMode}
-        />
-      </div>
+  // Left Panel Component
+  const leftPanel = (
+    <div
+      className="flex flex-col overflow-hidden"
+      style={{ height: '100%', background: 'rgba(255,255,255,0.012)' }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+    >
+      <PaperTree
+        papers={visiblePapers}
+        folders={folders}
+        selectedPaperId={selectedPaperId}
+        selectedPaperIds={selectedPaperIds}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        onPaperClick={(id) => setSelectedPaperId(id)}
+        onCheckboxToggle={handleCheckboxToggle}
+        onBatchDelete={handleBatchDelete}
+        onBatchMove={handleBatchMove}
+        onBatchStar={handleBatchStar}
+        onMovePaper={handleMovePaper}
+        onClearSelection={() => setSelectedPaperIds(new Set())}
+        onCreateFolder={handleCreateFolder}
+        onRenameFolder={handleRenameFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onContextMenuOpen={handleContextMenuOpen}
+        onToggleStar={handleToggleStar}
+        statusFilter={statusFilter}
+        starredOnly={starredOnly}
+        sortMode={sortMode}
+        stats={stats}
+        onStatusFilterChange={setStatusFilter}
+        onStarredOnlyChange={setStarredOnly}
+        onSortModeChange={setSortMode}
+      />
+    </div>
+  );
 
-      {/* Right Column: Preview Panel */}
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'rgba(255,255,255,0.006)' }}>
-        <PreviewPanel
-          paper={selectedPaper}
-          multiSelectCount={selectedPaperIds.size}
-          onDelete={handleDelete}
-          onMovePaper={handleMovePaper}
-          onRename={handleRename}
-          onToggleStar={handleToggleStar}
-          folders={folders}
-        />
-      </div>
+  // Right Panel Component
+  const rightPanel = (
+    <div className="flex flex-col overflow-hidden" style={{ height: '100%', background: 'rgba(255,255,255,0.006)' }}>
+      <PreviewPanel
+        paper={selectedPaper}
+        multiSelectCount={selectedPaperIds.size}
+        onDelete={handleDelete}
+        onMovePaper={handleMovePaper}
+        onRename={handleRename}
+        onToggleStar={handleToggleStar}
+        folders={folders}
+      />
+    </div>
+  );
+
+  return (
+    <div style={{ height: 'calc(100vh - 44px)' }}>
+      <ResizablePanels
+        leftPanel={leftPanel}
+        rightPanel={rightPanel}
+        defaultLeftWidth={300}
+        minLeftWidth={240}
+        maxLeftWidth={500}
+      />
 
       <UploadModal
         isOpen={uploadOpen}

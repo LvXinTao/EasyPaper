@@ -47,6 +47,26 @@ describe('PaperTreeItem', () => {
 
   it('shows analyzed status indicator', () => {
     render(<PaperTreeItem {...defaultProps} paper={{ ...mockPaper, status: 'analyzed' }} />);
-    expect(screen.getByText('\u2713')).toBeInTheDocument();
+    expect(screen.getByText('Analyzed')).toBeInTheDocument();
+  });
+
+  it('shows pending status indicator', () => {
+    render(<PaperTreeItem {...defaultProps} paper={{ ...mockPaper, status: 'pending' }} />);
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+  });
+
+  it('shows error status indicator', () => {
+    render(<PaperTreeItem {...defaultProps} paper={{ ...mockPaper, status: 'error' }} />);
+    expect(screen.getByText('Error')).toBeInTheDocument();
+  });
+
+  it('shows star button', () => {
+    render(<PaperTreeItem {...defaultProps} />);
+    expect(screen.getByTitle('Add star')).toBeInTheDocument();
+  });
+
+  it('shows filled star when starred', () => {
+    render(<PaperTreeItem {...defaultProps} paper={{ ...mockPaper, starred: true }} />);
+    expect(screen.getByTitle('Remove star')).toBeInTheDocument();
   });
 });
