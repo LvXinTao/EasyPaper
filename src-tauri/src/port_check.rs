@@ -1,7 +1,7 @@
 use std::net::TcpStream;
 
 /// Check if a port is in use (something is listening)
-fn is_port_in_use(port: u16) -> bool {
+pub fn is_port_in_use(port: u16) -> bool {
     TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
 }
 
