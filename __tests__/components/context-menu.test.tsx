@@ -22,17 +22,17 @@ describe('ContextMenu', () => {
 
   it('renders all menu items with correct labels', () => {
     render(<ContextMenu {...defaultProps} />);
-    expect(screen.getByText('删除选中项 (3)')).toBeInTheDocument();
-    expect(screen.getByText('移动到文件夹...')).toBeInTheDocument();
-    expect(screen.getByText('添加星标')).toBeInTheDocument();
-    expect(screen.getByText('移除星标')).toBeInTheDocument();
-    expect(screen.getByText('取消选择')).toBeInTheDocument();
+    expect(screen.getByText('Delete (3)')).toBeInTheDocument();
+    expect(screen.getByText('Move to folder...')).toBeInTheDocument();
+    expect(screen.getByText('Add star')).toBeInTheDocument();
+    expect(screen.getByText('Remove star')).toBeInTheDocument();
+    expect(screen.getByText('Clear selection')).toBeInTheDocument();
   });
 
   it('calls onDelete when delete item clicked', () => {
     const onDelete = jest.fn();
     render(<ContextMenu {...defaultProps} onDelete={onDelete} />);
-    fireEvent.click(screen.getByText('删除选中项 (3)'));
+    fireEvent.click(screen.getByText('Delete (3)'));
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
@@ -59,7 +59,7 @@ describe('ContextMenu', () => {
     const onMove = jest.fn();
     const onClose = jest.fn();
     render(<ContextMenu {...defaultProps} onMove={onMove} onClose={onClose} />);
-    fireEvent.click(screen.getByText('移动到文件夹...'));
+    fireEvent.click(screen.getByText('Move to folder...'));
     expect(onMove).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -68,7 +68,7 @@ describe('ContextMenu', () => {
     const onStar = jest.fn();
     const onClose = jest.fn();
     render(<ContextMenu {...defaultProps} onStar={onStar} onClose={onClose} />);
-    fireEvent.click(screen.getByText('添加星标'));
+    fireEvent.click(screen.getByText('Add star'));
     expect(onStar).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -77,7 +77,7 @@ describe('ContextMenu', () => {
     const onUnstar = jest.fn();
     const onClose = jest.fn();
     render(<ContextMenu {...defaultProps} onUnstar={onUnstar} onClose={onClose} />);
-    fireEvent.click(screen.getByText('移除星标'));
+    fireEvent.click(screen.getByText('Remove star'));
     expect(onUnstar).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -86,7 +86,7 @@ describe('ContextMenu', () => {
     const onClear = jest.fn();
     const onClose = jest.fn();
     render(<ContextMenu {...defaultProps} onClear={onClear} onClose={onClose} />);
-    fireEvent.click(screen.getByText('取消选择'));
+    fireEvent.click(screen.getByText('Clear selection'));
     expect(onClear).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -95,7 +95,7 @@ describe('ContextMenu', () => {
     const onDelete = jest.fn();
     const onClose = jest.fn();
     render(<ContextMenu {...defaultProps} onDelete={onDelete} onClose={onClose} />);
-    fireEvent.click(screen.getByText('删除选中项 (3)'));
+    fireEvent.click(screen.getByText('Delete (3)'));
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
