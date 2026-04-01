@@ -16,10 +16,17 @@ describe('ContextMenu', () => {
     onClear: jest.fn(),
   };
 
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('renders all menu items with correct labels', () => {
     render(<ContextMenu {...defaultProps} />);
     expect(screen.getByText('删除选中项 (3)')).toBeInTheDocument();
     expect(screen.getByText('移动到文件夹...')).toBeInTheDocument();
+    expect(screen.getByText('添加星标')).toBeInTheDocument();
+    expect(screen.getByText('移除星标')).toBeInTheDocument();
+    expect(screen.getByText('取消选择')).toBeInTheDocument();
   });
 
   it('calls onDelete when delete item clicked', () => {
@@ -27,5 +34,69 @@ describe('ContextMenu', () => {
     render(<ContextMenu {...defaultProps} onDelete={onDelete} />);
     fireEvent.click(screen.getByText('删除选中项 (3)'));
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when clicking outside the menu', () => {
+    const onClose = jest.fn();
+    render(
+      <div>
+        <div data-testid="outside">Outside</div>
+        <ContextMenu {...defaultProps} onClose={onClose} />
+      </div>
+    );
+    fireEvent.mouseDown(screen.getByTestId('outside'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when pressing Escape key', () => {
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onMove and onClose when move item clicked', () => {
+    const onMove = jest.fn();
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onMove={onMove} onClose={onClose} />);
+    fireEvent.click(screen.getByText('移动到文件夹...'));
+    expect(onMove).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onStar and onClose when star item clicked', () => {
+    const onStar = jest.fn();
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onStar={onStar} onClose={onClose} />);
+    fireEvent.click(screen.getByText('添加星标'));
+    expect(onStar).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onUnstar and onClose when unstar item clicked', () => {
+    const onUnstar = jest.fn();
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onUnstar={onUnstar} onClose={onClose} />);
+    fireEvent.click(screen.getByText('移除星标'));
+    expect(onUnstar).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClear and onClose when clear item clicked', () => {
+    const onClear = jest.fn();
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onClear={onClear} onClose={onClose} />);
+    fireEvent.click(screen.getByText('取消选择'));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onDelete and onClose when delete item clicked', () => {
+    const onDelete = jest.fn();
+    const onClose = jest.fn();
+    render(<ContextMenu {...defaultProps} onDelete={onDelete} onClose={onClose} />);
+    fireEvent.click(screen.getByText('删除选中项 (3)'));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
