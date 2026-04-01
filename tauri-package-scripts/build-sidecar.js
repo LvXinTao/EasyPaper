@@ -357,19 +357,64 @@ function createPlatformWrapper(platform, serverDir) {
   //   Resources/server/           <- server directory
 
   if (platform === 'windows-x64') {
-    // Windows: create a .exe wrapper (Tauri expects .exe on Windows)
-    // We create a simple batch script, but name it with .exe suffix won't work
-    // Instead, we need to create a .bat and let Tauri handle it
-    // Note: On Windows, Tauri looks for .exe files, but .bat can be executed too
-    // The actual solution is to use a .exe wrapper or adjust Tauri config
-    const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.bat`);
-    const batContent = `@echo off
-set RESOURCES_DIR=%~dp0..\\resources
-node "%RESOURCES_DIR%\\server\\start.js" --ready-signal %*
+    // Windows: Tauri externalBin expects a .exe file
+    // We create a batch script but name it with .exe extension won't work
+    // Solution: Create both the batch script and a simple .exe launcher that calls it
+    // For now, we document that Windows requires building the sidecar separately
+
+    // Create a PowerShell wrapper script (more reliable than .bat for Tauri)
+    // Tauri will look for easypaper-server-x86_64-pc-windows-msvc.exe
+    // We create a .ps1 script and a small wrapper that will be manually built
+    const psPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.ps1`);
+    const psContent = `
+$ErrorActionPreference = "Stop"
+$resourcesDir = Join-Path $PSScriptRoot "..\\resources"
+$serverPath = Join-Path $resourcesDir "server\\start.js"
+
+# Find node
+$nodePath = $null
+$candidates = @(
+  "C:\\Program Files\\nodejs\\node.exe",
+  "C:\\Program Files (x86)\\nodejs\\node.exe",
+  (Join-Path $env:USERPROFILE "AppData\\Local\\Programs\\nodejs\\node.exe"),
+  (Join-Path $env:USERPROFILE "scoop\\apps\\nodejs\\current\\node.exe"),
+  "node"
+)
+
+foreach ($candidate in $candidates) {
+  if (Test-Path $candidate -ErrorAction SilentlyContinue) {
+    $nodePath = $candidate
+    break
+  }
+  # Check if it's in PATH
+  if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+    $nodePath = $candidate
+    break
+  }
+}
+
+if (-not $nodePath) {
+  Write-Error "Node.js not found. Please install Node.js."
+  exit 1
+}
+
+& $nodePath $serverPath --ready-signal @args
 `;
-    fs.writeFileSync(wrapperPath, batContent);
-    console.log(`  -> ${wrapperPath}`);
-    console.log('  WARNING: Windows sidecar requires additional setup for .exe wrapper');
+    fs.writeFileSync(psPath, psContent);
+    console.log(`  -> ${psPath}`);
+
+    // Create a simple .bat that calls PowerShell (Tauri will need .exe, documented)
+    const batPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.bat`);
+    const batContent = `@echo off
+powershell -ExecutionPolicy Bypass -File "%~dp0easypaper-server-${targetTriple}.ps1" %*
+`;
+    fs.writeFileSync(batPath, batContent);
+    console.log(`  -> ${batPath}`);
+
+    // Note about .exe requirement
+    console.log('  NOTE: Windows requires building a .exe wrapper for Tauri sidecar.');
+    console.log('        The .bat/.ps1 files are provided for manual testing.');
+    console.log('        For production, use a tool like "bat2exe" or build a native launcher.');
   } else {
     // Unix: create shell script with process group for clean shutdown
     // For macOS: Resources are at ../Resources relative to MacOS

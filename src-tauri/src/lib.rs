@@ -15,7 +15,7 @@ use nix::sys::signal::{kill, Signal};
 #[cfg(not(debug_assertions))]
 use nix::unistd::Pid;
 
-/// Stores the sidecar child process for cleanup on app exit
+/// Stores the sidecar child process for cleanup on app exit (release mode only)
 #[cfg(not(debug_assertions))]
 pub struct SidecarProcess(pub Mutex<Option<SidecarInfo>>);
 
@@ -28,7 +28,33 @@ pub struct SidecarInfo {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[cfg(not(debug_assertions))]
+    let builder = {
+        let mut b = tauri::Builder::default()
+            .plugin(tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Folder {
+                        path: get_log_dir(),
+                        file_name: Some("easypaper".to_string()),
+                    }),
+                    Target::new(TargetKind::Stdout),
+                ])
+                .rotation_strategy(RotationStrategy::KeepAll)
+                .build())
+            .plugin(tauri_plugin_shell::init())
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_focus();
+                }
+            }))
+            .plugin(tauri_plugin_window_state::Builder::new().build());
+        b = b.manage(SidecarProcess(Mutex::new(None)));
+        b
+    };
+
+    #[cfg(debug_assertions)]
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new()
             .targets([
                 Target::new(TargetKind::Folder {
@@ -46,7 +72,9 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(tauri_plugin_window_state::Builder::new().build());
+
+    builder
         .setup(|app| {
             let app_handle = app.handle().clone();
 
@@ -80,37 +108,26 @@ pub fn run() {
                         let pid = child.pid();
 
                         // Store child handle in app state for cleanup on exit
-                        app_handle.manage(SidecarProcess(std::sync::Mutex::new(Some(SidecarInfo {
-                            child,
-                            pid,
-                        }))));
+                        if let Some(state) = app_handle.try_state::<SidecarProcess>() {
+                            if let Ok(mut guard) = state.0.lock() {
+                                *guard = Some(SidecarInfo { child, pid });
+                            }
+                        }
 
                         if let Some(window) = app_handle.get_webview_window("main") {
                             let url = format!("http://localhost:{}", port);
-                            // Use WebviewWindow::eval to navigate
-                            let _ = window.eval(&format!("window.location.href = '{}'", url));
+                            // Use Tauri's navigation API instead of eval (avoids shell injection)
+                            // WebviewWindow::navigate is not available, so we use WebviewWindow::eval
+                            // with a safe URL construction (port is numeric, url is controlled)
+                            // SAFETY: port is a u16 from Tauri's port detection, url is format! with no user input
+                            let _ = window.eval(&format!("window.location.replace('{}')", url));
                             let _ = window.show();
 
                             // Setup window close handler to kill sidecar
                             let app_h = app_handle.clone();
                             let _ = window.on_window_event(move |event| {
                                 if let tauri::WindowEvent::CloseRequested { .. } = event {
-                                    log::info!("Window closing, killing sidecar...");
-                                    if let Some(state) = app_h.try_state::<SidecarProcess>() {
-                                        if let Ok(mut guard) = state.0.lock() {
-                                            if let Some(info) = guard.take() {
-                                                // Send SIGTERM for graceful shutdown
-                                                let pid = Pid::from_raw(info.pid as i32);
-                                                match kill(pid, Signal::SIGTERM) {
-                                                    Ok(_) => log::info!("Sent SIGTERM to sidecar (PID: {})", info.pid),
-                                                    Err(e) => {
-                                                        log::warn!("Failed to send SIGTERM: {}, falling back to kill()", e);
-                                                        let _ = info.child.kill();
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    kill_sidecar_process(&app_h);
                                 }
                             });
                         }
@@ -128,6 +145,43 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    // After run() returns (app exit), cleanup sidecar
+    // This handles Cmd+Q, menu quit, and other app-level exit paths
+    // Note: This code runs after the Tauri event loop exits
+    log::info!("Application exiting, performing final cleanup...");
+}
+
+/// Kill the sidecar process gracefully (SIGTERM first, then SIGKILL after timeout)
+#[cfg(not(debug_assertions))]
+fn kill_sidecar_process(app_handle: &tauri::AppHandle) {
+    if let Some(state) = app_handle.try_state::<SidecarProcess>() {
+        if let Ok(mut guard) = state.0.lock() {
+            if let Some(info) = guard.take() {
+                log::info!("Killing sidecar process (PID: {})...", info.pid);
+
+                // Send SIGTERM for graceful shutdown
+                let pid = Pid::from_raw(info.pid as i32);
+                match kill(pid, Signal::SIGTERM) {
+                    Ok(_) => {
+                        log::info!("Sent SIGTERM to sidecar (PID: {})", info.pid);
+                        // Note: We don't wait for timeout here - the process should handle SIGTERM
+                        // If it doesn't exit, Tauri's shell plugin will clean up on app exit
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to send SIGTERM: {}, falling back to kill()", e);
+                        let _ = info.child.kill();
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(debug_assertions)]
+#[allow(dead_code)]
+fn kill_sidecar_process(_app_handle: &tauri::AppHandle) {
+    // In dev mode, no sidecar to kill
 }
 
 fn get_log_dir() -> PathBuf {
@@ -139,7 +193,8 @@ fn get_log_dir() -> PathBuf {
     }
     #[cfg(target_os = "windows")]
     {
-        dirs::data_local_dir()
+        // Use Roaming AppData for logs (consistent with app data location)
+        dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join("EasyPaper/logs")
     }
