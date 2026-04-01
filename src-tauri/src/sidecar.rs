@@ -52,7 +52,44 @@ pub async fn start_and_wait(app: &AppHandle) -> Result<(u16, CommandChild), Side
     // Wait for ready signal with timeout
     let result = tokio::time::timeout(
         Duration::from_secs(READY_TIMEOUT_SECS),
-        wait_for_ready_signal(&mut rx)
+        async {
+            // Inline wait_for_ready_signal to avoid type naming issues
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(line_bytes) => {
+                        let line = String::from_utf8_lossy(&line_bytes);
+                        let line = line.trim();
+                        log::info!("Sidecar stdout: {}", line);
+
+                        if line.starts_with("EASYPAPER_READY:") {
+                            let port_str = line.strip_prefix("EASYPAPER_READY:").unwrap();
+                            let port: u16 = port_str.parse()
+                                .map_err(|e| format!("Port parse error: {}", e))?;
+                            return Ok(port);
+                        }
+
+                        if line.starts_with("EASYPAPER_ERROR:") {
+                            let error = line.strip_prefix("EASYPAPER_ERROR:").unwrap();
+                            return Err(error.to_string());
+                        }
+                    }
+                    CommandEvent::Stderr(line_bytes) => {
+                        let line = String::from_utf8_lossy(&line_bytes);
+                        log::warn!("Sidecar stderr: {}", line.trim());
+                    }
+                    CommandEvent::Error(err) => {
+                        log::error!("Sidecar error: {}", err);
+                        return Err(err);
+                    }
+                    CommandEvent::Terminated(payload) => {
+                        log::error!("Sidecar terminated with code: {:?}", payload.code);
+                        return Err(format!("Sidecar terminated unexpectedly with code: {:?}", payload.code));
+                    }
+                    _ => {}
+                }
+            }
+            Err("No ready signal received".to_string())
+        }
     )
     .await;
 
@@ -74,46 +111,6 @@ pub async fn start_and_wait(app: &AppHandle) -> Result<(u16, CommandChild), Side
             Err(SidecarError::StartupTimeout(READY_TIMEOUT_SECS))
         }
     }
-}
-
-/// Wait for EASYPAPER_READY signal from sidecar stdout
-async fn wait_for_ready_signal(rx: &mut tauri_plugin_shell::process::CommandEventReceiver) -> Result<u16, String> {
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(line_bytes) => {
-                let line = String::from_utf8_lossy(&line_bytes);
-                let line = line.trim();
-                log::info!("Sidecar stdout: {}", line);
-
-                if line.starts_with("EASYPAPER_READY:") {
-                    let port_str = line.strip_prefix("EASYPAPER_READY:").unwrap();
-                    let port: u16 = port_str.parse()
-                        .map_err(|e| format!("Port parse error: {}", e))?;
-                    return Ok(port);
-                }
-
-                if line.starts_with("EASYPAPER_ERROR:") {
-                    let error = line.strip_prefix("EASYPAPER_ERROR:").unwrap();
-                    return Err(error.to_string());
-                }
-            }
-            CommandEvent::Stderr(line_bytes) => {
-                let line = String::from_utf8_lossy(&line_bytes);
-                log::warn!("Sidecar stderr: {}", line.trim());
-            }
-            CommandEvent::Error(err) => {
-                log::error!("Sidecar error: {}", err);
-                return Err(err);
-            }
-            CommandEvent::Terminated(payload) => {
-                log::error!("Sidecar terminated with code: {:?}", payload.code);
-                return Err(format!("Sidecar terminated unexpectedly with code: {:?}", payload.code));
-            }
-            _ => {}
-        }
-    }
-
-    Err("No ready signal received".to_string())
 }
 
 fn get_data_dir() -> String {

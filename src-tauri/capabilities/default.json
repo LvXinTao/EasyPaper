@@ -8,9 +8,7 @@
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-set-focus",
-    "shell:allow-spawn",
-    "shell:allow-execute",
-    "shell:allow-open",
+    "shell:default",
     {
       "identifier": "shell:allow-open",
       "allow": [
@@ -23,7 +21,6 @@
     },
     "dialog:default",
     "window-state:default",
-    "single-instance:default",
     "log:default"
   ]
 }

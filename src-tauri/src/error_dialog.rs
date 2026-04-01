@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager};
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 /// Show startup error dialog and exit
 pub fn show_startup_error(app: &AppHandle, message: &str) {
@@ -12,8 +12,8 @@ pub fn show_startup_error(app: &AppHandle, message: &str) {
     app.dialog()
         .message(message)
         .title("EasyPaper Startup Error")
-        .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-        .buttons(tauri_plugin_dialog::Buttons::Ok)
+        .kind(MessageDialogKind::Error)
+        .buttons(MessageDialogButtons::Ok)
         .show(|_| {
             std::process::exit(1);
         });
@@ -24,7 +24,7 @@ pub fn show_warning(app: &AppHandle, title: &str, message: &str) {
     app.dialog()
         .message(message)
         .title(title)
-        .kind(tauri_plugin_dialog::MessageDialogKind::Warning)
-        .buttons(tauri_plugin_dialog::Buttons::Ok)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::Ok)
         .show(|_| {});
 }

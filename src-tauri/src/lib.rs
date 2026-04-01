@@ -35,15 +35,28 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle().clone();
 
+            // In dev mode, beforeDevCommand already started the Next.js dev server
+            // and WebView is configured to connect to devUrl directly.
+            // Skip sidecar startup and CLI detection in dev mode.
+            let is_dev_mode = app.config().build.dev_url.is_some();
+
+            if is_dev_mode {
+                log::info!("Running in dev mode - skipping sidecar startup");
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                }
+                return Ok(());
+            }
+
             tauri::async_runtime::spawn(async move {
-                // Check if CLI is already running
+                // Check if CLI is already running (only in production mode)
                 if let Some(port) = port_check::detect_cli_running() {
                     let msg = format!("EasyPaper CLI is already running on port {}. Please close it before starting the desktop app.", port);
                     error_dialog::show_startup_error(&app_handle, &msg);
                     return;
                 }
 
-                // Start sidecar
+                // Start sidecar (only in production mode)
                 match sidecar::start_and_wait(&app_handle).await {
                     Ok((port, child)) => {
                         log::info!("Sidecar ready on port {}", port);
