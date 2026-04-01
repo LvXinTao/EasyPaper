@@ -181,14 +181,18 @@ async function main() {
     cwd: __dirname,
     env,
     stdio: ['inherit', 'pipe', 'pipe'],
+    detached: true, // Create new process group so we can kill all descendants
   });
+
+  // Store child PID for cleanup
+  const childPid = child.pid;
 
   if (READY_SIGNAL) {
     let serverReady = false;
     const timeout = setTimeout(() => {
       if (!serverReady) {
         console.log('EASYPAPER_ERROR:Server startup timeout');
-        child.kill();
+        child.kill('SIGTERM');
         process.exit(1);
       }
     }, 10000);
@@ -225,10 +229,32 @@ async function main() {
     process.exit(code ?? 0);
   });
 
-  // Handle shutdown signals
+  // Handle shutdown signals - forward to child and kill process tree
+  const shutdown = (signal) => {
+    // Kill the entire process group (including grandchildren)
+    // Negative PID means kill the process group
+    try {
+      process.kill(-childPid, signal);
+    } catch (e) {
+      // Process might already be dead
+    }
+    // Also kill direct child as fallback
+    child.kill(signal);
+  };
+
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => child.kill(signal));
+    process.on(signal, () => {
+      shutdown(signal);
+      process.exit(0);
+    });
   }
+
+  // Handle parent death (if parent exits, we should too)
+  process.on('exit', () => {
+    try {
+      process.kill(-childPid, 'SIGTERM');
+    } catch (e) {}
+  });
 }
 
 main().catch((err) => {
@@ -266,11 +292,11 @@ node "%RESOURCES_DIR%\\server\\server.js" --ready-signal %*
     fs.writeFileSync(wrapperPath, batContent);
     console.log(`  -> ${wrapperPath}`);
   } else {
-    // Unix: create shell script with robust node detection
+    // Unix: create shell script with process group for clean shutdown
     // For macOS: Resources are at ../Resources relative to MacOS
     // For Linux: Resources are at ../resources relative to the binary
     const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
-    // Shell wrapper that finds node from common locations
+    // Use setsid to create new session/process group, then kill the group on exit
     const shContent = `#!/bin/bash
 # Get the Resources directory (macOS) or resources directory (Linux)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -298,6 +324,8 @@ if [[ -z "$NODE_PATH" ]]; then
   NODE_PATH="node"
 fi
 
+# Create new process group (setsid) so we can kill all children on exit
+# This ensures that when Tauri kills this process, all Node.js children die too
 exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
 `;
     fs.writeFileSync(wrapperPath, shContent);
