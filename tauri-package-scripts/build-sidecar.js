@@ -1,0 +1,537 @@
+#!/usr/bin/env node
+
+/**
+ * Build sidecar for Tauri desktop app
+ *
+ * This script:
+ * 1. Runs next build (standalone output)
+ * 2. Creates sidecar directory structure:
+ *    - sidecar-dist/easypaper-server/  (contains server.js, node_modules, etc.)
+ *    - sidecar-dist/easypaper-server-{target} (shell wrapper executable)
+ * 3. Copies necessary files (server.js, node_modules, native modules)
+ * 4. Generates version.json
+ *
+ * IMPORTANT: Tauri externalBin requires an EXECUTABLE file at the specified path.
+ * We create a shell script wrapper that references the server directory.
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { execSync } = require('node:child_process');
+
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const SIDECAR_DIST = path.join(PROJECT_ROOT, 'sidecar-dist');
+const NEXT_STANDALONE = path.join(PROJECT_ROOT, '.next', 'standalone');
+
+const PLATFORMS = {
+  'macos-x64': 'x86_64-apple-darwin',
+  'macos-arm64': 'aarch64-apple-darwin',
+  'windows-x64': 'x86_64-pc-windows-msvc',
+  'linux-x64': 'x86_64-unknown-linux-gnu',
+};
+
+function main() {
+  console.log('Building sidecar for Tauri...\n');
+
+  // Step 1: Ensure Next.js standalone build exists
+  if (!fs.existsSync(NEXT_STANDALONE)) {
+    console.log('Running next build...');
+    execSync('npm run build', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+  }
+
+  if (!fs.existsSync(NEXT_STANDALONE)) {
+    console.error('ERROR: Next.js standalone build not found at', NEXT_STANDALONE);
+    process.exit(1);
+  }
+
+  // Step 2: Create sidecar-dist directory
+  fs.mkdirSync(SIDECAR_DIST, { recursive: true });
+
+  // Step 3: Create the server directory (contains all the actual files)
+  const serverDir = path.join(SIDECAR_DIST, 'easypaper-server');
+  buildServerDirectory(serverDir);
+
+  // Step 4: Create platform-specific wrapper executable
+  const currentPlatform = detectCurrentPlatform();
+  createPlatformWrapper(currentPlatform, serverDir);
+
+  // Step 5: Generate version.json
+  const packageJson = require(path.join(PROJECT_ROOT, 'package.json'));
+  fs.writeFileSync(
+    path.join(SIDECAR_DIST, 'version.json'),
+    JSON.stringify({
+      version: packageJson.version,
+      tauri_version: packageJson.version,
+      build_time: new Date().toISOString(),
+    }, null, 2)
+  );
+
+  console.log('\nSidecar build complete!');
+  console.log(`Output: ${SIDECAR_DIST}`);
+}
+
+function detectCurrentPlatform() {
+  const os = require('node:os');
+  const platform = os.platform();
+  const arch = os.arch();
+
+  if (platform === 'darwin') {
+    return arch === 'x64' ? 'macos-x64' : 'macos-arm64';
+  }
+  if (platform === 'win32') return 'windows-x64';
+  if (platform === 'linux') return 'linux-x64';
+
+  throw new Error(`Unsupported platform: ${platform}-${arch}`);
+}
+
+function buildServerDirectory(serverDir) {
+  console.log('Building server directory...');
+
+  // Remove existing directory
+  if (fs.existsSync(serverDir)) {
+    fs.rmSync(serverDir, { recursive: true });
+  }
+  fs.mkdirSync(serverDir, { recursive: true });
+
+  // Copy standalone Next.js files
+  console.log('  Copying Next.js standalone...');
+  copyDirectory(NEXT_STANDALONE, serverDir);
+
+  // Copy native modules (mupdf)
+  copyNativeModules(serverDir);
+
+  // Copy static files (from .next/static to server/.next/static)
+  const staticSrc = path.join(PROJECT_ROOT, '.next', 'static');
+  const staticDest = path.join(serverDir, '.next', 'static');
+  if (fs.existsSync(staticSrc)) {
+    console.log('  Copying static files...');
+    fs.mkdirSync(path.dirname(staticDest), { recursive: true });
+    copyDirectory(staticSrc, staticDest);
+  }
+
+  // Copy public folder
+  const publicSrc = path.join(PROJECT_ROOT, 'public');
+  const publicDest = path.join(serverDir, 'public');
+  if (fs.existsSync(publicSrc)) {
+    console.log('  Copying public files...');
+    copyDirectory(publicSrc, publicDest);
+  }
+
+  // Create start.js entry point that handles ready signal
+  createStartScript(serverDir);
+
+  console.log(`  -> ${serverDir}`);
+}
+
+function createStartScript(serverDir) {
+  console.log('  Creating start.js entry point...');
+  const startJs = `#!/usr/bin/env node
+
+/**
+ * Production entry point for Tauri sidecar
+ * Runs Next.js standalone server and outputs ready signal
+ * Logs to ~/.easypaper/logs/server.log
+ */
+
+const net = require('net');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { spawn } = require('child_process');
+
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+const READY_SIGNAL = process.argv.includes('--ready-signal');
+
+// Setup logging
+const LOG_DIR = path.join(os.homedir(), '.easypaper', 'logs');
+const LOG_FILE = path.join(LOG_DIR, 'server.log');
+let logStream = null;
+
+function setupLogging() {
+  try {
+    if (!fs.existsSync(LOG_DIR)) {
+      fs.mkdirSync(LOG_DIR, { recursive: true });
+    }
+    // Rotate old logs (keep last 3)
+    rotateLogs();
+    logStream = fs.createWriteStream(LOG_FILE, { flags: 'a' });
+  } catch (e) {
+    // Fallback if logging setup fails
+    console.error('Failed to setup logging:', e.message);
+  }
+}
+
+function rotateLogs() {
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      const stats = fs.statSync(LOG_FILE);
+      // Rotate if file is larger than 5MB
+      if (stats.size > 5 * 1024 * 1024) {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const rotatedFile = path.join(LOG_DIR, \`server-\${timestamp}.log\`);
+        fs.renameSync(LOG_FILE, rotatedFile);
+        // Clean up old rotated logs (keep last 3)
+        const rotatedLogs = fs.readdirSync(LOG_DIR)
+          .filter(f => f.startsWith('server-') && f.endsWith('.log'))
+          .sort()
+          .reverse();
+        rotatedLogs.slice(3).forEach(f => {
+          try { fs.unlinkSync(path.join(LOG_DIR, f)); } catch (e) {}
+        });
+      }
+    }
+  } catch (e) {}
+}
+
+function log(message) {
+  const timestamp = new Date().toISOString();
+  const line = \`[\${timestamp}] \${message}\\n\`;
+  // Write to log file
+  if (logStream) {
+    logStream.write(line);
+  }
+  // Also write to stderr for Tauri to capture
+  process.stderr.write(line);
+}
+
+// Find available port
+async function findAvailablePort(startPort) {
+  const maxPort = 3100;
+  for (let port = startPort; port <= maxPort; port++) {
+    const available = await new Promise((resolve) => {
+      const server = net.createServer();
+      server.once('error', () => resolve(false));
+      server.once('listening', () => {
+        server.close();
+        resolve(true);
+      });
+      server.listen(port);
+    });
+    if (available) return port;
+  }
+  return null;
+}
+
+async function main() {
+  setupLogging();
+  log('Starting EasyPaper server...');
+
+  // Find available port if in ready-signal mode
+  let port = PORT;
+  if (READY_SIGNAL) {
+    port = await findAvailablePort(PORT);
+    if (!port) {
+      log('ERROR: Port 3000-3100 all occupied');
+      console.log('EASYPAPER_ERROR:Port 3000-3100 all occupied');
+      if (logStream) logStream.end();
+      process.exit(1);
+    }
+  }
+  log(\`Using port: \${port}\`);
+
+  const serverPath = path.join(__dirname, 'server.js');
+
+  // Start the Next.js server
+  const env = {
+    ...process.env,
+    PORT: port.toString(),
+    NODE_ENV: 'production',
+  };
+
+  const child = spawn(process.execPath, [serverPath], {
+    cwd: __dirname,
+    env,
+    stdio: ['inherit', 'pipe', 'pipe'],
+  });
+
+  // Store child PID for cleanup
+  const childPid = child.pid;
+  log(\`Server process started with PID: \${childPid}\`);
+
+  if (READY_SIGNAL) {
+    let serverReady = false;
+    const timeout = setTimeout(() => {
+      if (!serverReady) {
+        log('ERROR: Server startup timeout after 10s');
+        console.log('EASYPAPER_ERROR:Server startup timeout');
+        child.kill('SIGTERM');
+        if (logStream) logStream.end();
+        process.exit(1);
+      }
+    }, 10000);
+
+    // HTTP health check to verify server is actually responding
+    const http = require('http');
+    const checkHealth = () => {
+      const req = http.request({
+        hostname: 'localhost',
+        port: port,
+        path: '/api/health',
+        method: 'HEAD',
+        timeout: 500,
+      }, (res) => {
+        if (res.headers['x-app'] === 'EasyPaper' && !serverReady) {
+          serverReady = true;
+          clearTimeout(timeout);
+          log(\`Server verified via health check on port \${port}\`);
+          console.log('EASYPAPER_READY:' + port);
+        }
+      });
+      req.on('error', () => {}); // Ignore errors, will retry
+      req.end();
+    };
+
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      // Log all stdout
+      log(\`[stdout] \${output.trim()}\`);
+      // Next.js outputs "Ready" or "Local:" when server starts
+      // Start health check polling after detecting startup indicator
+      if (!serverReady && (output.includes('Ready') || output.includes('Local:'))) {
+        log('Detected server startup, verifying with health check...');
+        // Poll health endpoint until it responds or timeout
+        const healthInterval = setInterval(() => {
+          if (serverReady) {
+            clearInterval(healthInterval);
+            return;
+          }
+          checkHealth();
+        }, 200);
+        // Stop polling after 5 seconds (timeout will catch overall failure)
+        setTimeout(() => clearInterval(healthInterval), 5000);
+      }
+    });
+
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      log(\`[stderr] \${output.trim()}\`);
+    });
+  } else {
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      log(\`[stdout] \${output.trim()}\`);
+    });
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      log(\`[stderr] \${output.trim()}\`);
+    });
+  }
+
+  child.on('error', (err) => {
+    log(\`ERROR: \${err.message}\`);
+    if (READY_SIGNAL) {
+      console.log('EASYPAPER_ERROR:' + err.message);
+    } else {
+      console.error('Error: ' + err.message);
+    }
+    if (logStream) logStream.end();
+    process.exit(1);
+  });
+
+  child.on('exit', (code) => {
+    log(\`Server process exited with code: \${code}\`);
+    if (logStream) logStream.end();
+    process.exit(code ?? 0);
+  });
+
+  // Handle shutdown signals - forward to child
+  // When start.js receives SIGTERM from Tauri, we forward it to server.js
+  // Both processes are in same process group (no detached), so signal propagation works
+  const shutdown = (signal) => {
+    log(\`Received \${signal}, shutting down...\`);
+    child.kill(signal);
+    if (logStream) logStream.end();
+    process.exit(0);
+  };
+
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => {
+      shutdown(signal);
+    });
+  }
+
+  // Handle parent death (if parent exits, we should too)
+  process.on('exit', () => {
+    try {
+      child.kill('SIGTERM');
+    } catch (e) {}
+  });
+}
+
+main().catch((err) => {
+  log(\`ERROR: \${err.message}\`);
+  if (READY_SIGNAL) {
+    console.log('EASYPAPER_ERROR:' + err.message);
+  } else {
+    console.error('Error: ' + err.message);
+  }
+  if (logStream) logStream.end();
+  process.exit(1);
+});
+`;
+  fs.writeFileSync(path.join(serverDir, 'start.js'), startJs);
+}
+
+function createPlatformWrapper(platform, serverDir) {
+  const targetTriple = PLATFORMS[platform];
+  console.log(`Creating wrapper for ${platform} (${targetTriple})...`);
+
+  // The wrapper sits at the same level as the server directory
+  // sidecar-dist/
+  //   easypaper-server/           <- server directory (will be bundled to Resources/server/)
+  //   easypaper-server-aarch64-apple-darwin  <- wrapper executable (will be bundled to MacOS)
+
+  // In the final app bundle:
+  //   MacOS/easypaper-server      <- wrapper
+  //   Resources/server/           <- server directory
+
+  if (platform === 'windows-x64') {
+    // Windows: Tauri externalBin expects a .exe file
+    // We create a batch script but name it with .exe extension won't work
+    // Solution: Create both the batch script and a simple .exe launcher that calls it
+    // For now, we document that Windows requires building the sidecar separately
+
+    // Create a PowerShell wrapper script (more reliable than .bat for Tauri)
+    // Tauri will look for easypaper-server-x86_64-pc-windows-msvc.exe
+    // We create a .ps1 script and a small wrapper that will be manually built
+    const psPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.ps1`);
+    const psContent = `
+$ErrorActionPreference = "Stop"
+$resourcesDir = Join-Path $PSScriptRoot "..\\resources"
+$serverPath = Join-Path $resourcesDir "server\\start.js"
+
+# Find node
+$nodePath = $null
+$candidates = @(
+  "C:\\Program Files\\nodejs\\node.exe",
+  "C:\\Program Files (x86)\\nodejs\\node.exe",
+  (Join-Path $env:USERPROFILE "AppData\\Local\\Programs\\nodejs\\node.exe"),
+  (Join-Path $env:USERPROFILE "scoop\\apps\\nodejs\\current\\node.exe"),
+  "node"
+)
+
+foreach ($candidate in $candidates) {
+  if (Test-Path $candidate -ErrorAction SilentlyContinue) {
+    $nodePath = $candidate
+    break
+  }
+  # Check if it's in PATH
+  if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+    $nodePath = $candidate
+    break
+  }
+}
+
+if (-not $nodePath) {
+  Write-Error "Node.js not found. Please install Node.js."
+  exit 1
+}
+
+& $nodePath $serverPath --ready-signal @args
+`;
+    fs.writeFileSync(psPath, psContent);
+    console.log(`  -> ${psPath}`);
+
+    // Create a simple .bat that calls PowerShell (Tauri will need .exe, documented)
+    const batPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.bat`);
+    const batContent = `@echo off
+powershell -ExecutionPolicy Bypass -File "%~dp0easypaper-server-${targetTriple}.ps1" %*
+`;
+    fs.writeFileSync(batPath, batContent);
+    console.log(`  -> ${batPath}`);
+
+    // Note about .exe requirement
+    console.log('  NOTE: Windows requires building a .exe wrapper for Tauri sidecar.');
+    console.log('        The .bat/.ps1 files are provided for manual testing.');
+    console.log('        For production, use a tool like "bat2exe" or build a native launcher.');
+  } else {
+    // Unix: create shell script with process group for clean shutdown
+    // For macOS: Resources are at ../Resources relative to MacOS
+    // For Linux: Resources are at ../resources relative to the binary
+    const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
+    // Use setsid to create new session/process group, then kill the group on exit
+    const shContent = `#!/bin/bash
+# Get the Resources directory (macOS) or resources directory (Linux)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  RESOURCES_DIR="$(cd "$(dirname "$0")/../Resources" && pwd)"
+else
+  RESOURCES_DIR="$(cd "$(dirname "$0")/../resources" && pwd)"
+fi
+
+# Find node - check common locations in order
+NODE_PATH=""
+for candidate in \\
+  "/opt/homebrew/bin/node" \\
+  "/usr/local/bin/node" \\
+  "/usr/bin/node" \\
+  "$HOME/.nvm/versions/node/*/bin/node" \\
+  "$HOME/.cargo/bin/node"; do
+  if [[ -x "$candidate" ]]; then
+    NODE_PATH="$candidate"
+    break
+  fi
+done
+
+# Fall back to node in PATH
+if [[ -z "$NODE_PATH" ]]; then
+  NODE_PATH="node"
+fi
+
+# Run start.js directly (no setsid - not available on macOS)
+# Process tree: wrapper(exec) -> start.js -> server.js
+# All in same process group - when parent gets SIGTERM, signal propagates to all
+exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
+`;
+    fs.writeFileSync(wrapperPath, shContent);
+    fs.chmodSync(wrapperPath, 0o755);
+    console.log(`  -> ${wrapperPath}`);
+  }
+}
+
+function copyDirectory(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectory(srcPath, destPath);
+    } else if (entry.isSymbolicLink()) {
+      // Skip symlinks (can cause issues with cross-platform builds)
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
+function copyNativeModules(outputDir) {
+  const mupdfSrc = path.join(PROJECT_ROOT, 'node_modules', 'mupdf');
+  if (fs.existsSync(mupdfSrc)) {
+    console.log('  Copying mupdf native module...');
+    const mupdfDest = path.join(outputDir, 'node_modules', 'mupdf');
+    fs.mkdirSync(mupdfDest, { recursive: true });
+
+    // Only copy essential files: .node binaries, package.json, and index.js
+    const essentialFiles = ['package.json', 'index.js'];
+    for (const file of essentialFiles) {
+      const srcPath = path.join(mupdfSrc, file);
+      if (fs.existsSync(srcPath)) {
+        fs.copyFileSync(srcPath, path.join(mupdfDest, file));
+      }
+    }
+
+    // Copy native addon files (*.node)
+    for (const entry of fs.readdirSync(mupdfSrc, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.node')) {
+        const srcPath = path.join(mupdfSrc, entry.name);
+        fs.copyFileSync(srcPath, path.join(mupdfDest, entry.name));
+        console.log(`    Copied: ${entry.name}`);
+      }
+    }
+  } else {
+    console.warn('  Warning: mupdf not found in node_modules');
+  }
+}
+
+main();

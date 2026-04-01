@@ -53,6 +53,22 @@ npm run dev
 npm i -g @lvxintao/easypaper@latest
 ```
 
+### 方式五：桌面应用（Tauri）
+
+如需原生桌面体验，无需打开浏览器：
+
+```bash
+git clone https://github.com/lvxintao/EasyPaper.git
+cd EasyPaper
+npm install
+npm run tauri:dev    # 开发模式
+npm run tauri:build  # 生产构建
+```
+
+**前置条件：** 构建需要 [Rust 工具链](https://rustup.rs/)。
+
+详细构建说明请参阅 [docs/TAURI_BUILD.md](./docs/TAURI_BUILD.md)。
+
 ## 使用
 
 ```bash
@@ -102,6 +118,7 @@ easypaper [选项]
 
 - [x] 支持划句笔记功能
 - [x] 支持划句向AI提问
+- [x] 桌面应用（macOS/Windows/Linux）via Tauri
 - [ ] 支持更多文件格式（目前仅支持PDF）
 - [ ] 支持更多PDF解析方式（目前仅支持MLLM）
 - [ ] 支持共享读论文

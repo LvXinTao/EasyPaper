@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Default capability for EasyPaper",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "shell:default",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [
+        {
+          "sidecar": true,
+          "name": "easypaper-server",
+          "cmd": "sidecar-dist/easypaper-server"
+        }
+      ]
+    },
+    "dialog:default",
+    "window-state:default",
+    "log:default"
+  ]
+}

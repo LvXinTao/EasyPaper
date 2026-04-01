@@ -51,3 +51,6 @@ next-env.d.ts
 /data/
 /config/
 .omc/
+
+# Tauri generated sidecar
+sidecar-dist/

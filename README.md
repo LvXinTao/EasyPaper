@@ -53,6 +53,22 @@ npm run dev
 npm i -g @lvxintao/easypaper@latest
 ```
 
+### Option 5: Desktop App (Tauri)
+
+For a native desktop experience without opening a browser:
+
+```bash
+git clone https://github.com/lvxintao/EasyPaper.git
+cd EasyPaper
+npm install
+npm run tauri:dev    # Development
+npm run tauri:build  # Production build
+```
+
+**Prerequisites:** [Rust toolchain](https://rustup.rs/) is required for Tauri builds.
+
+See [docs/TAURI_BUILD.md](./docs/TAURI_BUILD.md) for detailed build instructions.
+
 ## Usage
 
 ```bash
@@ -103,6 +119,7 @@ All data is stored locally in `~/.easypaper/`.
 
 - [x] Support sentence-level notes with PDF text selection
 - [x] Support asking AI questions about specific sentences
+- [x] Desktop app (macOS/Windows/Linux) via Tauri
 - [ ] Support more file formats (currently only PDF)
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers
