@@ -89,7 +89,8 @@ No new API endpoints. Existing endpoints used:
 | Scenario | Behavior |
 |----------|----------|
 | Non-PDF file in selection | Filtered out before upload, not counted |
-| File exceeds 50MB | API returns error, recorded as failed, continue |
+| Duplicate filename | Allowed — each upload gets a unique ID, no dedup needed |
+| File exceeds 50MB | Client-side check before upload; skip immediately, record as failed |
 | Network error | Recorded as failed, continue with next file |
 | All files fail | Show error summary, keep modal open |
 | Partial success | Show "X succeeded, Y failed" summary |
