@@ -1,0 +1,9 @@
+{
+  "name": "easypaper-tauri-scripts",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Build scripts for Tauri sidecar packaging",
+  "scripts": {
+    "build": "node build-sidecar.js"
+  }
+}
