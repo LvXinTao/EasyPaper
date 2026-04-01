@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Folder } from '@/types';
 
 interface UploadModalProps {
@@ -11,6 +11,7 @@ interface UploadModalProps {
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const CONCURRENT_UPLOADS = 3; // Number of parallel uploads
 
 const filterPdfFiles = (files: FileList | File[]): File[] => {
   return Array.from(files).filter(
@@ -56,14 +57,22 @@ const collectPdfFilesFromEntries = async (items: DataTransferItemList): Promise<
   return files;
 };
 
+interface FailedFile {
+  name: string;
+  reason: string;
+}
+
 export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }: UploadModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   // Use ref to avoid stale closure in setTimeout
   const onUploadCompleteRef = useRef(onUploadComplete);
   useEffect(() => {
     onUploadCompleteRef.current = onUploadComplete;
   }, [onUploadComplete]);
-  const folderInputRef = useRef<HTMLInputElement>(null);
+
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +80,15 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
   const [targetFolderId, setTargetFolderId] = useState<string | null>(null);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
-  const [uploadResults, setUploadResults] = useState<{ success: number; failed: number } | null>(null);
+  const [uploadResults, setUploadResults] = useState<{ success: number; failed: number; failedFiles: FailedFile[] } | null>(null);
+
+  // Filter initial files at render time
+  const filteredInitialFiles = useMemo(() => {
+    if (initialFiles && initialFiles.length > 0 && isOpen) {
+      return filterPdfFiles(initialFiles);
+    }
+    return null;
+  }, [initialFiles, isOpen]);
 
   // Fetch folders when modal opens
   useEffect(() => {
@@ -80,14 +97,24 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
     }
   }, [isOpen]);
 
-  // Pre-populate files when opened with initialFiles (e.g. drag onto paper list)
+  // Merge filtered initial files with selected files
   useEffect(() => {
-    if (initialFiles && initialFiles.length > 0 && isOpen) {
-      setSelectedFiles(filterPdfFiles(initialFiles));
+    if (filteredInitialFiles && filteredInitialFiles.length > 0) {
+      setSelectedFiles(prev => {
+        // Avoid duplicates by checking file name and size
+        const existingKeys = new Set(prev.map(f => `${f.name}-${f.size}`));
+        const newFiles = filteredInitialFiles.filter(f => !existingKeys.has(`${f.name}-${f.size}`));
+        return [...prev, ...newFiles];
+      });
     }
-  }, [initialFiles, isOpen]);
+  }, [filteredInitialFiles]);
 
   const handleClose = useCallback(() => {
+    // Cancel any ongoing upload
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setSelectedFiles([]);
     setUploadProgress(null);
     setUploadResults(null);
@@ -137,56 +164,107 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
 
   const startBatchUpload = useCallback(async () => {
     if (selectedFiles.length === 0) return;
+
     setUploading(true);
     setError(null);
+    setUploadResults(null);
+
     const total = selectedFiles.length;
-    let success = 0;
-    let failed = 0;
     const uploadedIds: string[] = [];
+    const failedFiles: FailedFile[] = [];
+    let completed = 0;
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     setUploadProgress({ current: 0, total });
-    for (let i = 0; i < total; i++) {
-      const file = selectedFiles[i];
+
+    // Upload with controlled concurrency
+    const uploadFile = async (file: File): Promise<{ id?: string; error?: string }> => {
+      // Check if cancelled
+      if (signal.aborted) {
+        return { error: 'Cancelled' };
+      }
 
       // Client-side size check
       if (file.size > MAX_FILE_SIZE) {
-        failed++;
-        setUploadProgress({ current: i + 1, total });
-        continue;
+        return { error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB > 50MB limit)` };
       }
 
       try {
         const formData = new FormData();
         formData.append('file', file);
-        const response = await fetch('/api/upload', { method: 'POST', body: formData });
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+          signal
+        });
+
         if (!response.ok) {
-          failed++;
-          setUploadProgress({ current: i + 1, total });
-          continue;
+          const errorData = await response.json().catch(() => ({}));
+          return { error: errorData.error?.message || `HTTP ${response.status}` };
         }
+
         const { id } = await response.json();
-        uploadedIds.push(id);
 
         // Assign to folder if selected
-        if (targetFolderId) {
+        if (targetFolderId && id) {
           await fetch(`/api/paper/${id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ folderId: targetFolderId }),
-          });
+            signal
+          }).catch(() => {}); // Ignore folder assignment errors
         }
-        success++;
-      } catch {
-        failed++;
+
+        return { id };
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return { error: 'Cancelled' };
+        }
+        return { error: err instanceof Error ? err.message : 'Upload failed' };
       }
-      setUploadProgress({ current: i + 1, total });
-    }
+    };
+
+    // Process files with concurrency control
+    const queue = [...selectedFiles];
+
+    const processNext = async () => {
+      while (queue.length > 0 && !signal.aborted) {
+        const file = queue.shift();
+        if (!file) break;
+
+        const result = await uploadFile(file);
+        completed++;
+        setUploadProgress({ current: completed, total });
+
+        if (result.id) {
+          uploadedIds.push(result.id);
+        } else if (result.error) {
+          failedFiles.push({ name: file.name, reason: result.error });
+          console.warn(`[Upload] Failed: ${file.name} - ${result.error}`);
+        }
+      }
+    };
+
+    // Start concurrent uploads
+    const workers = Array(Math.min(CONCURRENT_UPLOADS, total))
+      .fill(null)
+      .map(() => processNext());
+
+    await Promise.all(workers);
 
     setUploadProgress(null);
-    setUploadResults({ success, failed });
+    setUploadResults({
+      success: uploadedIds.length,
+      failed: failedFiles.length,
+      failedFiles
+    });
     setUploading(false);
+    abortControllerRef.current = null;
 
-    if (success > 0) {
+    if (uploadedIds.length > 0) {
       const lastId = uploadedIds[uploadedIds.length - 1];
       // Dispatch custom event for any listeners (e.g., page.tsx)
       window.dispatchEvent(new CustomEvent('paperUploaded', { detail: { paperId: lastId } }));
@@ -198,6 +276,13 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
       }, 2000);
     }
   }, [selectedFiles, targetFolderId, handleClose]);
+
+  const handleCancelUpload = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    handleClose();
+  }, [handleClose]);
 
   if (!isOpen) return null;
 
@@ -235,7 +320,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
               onClick={() => inputRef.current?.click()}
             >
               <input ref={inputRef} type="file" accept=".pdf,application/pdf" multiple onChange={handleFileSelect} className="hidden" />
-              <input ref={folderInputRef} type="file" {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>} onChange={handleFolderSelect} className="hidden" />
+              <input ref={folderInputRef} type="file" {...{ webkitdirectory: '' } as React.InputHTMLAttributes<HTMLInputElement>} onChange={handleFolderSelect} className="hidden" />
 
               {selectedFiles.length === 0 ? (
                 <div>
@@ -312,6 +397,17 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
                   : `${uploadResults.success} succeeded, ${uploadResults.failed} failed`
                 }
               </div>
+              {uploadResults.failedFiles.length > 0 && (
+                <div className="mt-2 text-left" style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>Failed files:</div>
+                  {uploadResults.failedFiles.slice(0, 5).map((f, i) => (
+                    <div key={i} style={{ color: 'var(--rose-subtle)' }}>• {f.name}: {f.reason}</div>
+                  ))}
+                  {uploadResults.failedFiles.length > 5 && (
+                    <div style={{ color: 'var(--text-tertiary)' }}>...and {uploadResults.failedFiles.length - 5} more</div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -345,11 +441,11 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
 
           <div className="flex justify-end gap-2 mt-4">
             <button
-              onClick={handleClose}
+              onClick={uploading ? handleCancelUpload : handleClose}
               className="cursor-pointer rounded-lg transition-colors"
               style={{ padding: '6px 16px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
             >
-              {uploadResults ? 'Close' : 'Cancel'}
+              {uploading ? 'Cancel' : (uploadResults ? 'Close' : 'Cancel')}
             </button>
             {selectedFiles.length > 0 && !uploading && !uploadResults && (
               <button
