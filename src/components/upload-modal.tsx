@@ -113,8 +113,8 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
 
     // Try webkitGetAsEntry first for folder support
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      const hasEntries = e.dataTransfer.items[0].webkitGetAsEntry;
-      if (hasEntries) {
+      const firstEntry = e.dataTransfer.items[0].webkitGetAsEntry?.();
+      if (firstEntry) {
         const files = await collectPdfFilesFromEntries(e.dataTransfer.items);
         if (files.length > 0) {
           setSelectedFiles(prev => [...prev, ...files]);
