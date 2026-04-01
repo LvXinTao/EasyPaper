@@ -45,17 +45,20 @@ export default function HomePage() {
       const res = await fetch('/api/papers');
       const data = await res.json();
       setPapers(data.papers || []);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []);
+    } catch {
+      showToast('Failed to load papers', 'error');
+    } finally { setLoading(false); }
+  }, [showToast]);
 
   const fetchFolders = useCallback(async () => {
     try {
       const res = await fetch('/api/folders');
       const data = await res.json();
       setFolders(data.folders || []);
-    } catch { /* ignore */ }
-  }, []);
+    } catch {
+      showToast('Failed to load folders', 'error');
+    }
+  }, [showToast]);
 
   // Initial load on mount
   useEffect(() => { fetchPapers(); fetchFolders(); }, [fetchPapers, fetchFolders]);
@@ -88,15 +91,15 @@ export default function HomePage() {
         setSelectedPaperIds(new Set());
         setContextMenu(c => ({ ...c, isOpen: false }));
       }
-      // Ctrl+A to select all
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && selectedPaperIds.size > 0) {
+      // Ctrl+A to select all visible papers
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && visiblePapers.length > 0) {
         e.preventDefault();
         setSelectedPaperIds(new Set(visiblePapers.map(p => p.id)));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPaperIds]);
+  }, [selectedPaperIds, visiblePapers]);
 
   // Compute stats
   const stats = useMemo(() => ({
