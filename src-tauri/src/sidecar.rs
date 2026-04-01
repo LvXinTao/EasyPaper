@@ -114,11 +114,19 @@ pub async fn start_and_wait(app: &AppHandle) -> Result<(u16, CommandChild), Side
 }
 
 fn get_data_dir() -> String {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/.easypaper/data", home)
+    dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+        .join("easypaper")
+        .join("data")
+        .to_string_lossy()
+        .to_string()
 }
 
 fn get_config_dir() -> String {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/.easypaper/config", home)
+    dirs::config_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+        .join("easypaper")
+        .join("config")
+        .to_string_lossy()
+        .to_string()
 }

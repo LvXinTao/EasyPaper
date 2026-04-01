@@ -357,14 +357,19 @@ function createPlatformWrapper(platform, serverDir) {
   //   Resources/server/           <- server directory
 
   if (platform === 'windows-x64') {
-    // Windows: create a .bat file
+    // Windows: create a .exe wrapper (Tauri expects .exe on Windows)
+    // We create a simple batch script, but name it with .exe suffix won't work
+    // Instead, we need to create a .bat and let Tauri handle it
+    // Note: On Windows, Tauri looks for .exe files, but .bat can be executed too
+    // The actual solution is to use a .exe wrapper or adjust Tauri config
     const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.bat`);
     const batContent = `@echo off
 set RESOURCES_DIR=%~dp0..\\resources
-node "%RESOURCES_DIR%\\server\\server.js" --ready-signal %*
+node "%RESOURCES_DIR%\\server\\start.js" --ready-signal %*
 `;
     fs.writeFileSync(wrapperPath, batContent);
     console.log(`  -> ${wrapperPath}`);
+    console.log('  WARNING: Windows sidecar requires additional setup for .exe wrapper');
   } else {
     // Unix: create shell script with process group for clean shutdown
     // For macOS: Resources are at ../Resources relative to MacOS
@@ -431,8 +436,25 @@ function copyNativeModules(outputDir) {
   if (fs.existsSync(mupdfSrc)) {
     console.log('  Copying mupdf native module...');
     const mupdfDest = path.join(outputDir, 'node_modules', 'mupdf');
-    fs.mkdirSync(path.dirname(mupdfDest), { recursive: true });
-    copyDirectory(mupdfSrc, mupdfDest);
+    fs.mkdirSync(mupdfDest, { recursive: true });
+
+    // Only copy essential files: .node binaries, package.json, and index.js
+    const essentialFiles = ['package.json', 'index.js'];
+    for (const file of essentialFiles) {
+      const srcPath = path.join(mupdfSrc, file);
+      if (fs.existsSync(srcPath)) {
+        fs.copyFileSync(srcPath, path.join(mupdfDest, file));
+      }
+    }
+
+    // Copy native addon files (*.node)
+    for (const entry of fs.readdirSync(mupdfSrc, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.node')) {
+        const srcPath = path.join(mupdfSrc, entry.name);
+        fs.copyFileSync(srcPath, path.join(mupdfDest, entry.name));
+        console.log(`    Copied: ${entry.name}`);
+      }
+    }
   } else {
     console.warn('  Warning: mupdf not found in node_modules');
   }

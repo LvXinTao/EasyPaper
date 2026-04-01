@@ -3,17 +3,24 @@ pub mod error_dialog;
 pub mod port_check;
 
 use std::path::PathBuf;
-use std::sync::Mutex;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind, RotationStrategy};
+
+#[cfg(not(debug_assertions))]
+use std::sync::Mutex;
+#[cfg(not(debug_assertions))]
 use tauri_plugin_shell::process::CommandChild;
+#[cfg(not(debug_assertions))]
 use nix::sys::signal::{kill, Signal};
+#[cfg(not(debug_assertions))]
 use nix::unistd::Pid;
 
 /// Stores the sidecar child process for cleanup on app exit
+#[cfg(not(debug_assertions))]
 pub struct SidecarProcess(pub Mutex<Option<SidecarInfo>>);
 
 /// Holds both the CommandChild (for Tauri's internal tracking) and the PID (for graceful shutdown)
+#[cfg(not(debug_assertions))]
 pub struct SidecarInfo {
     pub child: CommandChild,
     pub pid: u32,
@@ -115,6 +122,8 @@ pub fn run() {
                 }
             });
 
+            // This line is needed for debug builds (where #[cfg(not(debug_assertions))] block is empty)
+            #[allow(unreachable_code)]
             Ok(())
         })
         .run(tauri::generate_context!())
