@@ -32,6 +32,9 @@ const NEXT_STANDALONE = path.join(PROJECT_ROOT, '.next', 'standalone');
 // Using Node.js 22.x LTS (MODULE_VERSION 131)
 const BUNDLED_NODE_VERSION = '22.14.0';
 
+// Use npmmirror (Taobao) for faster download in China
+const NODEJS_MIRROR = 'https://npmmirror.com/mirrors/node';
+
 const PLATFORMS = {
   'macos-x64': 'x86_64-apple-darwin',
   'macos-arm64': 'aarch64-apple-darwin',
@@ -40,10 +43,10 @@ const PLATFORMS = {
 };
 
 const NODE_DOWNLOAD_URLS = {
-  'macos-arm64': `https://nodejs.org/dist/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-arm64.tar.gz`,
-  'macos-x64': `https://nodejs.org/dist/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-x64.tar.gz`,
-  'windows-x64': `https://nodejs.org/dist/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-win-x64.zip`,
-  'linux-x64': `https://nodejs.org/dist/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-linux-x64.tar.gz`,
+  'macos-arm64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-arm64.tar.gz`,
+  'macos-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-x64.tar.gz`,
+  'windows-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-win-x64.zip`,
+  'linux-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-linux-x64.tar.gz`,
 };
 
 function main() {
@@ -77,10 +80,13 @@ function main() {
   // Step 5: Rebuild native modules for bundled Node.js version
   rebuildNativeModulesForBundledNode(nodeDir, serverDir);
 
-  // Step 6: Create platform-specific wrapper executable
+  // Step 6: Strip unnecessary files from Node.js runtime (after rebuild, ~70MB savings)
+  stripNodeJsRuntime(nodeDir);
+
+  // Step 7: Create platform-specific wrapper executable
   createPlatformWrapper(currentPlatform, serverDir);
 
-  // Step 7: Generate version.json
+  // Step 8: Generate version.json
   const packageJson = require(path.join(PROJECT_ROOT, 'package.json'));
   fs.writeFileSync(
     path.join(SIDECAR_DIST, 'version.json'),
@@ -121,12 +127,15 @@ function downloadAndExtractNodeJs(platform, nodeDir) {
     throw new Error(`No Node.js download URL for platform: ${platform}`);
   }
 
-  // Check if already downloaded
+  // Check if already downloaded AND complete (need npm for node-gyp)
   const nodeBinaryPath = platform === 'windows-x64'
     ? path.join(nodeDir, 'node.exe')
     : path.join(nodeDir, 'bin', 'node');
 
-  if (fs.existsSync(nodeBinaryPath)) {
+  // Also check npm exists (required for node-gyp during rebuild)
+  const nodeGypPath = path.join(nodeDir, 'lib', 'node_modules', 'npm', 'node_modules', 'node-gyp', 'bin', 'node-gyp.js');
+
+  if (fs.existsSync(nodeBinaryPath) && fs.existsSync(nodeGypPath)) {
     // Verify version matches
     try {
       const version = execSync(`"${nodeBinaryPath}" --version`, { encoding: 'utf-8' }).trim();
@@ -202,6 +211,71 @@ function downloadAndExtractNodeJs(platform, nodeDir) {
 
   const version = execSync(`"${nodeBinaryPath}" --version`, { encoding: 'utf-8' }).trim();
   console.log(`  Node.js ${version} ready at ${nodeDir}`);
+}
+
+/**
+ * Remove unnecessary files from Node.js runtime to reduce bundle size.
+ * Saves approximately 70MB by removing:
+ * - include/ (C++ headers, only needed for compilation)
+ * - npm and corepack (package managers, not needed at runtime)
+ * - documentation files
+ */
+function stripNodeJsRuntime(nodeDir) {
+  console.log('  Stripping unnecessary files from Node.js runtime...');
+
+  // Remove include directory (C++ headers, ~53MB)
+  const includeDir = path.join(nodeDir, 'include');
+  if (fs.existsSync(includeDir)) {
+    fs.rmSync(includeDir, { recursive: true });
+    console.log('    Removed include/ (C++ headers)');
+  }
+
+  // Remove npm and corepack (package managers, ~19MB)
+  const npmDir = path.join(nodeDir, 'lib', 'node_modules', 'npm');
+  const corepackDir = path.join(nodeDir, 'lib', 'node_modules', 'corepack');
+  if (fs.existsSync(npmDir)) {
+    fs.rmSync(npmDir, { recursive: true });
+    console.log('    Removed npm');
+  }
+  if (fs.existsSync(corepackDir)) {
+    fs.rmSync(corepackDir, { recursive: true });
+    console.log('    Removed corepack');
+  }
+
+  // Remove symlinks in bin/ that point to removed modules
+  // npm, npx, corepack are symlinks to lib/node_modules/*/bin/*
+  // Use lstatSync to detect broken symlinks (existsSync returns false for broken symlinks)
+  const binDir = path.join(nodeDir, 'bin');
+  if (fs.existsSync(binDir)) {
+    const symlinksToRemove = ['npm', 'npx', 'corepack'];
+    for (const link of symlinksToRemove) {
+      const linkPath = path.join(binDir, link);
+      try {
+        const stat = fs.lstatSync(linkPath);
+        if (stat.isSymbolicLink()) {
+          fs.unlinkSync(linkPath);
+          console.log(`    Removed bin/${link} symlink`);
+        }
+      } catch (e) {
+        // File doesn't exist, skip
+      }
+    }
+  }
+
+  // Remove documentation files
+  const docFiles = ['README.md', 'CHANGELOG.md', 'LICENSE'];
+  for (const f of docFiles) {
+    const p = path.join(nodeDir, f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  console.log('    Removed documentation files');
+
+  // Remove share directory (mostly man pages)
+  const shareDir = path.join(nodeDir, 'share');
+  if (fs.existsSync(shareDir)) {
+    fs.rmSync(shareDir, { recursive: true });
+    console.log('    Removed share/');
+  }
 }
 
 function getNodePlatformSuffix(platform) {
@@ -310,24 +384,23 @@ function rebuildNativeModulesForBundledNode(nodeDir, serverDir) {
   }
 
   // Restore the original dev binary so npm run dev continues to work
+  // IMPORTANT: Directly restore the backup file instead of running npm rebuild
+  // because npm rebuild might still use cached/stale node-gyp settings from bundled Node.js
   if (fs.existsSync(backupBinaryPath)) {
-    // Rebuild for dev Node.js to restore proper binary
-    console.log('  Restoring dev binary...');
-    const devNodeGypCache = path.join(require('node:os').homedir(), 'Library', 'Caches', 'node-gyp', '20.20.0');
+    console.log('  Restoring dev binary from backup...');
 
-    // Remove the bundled-Node.js build
-    fs.rmSync(projectBuildDir, { recursive: true });
-
-    // Restore backup
-    if (fs.existsSync(path.dirname(backupBinaryPath))) {
-      // The backup was the actual file, we need to rebuild for dev
-      // Use npm rebuild with the dev Node.js
-      execSync('npm rebuild better-sqlite3 --build-from-source', {
-        cwd: PROJECT_ROOT,
-        stdio: 'inherit',
-      });
-      console.log('  Dev binary restored - npm run dev will work correctly');
+    // Remove the bundled-Node.js compiled binary
+    if (fs.existsSync(projectBinaryPath)) {
+      fs.unlinkSync(projectBinaryPath);
     }
+
+    // Restore the backup (original dev binary compiled for system Node.js)
+    fs.copyFileSync(backupBinaryPath, projectBinaryPath);
+    console.log('  Dev binary restored from backup');
+
+    // Clean up the backup file
+    fs.unlinkSync(backupBinaryPath);
+    console.log('  Backup cleaned up - npm run dev will work correctly');
   }
 }
 
