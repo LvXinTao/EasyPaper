@@ -9,6 +9,7 @@ interface PaperTreeItemProps {
   isChecked: boolean;
   depth: number;
   onClick: () => void;
+  onDoubleClick?: () => void;
   onCheckboxToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onToggleStar?: () => void;
@@ -29,6 +30,7 @@ export function PaperTreeItem({
   isChecked,
   depth,
   onClick,
+  onDoubleClick,
   onCheckboxToggle,
   onContextMenu,
   onToggleStar,
@@ -53,6 +55,7 @@ export function PaperTreeItem({
         transition: 'background 0.15s ease, border 0.15s ease',
       }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>

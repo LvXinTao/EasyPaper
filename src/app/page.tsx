@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { PaperTree } from '@/components/paper-tree';
 import { ResizablePanels } from '@/components/resizable-panels';
 import { ContextMenu } from '@/components/context-menu';
@@ -13,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { PaperListItem, Folder } from '@/types';
 
 export default function HomePage() {
+  const router = useRouter();
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -258,6 +260,10 @@ export default function HomePage() {
 
   const selectedPaper = papers.find(p => p.id === selectedPaperId) || null;
 
+  const handlePaperDoubleClick = useCallback((paperId: string) => {
+    router.push(`/paper/${paperId}`);
+  }, [router]);
+
   // Left Panel Component
   const leftPanel = (
     <div
@@ -274,6 +280,7 @@ export default function HomePage() {
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         onPaperClick={(id) => setSelectedPaperId(id)}
+        onPaperDoubleClick={handlePaperDoubleClick}
         onCheckboxToggle={handleCheckboxToggle}
         onBatchDelete={handleBatchDelete}
         onBatchMove={handleBatchMove}

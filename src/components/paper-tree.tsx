@@ -14,6 +14,7 @@ interface PaperTreeProps {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   onPaperClick: (paperId: string) => void;
+  onPaperDoubleClick: (paperId: string) => void;
   onCheckboxToggle: (paperId: string) => void;
   onBatchDelete: (paperIds: string[]) => void;
   onBatchMove: (paperIds: string[], folderId: string | null) => void;
@@ -43,6 +44,7 @@ export function PaperTree({
   searchQuery,
   onSearchQueryChange,
   onPaperClick,
+  onPaperDoubleClick,
   onCheckboxToggle,
   onBatchDelete,
   onBatchMove,
@@ -179,7 +181,7 @@ export function PaperTree({
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         {rootFolders.map(folder => (
-          <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onDropPaper={(paperId, folderId) => onMovePaper(paperId, folderId)} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
+          <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onDropPaper={(paperId, folderId) => onMovePaper(paperId, folderId)} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
         ))}
 
         {isCreatingRoot && (
@@ -197,6 +199,7 @@ export function PaperTree({
               isChecked={selectedPaperIds.has(paper.id)}
               depth={0}
               onClick={() => onPaperClick(paper.id)}
+              onDoubleClick={() => onPaperDoubleClick(paper.id)}
               onCheckboxToggle={() => onCheckboxToggle(paper.id)}
               onContextMenu={e => onContextMenuOpen(e, paper.id)}
               onToggleStar={() => onToggleStar(paper.id)}

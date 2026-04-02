@@ -12,6 +12,7 @@ interface PaperTreeFolderProps {
   selectedPaperIds: Set<string>;
   selectedPaperId: string | null;
   onPaperClick: (paperId: string) => void;
+  onPaperDoubleClick: (paperId: string) => void;
   onPaperCheckboxToggle: (paperId: string) => void;
   onPaperContextMenu: (e: React.MouseEvent, paperId: string) => void;
   onDropPaper: (paperId: string, folderId: string) => void;
@@ -29,6 +30,7 @@ export function PaperTreeFolder({
   selectedPaperIds,
   selectedPaperId,
   onPaperClick,
+  onPaperDoubleClick,
   onPaperCheckboxToggle,
   onPaperContextMenu,
   onDropPaper,
@@ -136,11 +138,11 @@ export function PaperTreeFolder({
             </div>
           )}
           {childFolders.map(child => (
-            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onDropPaper={onDropPaper} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
+            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onDropPaper={onDropPaper} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
           ))}
           {folderPapers.map(paper => (
             <div key={paper.id} draggable onDragStart={e => e.dataTransfer.setData('application/x-paper-id', paper.id)}>
-              <PaperTreeItem paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
+              <PaperTreeItem paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onDoubleClick={() => onPaperDoubleClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
             </div>
           ))}
         </div>
