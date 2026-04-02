@@ -6,7 +6,9 @@ Add a "one-click Zotero import" feature to EasyPaper that reads the local Zotero
 
 ## Connection Method
 
-**Direct local SQLite read** — open `~/Zotero/zotero.sqlite` in read-only mode (`OPEN_READONLY` + `immutable=1`). No need for Zotero to be running. Uses `better-sqlite3` npm package.
+**Direct local SQLite read** — open `~/Zotero/zotero.sqlite` in read-only mode (`OPEN_READONLY`). Uses `better-sqlite3` npm package.
+
+Note: Do NOT use `immutable=1` — if Zotero is running and writing in WAL mode, `immutable` could cause read errors. Plain `OPEN_READONLY` handles WAL safely. If Zotero is running, data may be slightly stale (acceptable).
 
 The Zotero data directory path is configurable in EasyPaper settings (default: `~/Zotero/`).
 
@@ -21,6 +23,8 @@ The Zotero data directory path is configurable in EasyPaper settings (default: `
 PDF files: `~/Zotero/storage/{attachment_key}/{filename}` where `attachment_key` is the attachment item's `key`, and `path` in `itemAttachments` is `storage:{filename}`.
 
 ## Backend API
+
+All Zotero API routes must include `export const runtime = 'nodejs'` since `better-sqlite3` is a native C++ addon that cannot be bundled by webpack. Also add `better-sqlite3` to `serverExternalPackages` in `next.config.ts`.
 
 ### 1. `GET /api/zotero/collections`
 
@@ -60,13 +64,69 @@ Returns papers in a collection with PDF info. If `collectionId` omitted, returns
 
 Joins `collectionItems` + `items` + `itemData` + `itemDataValues` for titles, `itemAttachments` for PDFs (`contentType = 'application/pdf'`). Checks existing EasyPaper papers by filename+size for `alreadyImported`.
 
+**Dedup limitation:** filename+size matching is imperfect — the same paper uploaded via UI (e.g., `"paper.pdf"`) vs Zotero (e.g., `"1706.03762v7.pdf"`) won't match. Acceptable for v1; file hash dedup can be added later.
+
 ### 3. `POST /api/zotero/import`
 
 **Request:** `{ items: [{ key, title, attachmentKey, pdfFilename }], folderId?: string }`
 
 **Response:** `{ results: [{ key, paperId?, status: "success"|"error", error? }] }`
 
-Per item: resolve PDF at `{zoteroDataDir}/storage/{attachmentKey}/{pdfFilename}`, copy to EasyPaper via `storage.createPaperDir()` + `storage.savePdf()` + `storage.saveMetadata()` with Zotero title. Status set to `pending`.
+**Per item flow:**
+1. Resolve PDF at `{zoteroDataDir}/storage/{attachmentKey}/{pdfFilename}`
+2. Validate file exists and is readable
+3. Read PDF binary into buffer
+4. **Extract page count** from PDF buffer (reuse existing `countPdfPages()` logic from upload route — scan for `/Type /Page` entries)
+5. Generate new UUID paperId
+6. `storage.createPaperDir(paperId)`
+7. `storage.savePdf(paperId, buffer)`
+8. `storage.saveMetadata(paperId, { id, title, filename: pdfFilename, pages, status: 'pending', folderId, createdAt })`
+9. Return success with paperId
+
+## Type Definitions
+
+Add to `src/types/index.ts`:
+
+```typescript
+// Zotero Import Types
+interface ZoteroCollection {
+  id: number;
+  name: string;
+  parentId: number | null;
+  children: ZoteroCollection[];
+}
+
+interface ZoteroItem {
+  key: string;
+  title: string;
+  attachmentKey: string;
+  pdfFilename: string;
+  pdfSize: number;
+  alreadyImported: boolean;
+}
+
+interface ZoteroImportRequest {
+  items: Array<{
+    key: string;
+    title: string;
+    attachmentKey: string;
+    pdfFilename: string;
+  }>;
+  folderId?: string;
+}
+
+interface ZoteroImportResult {
+  key: string;
+  paperId?: string;
+  status: 'success' | 'error';
+  error?: string;
+}
+```
+
+Add to `AppSettings` type:
+```typescript
+zoteroDataDir?: string;  // default: ~/Zotero/
+```
 
 ## Frontend UI
 
@@ -87,21 +147,18 @@ Two-column layout:
 2. If DB not found → show message linking to settings
 3. Click collection → items load
 4. Check papers → click "导入到 EasyPaper"
-5. Progress shown → result summary → `paperUploaded` event → modal closes
+5. Progress shown → result summary → dispatch `paperUploaded` custom DOM event (same pattern as existing upload) → modal closes
 
 ### Error States
 
-- **Zotero not found:** prompt to configure path in settings
+- **Zotero not found:** "未找到 Zotero 数据库，请在设置中配置路径"
+- **SQLite open failure** (corrupted, permission denied): "无法读取 Zotero 数据库: {error}"
 - **PDF missing:** individual item fails, others continue
 - **Already imported:** shown with badge, unchecked by default
 
-## Deduplication
-
-Compare `filename` + file size against existing EasyPaper papers. Already-imported items shown with badge, unchecked by default, but re-importable.
-
 ## Settings Extension
 
-New field on `/settings`: "Zotero 数据目录" (default `~/Zotero/`), stored as `zoteroDataDir` in `~/.easypaper/settings.json`. Validates `zotero.sqlite` exists.
+New field on `/settings`: "Zotero 数据目录" (default `~/Zotero/`), stored as `zoteroDataDir` in `~/.easypaper/config/settings.json` (follows existing `getConfigDir()` pattern). Validates `zotero.sqlite` exists at the given path.
 
 ## File Changes
 
@@ -120,10 +177,11 @@ New field on `/settings`: "Zotero 数据目录" (default `~/Zotero/`), stored as
 | File | Change |
 |------|--------|
 | `src/components/upload-modal.tsx` | Tab switcher + ZoteroImport integration |
-| `src/lib/storage.ts` | Add filename+size dedup check |
+| `src/lib/storage.ts` | Add method to find existing papers by filename+size |
 | `src/app/settings/page.tsx` | Zotero path config field |
-| `src/types/index.ts` | Zotero type definitions |
-| `package.json` | Add `better-sqlite3` + types |
+| `src/types/index.ts` | Zotero type definitions + `zoteroDataDir` in AppSettings |
+| `package.json` | Add `better-sqlite3` + `@types/better-sqlite3` |
+| `next.config.ts` | Add `better-sqlite3` to `serverExternalPackages` |
 
 ## Dependencies
 
