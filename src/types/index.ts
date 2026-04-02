@@ -196,3 +196,9 @@ export interface PromptSettings {
   analysis: PromptConfig;
   chat: PromptConfig;
 }
+
+export interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'success' | 'warning' | 'error' | 'info';
+}
