@@ -206,6 +206,18 @@ export function PaperTree({
             />
           </div>
         ))}
+
+        {filteredPapers.length === 0 && papers.length > 0 && (
+          <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+            No papers match current filters
+          </div>
+        )}
+
+        {papers.length === 0 && (
+          <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+            No papers yet. Upload a PDF to get started.
+          </div>
+        )}
       </div>
 
       <button onClick={() => setIsCreatingRoot(true)} style={{ marginTop: '8px', padding: '8px 12px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', width: '100%' }}>+ New Folder</button>

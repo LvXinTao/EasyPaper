@@ -103,7 +103,9 @@ if (typeof globalThis.Headers === 'undefined') {
     constructor(init?: Record<string, string> | Iterable<[string, string]>) {
       this._map = new Map();
       if (init) {
-        if (typeof init[Symbol.iterator] === 'function') {
+        // Check if it's iterable (like Headers or Map)
+        const isIterable = typeof (init as Iterable<[string, string]>)[Symbol.iterator] === 'function';
+        if (isIterable) {
           for (const [key, value] of init as Iterable<[string, string]>) {
             this._map.set(key.toLowerCase(), value);
           }
