@@ -15,7 +15,9 @@ export type ErrorCode =
   | 'BOOKMARK_NOT_FOUND'
   | 'SESSION_NOT_FOUND'
   | 'FOLDER_NOT_FOUND'
-  | 'VALIDATION_ERROR';
+  | 'VALIDATION_ERROR'
+  | 'ZOTERO_NOT_FOUND'
+  | 'ZOTERO_IMPORT_FAILED';
 
 const STATUS_MAP: Record<ErrorCode, number> = {
   INVALID_FILE_TYPE: 400,
@@ -33,6 +35,8 @@ const STATUS_MAP: Record<ErrorCode, number> = {
   SESSION_NOT_FOUND: 404,
   FOLDER_NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
+  ZOTERO_NOT_FOUND: 404,
+  ZOTERO_IMPORT_FAILED: 500,
 };
 
 export class AppError extends Error {
