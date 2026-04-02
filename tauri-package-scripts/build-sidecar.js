@@ -5,14 +5,19 @@
  *
  * This script:
  * 1. Runs next build (standalone output)
- * 2. Creates sidecar directory structure:
- *    - sidecar-dist/easypaper-server/  (contains server.js, node_modules, etc.)
+ * 2. Downloads and bundles Node.js runtime (ensures native module ABI compatibility)
+ * 3. Creates sidecar directory structure:
+ *    - sidecar-dist/easypaper-server/  (contains server.js, node_modules, bundled node, etc.)
  *    - sidecar-dist/easypaper-server-{target} (shell wrapper executable)
- * 3. Copies necessary files (server.js, node_modules, native modules)
- * 4. Generates version.json
+ * 4. Copies necessary files (server.js, node_modules, native modules)
+ * 5. Rebuilds native modules (better-sqlite3) for bundled Node.js version
+ * 6. Generates version.json
  *
  * IMPORTANT: Tauri externalBin requires an EXECUTABLE file at the specified path.
  * We create a shell script wrapper that references the server directory.
+ *
+ * CRITICAL: Native modules like better-sqlite3 use legacy NAN APIs (not Node-API),
+ * so they are NOT ABI-stable. Bundling Node.js ensures version consistency.
  */
 
 const fs = require('node:fs');
@@ -23,11 +28,25 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const SIDECAR_DIST = path.join(PROJECT_ROOT, 'sidecar-dist');
 const NEXT_STANDALONE = path.join(PROJECT_ROOT, '.next', 'standalone');
 
+// Node.js version to bundle - must match better-sqlite3 supported versions
+// Using Node.js 22.x LTS (MODULE_VERSION 131)
+const BUNDLED_NODE_VERSION = '22.14.0';
+
+// Use npmmirror (Taobao) for faster download in China
+const NODEJS_MIRROR = 'https://npmmirror.com/mirrors/node';
+
 const PLATFORMS = {
   'macos-x64': 'x86_64-apple-darwin',
   'macos-arm64': 'aarch64-apple-darwin',
   'windows-x64': 'x86_64-pc-windows-msvc',
   'linux-x64': 'x86_64-unknown-linux-gnu',
+};
+
+const NODE_DOWNLOAD_URLS = {
+  'macos-arm64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-arm64.tar.gz`,
+  'macos-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-darwin-x64.tar.gz`,
+  'windows-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-win-x64.zip`,
+  'linux-x64': `${NODEJS_MIRROR}/v${BUNDLED_NODE_VERSION}/node-v${BUNDLED_NODE_VERSION}-linux-x64.tar.gz`,
 };
 
 function main() {
@@ -47,15 +66,27 @@ function main() {
   // Step 2: Create sidecar-dist directory
   fs.mkdirSync(SIDECAR_DIST, { recursive: true });
 
-  // Step 3: Create the server directory (contains all the actual files)
-  const serverDir = path.join(SIDECAR_DIST, 'easypaper-server');
-  buildServerDirectory(serverDir);
-
-  // Step 4: Create platform-specific wrapper executable
+  // Step 3: Detect platform and download Node.js
   const currentPlatform = detectCurrentPlatform();
+  const serverDir = path.join(SIDECAR_DIST, 'easypaper-server');
+  const nodeDir = path.join(serverDir, 'node-runtime');
+
+  // Download and extract Node.js for bundling
+  downloadAndExtractNodeJs(currentPlatform, nodeDir);
+
+  // Step 4: Build server directory
+  buildServerDirectory(serverDir, nodeDir);
+
+  // Step 5: Rebuild native modules for bundled Node.js version
+  rebuildNativeModulesForBundledNode(nodeDir, serverDir);
+
+  // Step 6: Strip unnecessary files from Node.js runtime (after rebuild, ~70MB savings)
+  stripNodeJsRuntime(nodeDir);
+
+  // Step 7: Create platform-specific wrapper executable
   createPlatformWrapper(currentPlatform, serverDir);
 
-  // Step 5: Generate version.json
+  // Step 8: Generate version.json
   const packageJson = require(path.join(PROJECT_ROOT, 'package.json'));
   fs.writeFileSync(
     path.join(SIDECAR_DIST, 'version.json'),
@@ -63,11 +94,13 @@ function main() {
       version: packageJson.version,
       tauri_version: packageJson.version,
       build_time: new Date().toISOString(),
+      bundled_node_version: BUNDLED_NODE_VERSION,
     }, null, 2)
   );
 
   console.log('\nSidecar build complete!');
   console.log(`Output: ${SIDECAR_DIST}`);
+  console.log(`Bundled Node.js: v${BUNDLED_NODE_VERSION}`);
 }
 
 function detectCurrentPlatform() {
@@ -84,14 +117,307 @@ function detectCurrentPlatform() {
   throw new Error(`Unsupported platform: ${platform}-${arch}`);
 }
 
-function buildServerDirectory(serverDir) {
-  console.log('Building server directory...');
+/**
+ * Downloads and extracts Node.js runtime for bundling.
+ * This ensures native modules are compiled for the exact Node.js version used at runtime.
+ */
+function downloadAndExtractNodeJs(platform, nodeDir) {
+  const downloadUrl = NODE_DOWNLOAD_URLS[platform];
+  if (!downloadUrl) {
+    throw new Error(`No Node.js download URL for platform: ${platform}`);
+  }
+
+  // Check if already downloaded AND complete (need npm for node-gyp)
+  const nodeBinaryPath = platform === 'windows-x64'
+    ? path.join(nodeDir, 'node.exe')
+    : path.join(nodeDir, 'bin', 'node');
+
+  // Also check npm exists (required for node-gyp during rebuild)
+  const nodeGypPath = path.join(nodeDir, 'lib', 'node_modules', 'npm', 'node_modules', 'node-gyp', 'bin', 'node-gyp.js');
+
+  if (fs.existsSync(nodeBinaryPath) && fs.existsSync(nodeGypPath)) {
+    // Verify version matches
+    try {
+      const version = execSync(`"${nodeBinaryPath}" --version`, { encoding: 'utf-8' }).trim();
+      if (version === `v${BUNDLED_NODE_VERSION}`) {
+        console.log(`  Node.js v${BUNDLED_NODE_VERSION} already downloaded at ${nodeDir}`);
+        return;
+      }
+    } catch (e) {
+      // Version check failed, re-download
+    }
+  }
+
+  console.log(`  Downloading Node.js v${BUNDLED_NODE_VERSION} for ${platform}...`);
+  console.log(`  URL: ${downloadUrl}`);
 
   // Remove existing directory
-  if (fs.existsSync(serverDir)) {
-    fs.rmSync(serverDir, { recursive: true });
+  if (fs.existsSync(nodeDir)) {
+    fs.rmSync(nodeDir, { recursive: true });
   }
-  fs.mkdirSync(serverDir, { recursive: true });
+  fs.mkdirSync(nodeDir, { recursive: true });
+
+  const archivePath = path.join(nodeDir, 'node-archive.tar.gz');
+
+  // Download archive using curl
+  execSync(`curl -L -o "${archivePath}" "${downloadUrl}"`, { stdio: 'inherit' });
+
+  // Extract archive
+  console.log('  Extracting Node.js...');
+  if (downloadUrl.endsWith('.tar.gz')) {
+    // Use tar for .tar.gz files (macOS and Linux)
+    execSync(`tar -xzf "${archivePath}" -C "${nodeDir}"`, { stdio: 'inherit' });
+
+    // Move contents from node-v{version}-{platform}/ to nodeDir
+    const extractedDir = path.join(nodeDir, `node-v${BUNDLED_NODE_VERSION}-${getNodePlatformSuffix(platform)}`);
+    if (fs.existsSync(extractedDir)) {
+      // Move all contents up one level
+      for (const entry of fs.readdirSync(extractedDir)) {
+        const srcPath = path.join(extractedDir, entry);
+        const destPath = path.join(nodeDir, entry);
+        fs.renameSync(srcPath, destPath);
+      }
+      fs.rmSync(extractedDir, { recursive: true });
+    }
+  } else if (downloadUrl.endsWith('.zip')) {
+    // Use unzip for Windows .zip files
+    execSync(`unzip -o "${archivePath}" -d "${nodeDir}"`, { stdio: 'inherit' });
+
+    // Move contents from node-v{version}-win-x64/ to nodeDir
+    const extractedDir = path.join(nodeDir, `node-v${BUNDLED_NODE_VERSION}-win-x64`);
+    if (fs.existsSync(extractedDir)) {
+      for (const entry of fs.readdirSync(extractedDir)) {
+        const srcPath = path.join(extractedDir, entry);
+        const destPath = path.join(nodeDir, entry);
+        fs.renameSync(srcPath, destPath);
+      }
+      fs.rmSync(extractedDir, { recursive: true });
+    }
+    // Rename archive for cleanup
+    fs.renameSync(archivePath, path.join(nodeDir, 'node-archive.zip'));
+  }
+
+  // Clean up archive
+  const archiveFiles = ['node-archive.tar.gz', 'node-archive.zip'];
+  for (const f of archiveFiles) {
+    const p = path.join(nodeDir, f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+
+  // Verify extraction
+  if (!fs.existsSync(nodeBinaryPath)) {
+    throw new Error(`Node.js binary not found at ${nodeBinaryPath} after extraction`);
+  }
+
+  const version = execSync(`"${nodeBinaryPath}" --version`, { encoding: 'utf-8' }).trim();
+  console.log(`  Node.js ${version} ready at ${nodeDir}`);
+}
+
+/**
+ * Remove unnecessary files from Node.js runtime to reduce bundle size.
+ * Saves approximately 70MB by removing:
+ * - include/ (C++ headers, only needed for compilation)
+ * - npm and corepack (package managers, not needed at runtime)
+ * - documentation files
+ */
+function stripNodeJsRuntime(nodeDir) {
+  console.log('  Stripping unnecessary files from Node.js runtime...');
+
+  // Remove include directory (C++ headers, ~53MB)
+  const includeDir = path.join(nodeDir, 'include');
+  if (fs.existsSync(includeDir)) {
+    fs.rmSync(includeDir, { recursive: true });
+    console.log('    Removed include/ (C++ headers)');
+  }
+
+  // Remove npm and corepack (package managers, ~19MB)
+  const npmDir = path.join(nodeDir, 'lib', 'node_modules', 'npm');
+  const corepackDir = path.join(nodeDir, 'lib', 'node_modules', 'corepack');
+  if (fs.existsSync(npmDir)) {
+    fs.rmSync(npmDir, { recursive: true });
+    console.log('    Removed npm');
+  }
+  if (fs.existsSync(corepackDir)) {
+    fs.rmSync(corepackDir, { recursive: true });
+    console.log('    Removed corepack');
+  }
+
+  // Remove symlinks in bin/ that point to removed modules
+  // npm, npx, corepack are symlinks to lib/node_modules/*/bin/*
+  // Use lstatSync to detect broken symlinks (existsSync returns false for broken symlinks)
+  const binDir = path.join(nodeDir, 'bin');
+  if (fs.existsSync(binDir)) {
+    const symlinksToRemove = ['npm', 'npx', 'corepack'];
+    for (const link of symlinksToRemove) {
+      const linkPath = path.join(binDir, link);
+      try {
+        const stat = fs.lstatSync(linkPath);
+        if (stat.isSymbolicLink()) {
+          fs.unlinkSync(linkPath);
+          console.log(`    Removed bin/${link} symlink`);
+        }
+      } catch (e) {
+        // File doesn't exist, skip
+      }
+    }
+  }
+
+  // Remove documentation files
+  const docFiles = ['README.md', 'CHANGELOG.md', 'LICENSE'];
+  for (const f of docFiles) {
+    const p = path.join(nodeDir, f);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  }
+  console.log('    Removed documentation files');
+
+  // Remove share directory (mostly man pages)
+  const shareDir = path.join(nodeDir, 'share');
+  if (fs.existsSync(shareDir)) {
+    fs.rmSync(shareDir, { recursive: true });
+    console.log('    Removed share/');
+  }
+}
+
+function getNodePlatformSuffix(platform) {
+  switch (platform) {
+    case 'macos-arm64': return 'darwin-arm64';
+    case 'macos-x64': return 'darwin-x64';
+    case 'linux-x64': return 'linux-x64';
+    case 'windows-x64': return 'win-x64';
+    default: return platform;
+  }
+}
+
+/**
+ * Rebuilds native modules (better-sqlite3) for the bundled Node.js version.
+ * This is CRITICAL because better-sqlite3 uses legacy NAN APIs (not Node-API),
+ * so it's NOT ABI-stable across Node.js versions.
+ *
+ * Strategy: Rebuild in project root (where binding.gyp exists), then copy to sidecar.
+ */
+function rebuildNativeModulesForBundledNode(nodeDir, serverDir) {
+  const nodeBinaryPath = fs.existsSync(path.join(nodeDir, 'node.exe'))
+    ? path.join(nodeDir, 'node.exe')
+    : path.join(nodeDir, 'bin', 'node');
+
+  if (!fs.existsSync(nodeBinaryPath)) {
+    throw new Error(`Bundled Node.js binary not found at ${nodeBinaryPath}`);
+  }
+
+  console.log('  Rebuilding native modules for bundled Node.js...');
+  console.log(`  Using Node.js: ${nodeBinaryPath}`);
+
+  // Verify bundled Node.js version
+  const versionOutput = execSync(`"${nodeBinaryPath}" --version`, { encoding: 'utf-8' }).trim();
+  console.log(`  Bundled Node.js version: ${versionOutput}`);
+
+  // Rebuild better-sqlite3 in the PROJECT ROOT (where full source exists)
+  const projectBetterSqlite3Dir = path.join(PROJECT_ROOT, 'node_modules', 'better-sqlite3');
+  const sidecarBetterSqlite3Dir = path.join(serverDir, 'node_modules', 'better-sqlite3');
+
+  if (!fs.existsSync(projectBetterSqlite3Dir)) {
+    console.log('  better-sqlite3 not found in project, skipping rebuild');
+    return;
+  }
+
+  console.log(`  Rebuilding better-sqlite3 for bundled Node.js...`);
+
+  // Backup the original binary (compiled for dev Node.js) to restore later
+  const projectBinaryPath = path.join(projectBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node');
+  const backupBinaryPath = path.join(projectBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node.dev-backup');
+
+  if (fs.existsSync(projectBinaryPath)) {
+    fs.copyFileSync(projectBinaryPath, backupBinaryPath);
+    console.log('  Backed up dev binary for restoration');
+  }
+
+  // Remove existing build in project
+  const projectBuildDir = path.join(projectBetterSqlite3Dir, 'build');
+  if (fs.existsSync(projectBuildDir)) {
+    fs.rmSync(projectBuildDir, { recursive: true });
+  }
+
+  // Use node-gyp directly with bundled Node.js - this ensures correct ABI
+  const nodeGypPath = path.join(nodeDir, 'lib', 'node_modules', 'npm', 'node_modules', 'node-gyp', 'bin', 'node-gyp.js');
+
+  if (!fs.existsSync(nodeGypPath)) {
+    throw new Error('node-gyp not found in bundled Node.js');
+  }
+
+  // Run node-gyp rebuild using bundled Node.js
+  execSync(`"${nodeBinaryPath}" "${nodeGypPath}" rebuild`, {
+    cwd: projectBetterSqlite3Dir,
+    stdio: 'inherit',
+  });
+
+  console.log('  better-sqlite3 rebuilt successfully');
+
+  // Verify the rebuilt module
+  const testScript = `
+    try {
+      const Database = require('${projectBetterSqlite3Dir}');
+      console.log('SUCCESS: Module loads correctly');
+    } catch (e) {
+      console.error('FAILED:', e.message);
+      process.exit(1);
+    }
+  `;
+  execSync(`"${nodeBinaryPath}" -e "${testScript.replace(/\n/g, ' ')}"`, {
+    encoding: 'utf-8',
+  });
+  console.log('  Verified: better-sqlite3 loads with bundled Node.js');
+
+  // Copy the rebuilt .node binary to sidecar
+  const rebuiltBinary = path.join(projectBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node');
+  const sidecarBinary = path.join(sidecarBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node');
+
+  if (fs.existsSync(rebuiltBinary)) {
+    // Ensure target directory exists
+    const targetDir = path.dirname(sidecarBinary);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    fs.copyFileSync(rebuiltBinary, sidecarBinary);
+    console.log(`  Copied rebuilt binary to sidecar`);
+  } else {
+    throw new Error('Rebuilt better_sqlite3.node not found');
+  }
+
+  // Restore the original dev binary so npm run dev continues to work
+  // IMPORTANT: Directly restore the backup file instead of running npm rebuild
+  // because npm rebuild might still use cached/stale node-gyp settings from bundled Node.js
+  if (fs.existsSync(backupBinaryPath)) {
+    console.log('  Restoring dev binary from backup...');
+
+    // Remove the bundled-Node.js compiled binary
+    if (fs.existsSync(projectBinaryPath)) {
+      fs.unlinkSync(projectBinaryPath);
+    }
+
+    // Restore the backup (original dev binary compiled for system Node.js)
+    fs.copyFileSync(backupBinaryPath, projectBinaryPath);
+    console.log('  Dev binary restored from backup');
+
+    // Clean up the backup file
+    fs.unlinkSync(backupBinaryPath);
+    console.log('  Backup cleaned up - npm run dev will work correctly');
+  }
+}
+
+function buildServerDirectory(serverDir, nodeDir) {
+  console.log('Building server directory...');
+
+  // Remove existing directory (except node-runtime which we just downloaded)
+  if (fs.existsSync(serverDir)) {
+    for (const entry of fs.readdirSync(serverDir)) {
+      if (entry !== 'node-runtime') {
+        const entryPath = path.join(serverDir, entry);
+        fs.rmSync(entryPath, { recursive: true });
+      }
+    }
+  } else {
+    fs.mkdirSync(serverDir, { recursive: true });
+  }
 
   // Copy standalone Next.js files
   console.log('  Copying Next.js standalone...');
@@ -121,6 +447,7 @@ function buildServerDirectory(serverDir) {
   createStartScript(serverDir);
 
   console.log(`  -> ${serverDir}`);
+  console.log(`  Bundled Node.js at: ${nodeDir}`);
 }
 
 function createStartScript(serverDir) {
@@ -383,47 +710,22 @@ function createPlatformWrapper(platform, serverDir) {
 
   // In the final app bundle:
   //   MacOS/easypaper-server      <- wrapper
-  //   Resources/server/           <- server directory
+  //   Resources/server/           <- server directory (including bundled node-runtime)
 
   if (platform === 'windows-x64') {
     // Windows: Tauri externalBin expects a .exe file
-    // We create a batch script but name it with .exe extension won't work
-    // Solution: Create both the batch script and a simple .exe launcher that calls it
-    // For now, we document that Windows requires building the sidecar separately
-
-    // Create a PowerShell wrapper script (more reliable than .bat for Tauri)
-    // Tauri will look for easypaper-server-x86_64-pc-windows-msvc.exe
-    // We create a .ps1 script and a small wrapper that will be manually built
+    // We create a PowerShell wrapper script
     const psPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}.ps1`);
     const psContent = `
 $ErrorActionPreference = "Stop"
 $resourcesDir = Join-Path $PSScriptRoot "..\\resources"
 $serverPath = Join-Path $resourcesDir "server\\start.js"
 
-# Find node
-$nodePath = $null
-$candidates = @(
-  "C:\\Program Files\\nodejs\\node.exe",
-  "C:\\Program Files (x86)\\nodejs\\node.exe",
-  (Join-Path $env:USERPROFILE "AppData\\Local\\Programs\\nodejs\\node.exe"),
-  (Join-Path $env:USERPROFILE "scoop\\apps\\nodejs\\current\\node.exe"),
-  "node"
-)
+# Use bundled Node.js from server/node-runtime
+$nodePath = Join-Path $resourcesDir "server\\node-runtime\\node.exe"
 
-foreach ($candidate in $candidates) {
-  if (Test-Path $candidate -ErrorAction SilentlyContinue) {
-    $nodePath = $candidate
-    break
-  }
-  # Check if it's in PATH
-  if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-    $nodePath = $candidate
-    break
-  }
-}
-
-if (-not $nodePath) {
-  Write-Error "Node.js not found. Please install Node.js."
+if (-not (Test-Path $nodePath)) {
+  Write-Error "Bundled Node.js not found at $nodePath"
   exit 1
 }
 
@@ -440,16 +742,15 @@ powershell -ExecutionPolicy Bypass -File "%~dp0easypaper-server-${targetTriple}.
     fs.writeFileSync(batPath, batContent);
     console.log(`  -> ${batPath}`);
 
-    // Note about .exe requirement
     console.log('  NOTE: Windows requires building a .exe wrapper for Tauri sidecar.');
     console.log('        The .bat/.ps1 files are provided for manual testing.');
     console.log('        For production, use a tool like "bat2exe" or build a native launcher.');
   } else {
-    // Unix: create shell script with process group for clean shutdown
+    // Unix: create shell script with bundled Node.js
+    // Bundled Node.js is at Resources/server/node-runtime/bin/node (macOS)
     // For macOS: Resources are at ../Resources relative to MacOS
     // For Linux: Resources are at ../resources relative to the binary
     const wrapperPath = path.join(SIDECAR_DIST, `easypaper-server-${targetTriple}`);
-    // Use setsid to create new session/process group, then kill the group on exit
     const shContent = `#!/bin/bash
 # Get the Resources directory (macOS) or resources directory (Linux)
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -458,33 +759,22 @@ else
   RESOURCES_DIR="$(cd "$(dirname "$0")/../resources" && pwd)"
 fi
 
-# Find node - check common locations in order
-NODE_PATH=""
-for candidate in \\
-  "/opt/homebrew/bin/node" \\
-  "/usr/local/bin/node" \\
-  "/usr/bin/node" \\
-  "$HOME/.nvm/versions/node/*/bin/node" \\
-  "$HOME/.cargo/bin/node"; do
-  if [[ -x "$candidate" ]]; then
-    NODE_PATH="$candidate"
-    break
-  fi
-done
+# Use bundled Node.js - this ensures native modules (better-sqlite3) work correctly
+# because they are compiled for this exact Node.js version
+NODE_PATH="$RESOURCES_DIR/server/node-runtime/bin/node"
 
-# Fall back to node in PATH
-if [[ -z "$NODE_PATH" ]]; then
-  NODE_PATH="node"
+if [[ ! -x "$NODE_PATH" ]]; then
+  echo "ERROR: Bundled Node.js not found at $NODE_PATH"
+  exit 1
 fi
 
-# Run start.js directly (no setsid - not available on macOS)
-# Process tree: wrapper(exec) -> start.js -> server.js
-# All in same process group - when parent gets SIGTERM, signal propagates to all
+# Run start.js with bundled Node.js
 exec "$NODE_PATH" "$RESOURCES_DIR/server/start.js" --ready-signal "$@"
 `;
     fs.writeFileSync(wrapperPath, shContent);
     fs.chmodSync(wrapperPath, 0o755);
     console.log(`  -> ${wrapperPath}`);
+    console.log('  Using bundled Node.js for native module ABI compatibility');
   }
 }
 
