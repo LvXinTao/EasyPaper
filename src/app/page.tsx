@@ -17,7 +17,6 @@ export default function HomePage() {
   const router = useRouter();
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,7 +46,7 @@ export default function HomePage() {
       setPapers(data.papers || []);
     } catch {
       showToast('Failed to load papers', 'error');
-    } finally { setLoading(false); }
+    }
   }, [showToast]);
 
   const fetchFolders = useCallback(async () => {
@@ -60,8 +59,25 @@ export default function HomePage() {
     }
   }, [showToast]);
 
-  useEffect(() => { fetchPapers(); fetchFolders(); }, [fetchPapers, fetchFolders]);
+  // Initial data fetch
+  useEffect(() => {
+    (async () => {
+      try {
+        const [papersRes, foldersRes] = await Promise.all([
+          fetch('/api/papers'),
+          fetch('/api/folders')
+        ]);
+        const papersData = await papersRes.json();
+        const foldersData = await foldersRes.json();
+        setPapers(papersData.papers || []);
+        setFolders(foldersData.folders || []);
+      } catch {
+        showToast('Failed to load data', 'error');
+      }
+    })();
+  }, [showToast]);
 
+  // Refresh handlers
   useEffect(() => {
     const handlePaperUploaded = (e: CustomEvent<{ paperId: string }>) => {
       fetchPapers().then(() => setSelectedPaperId(e.detail.paperId));
@@ -195,41 +211,67 @@ export default function HomePage() {
       title: 'Delete Papers',
       message: `Are you sure you want to delete ${paperIds.length} papers? This action cannot be undone.`,
       onConfirm: async () => {
-        for (const id of paperIds) {
-          await fetch(`/api/paper/${id}`, { method: 'DELETE' });
-        }
-        setPapers(prev => prev.filter(p => !paperIds.includes(p.id)));
+        const results = await Promise.allSettled(
+          paperIds.map(id => fetch(`/api/paper/${id}`, { method: 'DELETE' }))
+        );
+        const deletedIds = paperIds.filter((_, i) => results[i].status === 'fulfilled');
+        setPapers(prev => prev.filter(p => !deletedIds.includes(p.id)));
         setSelectedPaperIds(new Set());
         if (paperIds.includes(selectedPaperId || '')) setSelectedPaperId(null);
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {} });
-        showToast(`${paperIds.length} papers deleted`, 'success');
+        const failedCount = paperIds.length - deletedIds.length;
+        if (failedCount > 0) {
+          showToast(`${deletedIds.length} papers deleted, ${failedCount} failed`, 'warning');
+        } else {
+          showToast(`${deletedIds.length} papers deleted`, 'success');
+        }
       }
     });
   };
 
-  const handleBatchMove = (paperIds: string[], folderId: string | null) => {
+  const handleBatchMove = (paperIds: string[], _folderId: string | null) => {
     if (paperIds.length === 0) return;
     setFolderPickerModal({ isOpen: true, paperIds });
   };
 
   const handleBatchMoveConfirm = async (folderId: string | null) => {
     const paperIds = folderPickerModal.paperIds;
-    for (const id of paperIds) {
-      await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folderId }) });
-    }
+    const results = await Promise.allSettled(
+      paperIds.map(id => fetch(`/api/paper/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId })
+      }))
+    );
+    const movedIds = paperIds.filter((_, i) => results[i].status === 'fulfilled');
     await fetchPapers();
     setSelectedPaperIds(new Set());
     setFolderPickerModal({ isOpen: false, paperIds: [] });
-    showToast(`${paperIds.length} papers moved`, 'success');
+    const failedCount = paperIds.length - movedIds.length;
+    if (failedCount > 0) {
+      showToast(`${movedIds.length} papers moved, ${failedCount} failed`, 'warning');
+    } else {
+      showToast(`${movedIds.length} papers moved`, 'success');
+    }
   };
 
   const handleBatchStar = async (paperIds: string[], starred: boolean) => {
-    for (const id of paperIds) {
-      await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ starred }) });
-    }
-    setPapers(prev => prev.map(p => paperIds.includes(p.id) ? { ...p, starred } : p));
+    const results = await Promise.allSettled(
+      paperIds.map(id => fetch(`/api/paper/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starred })
+      }))
+    );
+    const starredIds = paperIds.filter((_, i) => results[i].status === 'fulfilled');
+    setPapers(prev => prev.map(p => starredIds.includes(p.id) ? { ...p, starred } : p));
     setSelectedPaperIds(new Set());
-    showToast(starred ? `Star added to ${paperIds.length} papers` : `Star removed from ${paperIds.length} papers`, 'success');
+    const failedCount = paperIds.length - starredIds.length;
+    if (failedCount > 0) {
+      showToast(starred ? `Star added to ${starredIds.length} papers, ${failedCount} failed` : `Star removed from ${starredIds.length} papers, ${failedCount} failed`, 'warning');
+    } else {
+      showToast(starred ? `Star added to ${starredIds.length} papers` : `Star removed from ${starredIds.length} papers`, 'success');
+    }
   };
 
   const handleCheckboxToggle = (paperId: string) => {

@@ -71,7 +71,8 @@ describe('ConfirmModal', () => {
     onCancel.mockClear();
 
     // Click backdrop
-    fireEvent.click(screen.getByText('Test').parentElement?.parentElement!);
+    const backdrop = screen.getByText('Test').parentElement?.parentElement;
+    if (backdrop) fireEvent.click(backdrop);
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
