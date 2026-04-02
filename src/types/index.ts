@@ -96,6 +96,7 @@ export interface AppSettings {
   embeddingApiKeyIV?: string;
   maxConcurrent?: number;
   staleThresholdMinutes?: number;
+  zoteroDataDir?: string;
 }
 
 export interface ApiError {
@@ -201,4 +202,38 @@ export interface ToastMessage {
   id: string;
   message: string;
   type: 'success' | 'warning' | 'error' | 'info';
+}
+
+// Zotero Import Types
+export interface ZoteroCollection {
+  id: number;
+  name: string;
+  parentId: number | null;
+  children: ZoteroCollection[];
+}
+
+export interface ZoteroItem {
+  key: string;
+  title: string;
+  attachmentKey: string;
+  pdfFilename: string;
+  pdfSize: number;
+  alreadyImported: boolean;
+}
+
+export interface ZoteroImportRequest {
+  items: Array<{
+    key: string;
+    title: string;
+    attachmentKey: string;
+    pdfFilename: string;
+  }>;
+  folderId?: string;
+}
+
+export interface ZoteroImportResult {
+  key: string;
+  paperId?: string;
+  status: 'success' | 'error';
+  error?: string;
 }
