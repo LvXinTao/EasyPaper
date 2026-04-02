@@ -58,45 +58,42 @@ if (typeof globalThis.Request === 'undefined') {
   };
 }
 
-// Override Response to ensure consistent behavior in jsdom environment
-// Node's built-in Response may behave differently in jsdom
-// @ts-expect-error Overriding Response for jsdom compatibility
-globalThis.Response = class Response {
-  status: number;
-  headers: Headers;
-  ok: boolean;
-  private _body: unknown;
+if (typeof globalThis.Response === 'undefined') {
+  // @ts-expect-error Mocking Response for Node.js
+  globalThis.Response = class Response {
+    status: number;
+    headers: Headers;
+    ok: boolean;
+    private _body: unknown;
 
-  constructor(body?: unknown, init?: { status?: number; headers?: Record<string, string> | Headers }) {
-    this._body = body;
-    this.status = init?.status || 200;
-    this.ok = this.status >= 200 && this.status < 300;
-    if (init?.headers instanceof Headers) {
-      this.headers = init.headers;
-    } else {
-      this.headers = new Headers(init?.headers || {});
+    constructor(body?: unknown, init?: { status?: number; headers?: Record<string, string> | Headers }) {
+      this._body = body;
+      this.status = init?.status || 200;
+      this.ok = this.status >= 200 && this.status < 300;
+      if (init?.headers instanceof Headers) {
+        this.headers = init.headers;
+      } else {
+        this.headers = new Headers(init?.headers || {});
+      }
     }
-  }
 
-  async json() {
-    if (typeof this._body === 'string') {
-      return JSON.parse(this._body);
+    async json() {
+      return this._body;
     }
-    return this._body;
-  }
 
-  async text() {
-    return typeof this._body === 'string' ? this._body : JSON.stringify(this._body);
-  }
-
-  static json(data: unknown, init?: { status?: number; headers?: Record<string, string> | Headers }) {
-    const headers = init?.headers ? new Headers(init.headers) : new Headers();
-    if (!headers.get('content-type')) {
-      headers.set('content-type', 'application/json');
+    async text() {
+      return typeof this._body === 'string' ? this._body : JSON.stringify(this._body);
     }
-    return new Response(JSON.stringify(data), { ...init, headers });
-  }
-};
+
+    static json(data: unknown, init?: { status?: number; headers?: Record<string, string> | Headers }) {
+      const headers = init?.headers ? new Headers(init.headers) : new Headers();
+      if (!headers.get('content-type')) {
+        headers.set('content-type', 'application/json');
+      }
+      return new Response(data, { ...init, headers });
+    }
+  };
+}
 
 if (typeof globalThis.Headers === 'undefined') {
   // @ts-expect-error Mocking Headers for Node.js
