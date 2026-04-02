@@ -10,13 +10,34 @@ interface ZoteroSettings {
 }
 
 /**
+ * Validates and resolves a path, preventing directory traversal attacks.
+ * @param inputPath - User-provided path
+ * @returns Resolved absolute path
+ * @throws Error if path contains invalid characters or traversal attempts
+ */
+function validateAndResolvePath(inputPath: string): string {
+  // Expand tilde
+  const expanded = inputPath.replace(/^~/, os.homedir());
+
+  // Resolve to absolute path
+  const resolved = path.resolve(expanded);
+
+  // Check for path traversal attempts
+  if (expanded.includes('..') || inputPath.includes('..')) {
+    throw new Error('Invalid path: directory traversal not allowed');
+  }
+
+  return resolved;
+}
+
+/**
  * Resolves the Zotero database path from settings.
  * @param settings - Settings object with optional zoteroDataDir
  * @returns Full path to zotero.sqlite
  */
 export function getZoteroDbPath(settings: ZoteroSettings): string {
   const zoteroDir = settings.zoteroDataDir
-    ? settings.zoteroDataDir.replace(/^~/, os.homedir())
+    ? validateAndResolvePath(settings.zoteroDataDir)
     : path.join(os.homedir(), 'Zotero');
   return path.join(zoteroDir, 'zotero.sqlite');
 }
@@ -220,7 +241,16 @@ export function resolveZoteroPdfPath(
   attachmentKey: string,
   pdfFilename: string
 ): string {
-  const dir = zoteroDataDir.replace(/^~/, os.homedir());
+  const dir = validateAndResolvePath(zoteroDataDir);
+
+  // Validate attachmentKey and pdfFilename to prevent traversal
+  if (attachmentKey.includes('..') || attachmentKey.includes('/') || attachmentKey.includes('\\')) {
+    throw new Error('Invalid attachment key');
+  }
+  if (pdfFilename.includes('..') || pdfFilename.includes('/') || pdfFilename.includes('\\')) {
+    throw new Error('Invalid PDF filename');
+  }
+
   return path.join(dir, 'storage', attachmentKey, pdfFilename);
 }
 
