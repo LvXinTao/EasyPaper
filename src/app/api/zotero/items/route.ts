@@ -13,7 +13,9 @@ export async function GET(request: Request) {
     const collectionId = collectionIdParam ? parseInt(collectionIdParam, 10) : undefined;
 
     const settings = await storage.getSettings();
-    const zoteroDataDir = (settings?.zoteroDataDir as string | undefined) || '~/Zotero';
+    // Explicitly handle undefined/null/empty string to ensure default value
+    const rawZoteroDir = settings?.zoteroDataDir;
+    const zoteroDataDir = rawZoteroDir && rawZoteroDir.trim() !== '' ? rawZoteroDir : '~/Zotero';
     const dbPath = getZoteroDbPath({ zoteroDataDir });
     const rawItems = getItems(dbPath, collectionId);
 
