@@ -13,6 +13,7 @@ interface SettingsData {
   embeddingBaseUrl: string;
   hasEmbeddingApiKey: boolean;
   maxConcurrent: number;
+  zoteroDataDir: string;
 }
 
 export function SettingsForm() {
@@ -26,6 +27,7 @@ export function SettingsForm() {
     embeddingBaseUrl: 'https://api.openai.com/v1',
     hasEmbeddingApiKey: false,
     maxConcurrent: 3,
+    zoteroDataDir: '',
   });
   const [apiKey, setApiKey] = useState('');
   const [embeddingApiKey, setEmbeddingApiKey] = useState('');
@@ -57,6 +59,7 @@ export function SettingsForm() {
         embeddingModel: settings.embeddingModel,
         useSameApiForEmbedding: settings.useSameApiForEmbedding,
         maxConcurrent: settings.maxConcurrent,
+        zoteroDataDir: settings.zoteroDataDir,
       };
       if (apiKey) {
         body.apiKey = apiKey;
@@ -255,6 +258,28 @@ export function SettingsForm() {
             </div>
           </>
         )}
+      </div>
+
+      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
+          Zotero Integration
+        </h3>
+        <div>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+            Zotero Data Directory
+          </label>
+          <input
+            type="text"
+            value={settings.zoteroDataDir}
+            onChange={(e) => setSettings({ ...settings, zoteroDataDir: e.target.value })}
+            className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+            style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+            placeholder="~/Zotero"
+          />
+          <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+            Path to your Zotero data directory. Leave empty for default (~/Zotero).
+          </p>
+        </div>
       </div>
 
       {message && (
