@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.2] - 2026-04-02
+
+### Added
+
+- **Zotero Integration** — Import papers directly from local Zotero library
+  - Browse Zotero collections as a tree structure
+  - Select multiple papers for batch import
+  - Duplicate detection with "Imported" badge
+  - Configure custom Zotero data directory in Settings
+  - Import PDFs with metadata (title, page count)
+
+### Fixed
+
+- Modal dialogs now use solid backgrounds for better visibility
+- Default to `~/Zotero` when Zotero data directory is not configured
+
+---
+
 ## [1.0.1] - 2026-04-01
 
 ### Added
@@ -55,6 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Roadmap
 
+- [x] Zotero integration for importing papers from local library
 - [ ] Support more file formats (currently only PDF)
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers

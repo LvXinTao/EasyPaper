@@ -13,6 +13,7 @@ Upload academic PDFs, get AI-powered analysis, chat about the content, and take 
 ## Features
 
 - **PDF Upload & Viewing** — Drag-and-drop upload with built-in PDF viewer (zoom, page navigation, text selection).
+- **Zotero Integration** — Import papers directly from your local Zotero library. Browse collections, select papers, and import PDFs with one click.
 - **AI Analysis** — Automatically extract summary, key contributions, methodology, and conclusions via MLLM (e.g. GPT-4o), with customizable prompts and batch progress tracking.
 - **Interactive Chat** — Ask follow-up questions with full paper context. Supports multiple chat sessions per paper.
 - **Sentence-Level Notes** — Select any text in the PDF and create notes linked to specific sentences, with tag management and Markdown support.
@@ -97,11 +98,21 @@ Configure your AI provider in the app's **Settings** page, or via environment va
 
 ## How to Use
 
-1. **Upload** — Upload a PDF on the home page (drag-and-drop or click to browse)
+1. **Upload** — Upload a PDF on the home page (drag-and-drop, click to browse, or import from Zotero)
 2. **Open** — Enter the paper detail page with PDF viewer on the left and analysis panel on the right
 3. **Analyze** — Get a structured analysis with page-referenced insights
 4. **Chat** — Ask specific questions about the paper content
 5. **Take Notes** — Select text in the PDF and create notes linked to specific sentences
+
+## Zotero Integration
+
+EasyPaper can import papers directly from your local Zotero library:
+
+1. Open the upload modal and switch to the **"Zotero Import"** tab
+2. Configure your Zotero data directory in Settings (default: `~/Zotero`)
+3. Browse your Zotero collections and select papers to import
+4. Imported papers are marked with "Imported" badge to avoid duplicates
+5. PDFs are copied to EasyPaper storage, ready for AI analysis
 
 ## CLI Options
 
@@ -120,6 +131,7 @@ All data is stored locally in `~/.easypaper/`.
 - [x] Support sentence-level notes with PDF text selection
 - [x] Support asking AI questions about specific sentences
 - [x] Desktop app (macOS/Windows/Linux) via Tauri
+- [x] Zotero integration for importing papers from local library
 - [ ] Support more file formats (currently only PDF)
 - [ ] Support more PDF parsing methods (currently only MLLM)
 - [ ] Support shared reading of papers
