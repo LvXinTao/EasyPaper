@@ -79,8 +79,12 @@ export default function HomePage() {
 
   // Refresh handlers
   useEffect(() => {
-    const handlePaperUploaded = (e: CustomEvent<{ paperId: string }>) => {
-      fetchPapers().then(() => setSelectedPaperId(e.detail.paperId));
+    const handlePaperUploaded = (e: CustomEvent<{ paperId?: string }>) => {
+      fetchPapers().then(() => {
+        if (e.detail?.paperId) {
+          setSelectedPaperId(e.detail.paperId);
+        }
+      });
     };
     window.addEventListener('paperUploaded', handlePaperUploaded as EventListener);
     return () => window.removeEventListener('paperUploaded', handlePaperUploaded as EventListener);
