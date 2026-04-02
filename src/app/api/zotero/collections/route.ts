@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export async function GET() {
   try {
     const settings = await storage.getSettings();
-    const dbPath = getZoteroDbPath(settings?.zoteroDataDir as string | undefined);
+    const dbPath = getZoteroDbPath({ zoteroDataDir: settings?.zoteroDataDir });
     const result = getCollections(dbPath);
     return NextResponse.json(result);
   } catch (error) {
