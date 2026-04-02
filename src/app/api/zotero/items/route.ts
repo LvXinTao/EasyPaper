@@ -13,14 +13,14 @@ export async function GET(request: Request) {
     const collectionId = collectionIdParam ? parseInt(collectionIdParam, 10) : undefined;
 
     const settings = await storage.getSettings();
-    const zoteroDataDir = settings?.zoteroDataDir as string | undefined;
+    const zoteroDataDir = (settings?.zoteroDataDir as string | undefined) || '~/Zotero';
     const dbPath = getZoteroDbPath({ zoteroDataDir });
     const rawItems = getItems(dbPath, collectionId);
 
     const items: ZoteroItem[] = await Promise.all(
       rawItems.map(async (item) => {
         const existingId = await storage.findPaperByFilename(item.pdfFilename);
-        const pdfSize = getPdfFileSize(zoteroDataDir ?? '', item.attachmentKey, item.pdfFilename);
+        const pdfSize = getPdfFileSize(zoteroDataDir, item.attachmentKey, item.pdfFilename);
         return {
           ...item,
           pdfSize,

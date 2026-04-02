@@ -16,13 +16,13 @@ export async function POST(request: Request) {
     }
 
     const settings = await storage.getSettings();
-    const zoteroDataDir = settings?.zoteroDataDir as string | undefined;
+    const zoteroDataDir = (settings?.zoteroDataDir as string | undefined) || '~/Zotero';
 
     const results: ZoteroImportResult[] = [];
 
     for (const item of body.items) {
       try {
-        const pdfPath = resolveZoteroPdfPath(zoteroDataDir ?? '', item.attachmentKey, item.pdfFilename);
+        const pdfPath = resolveZoteroPdfPath(zoteroDataDir, item.attachmentKey, item.pdfFilename);
         await fs.access(pdfPath);
         const buffer = await fs.readFile(pdfPath);
 
