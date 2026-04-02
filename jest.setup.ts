@@ -172,3 +172,55 @@ if (typeof globalThis.TextDecoder === 'undefined') {
     }
   };
 }
+
+// Mock ReadableStream for Node.js < 20 and jsdom environment
+if (typeof globalThis.ReadableStream === 'undefined') {
+  // @ts-expect-error Mocking ReadableStream
+  globalThis.ReadableStream = class ReadableStream {
+    private _chunks: Uint8Array[] = [];
+    private _closed = false;
+
+    constructor(underlyingSource?: { start?: (controller: unknown) => void }) {
+      if (underlyingSource?.start) {
+        const controller = {
+          enqueue: (chunk: Uint8Array) => {
+            this._chunks.push(chunk);
+          },
+          close: () => {
+            this._closed = true;
+          },
+          error: (e: Error) => {
+            throw e;
+          },
+        };
+        underlyingSource.start(controller);
+      }
+    }
+
+    getReader() {
+      const chunks = this._chunks;
+      let index = 0;
+      return {
+        read: async () => {
+          if (index < chunks.length) {
+            return { done: false, value: chunks[index++] };
+          }
+          return { done: true, value: undefined };
+        },
+      };
+    }
+  };
+}
+
+// Mock next/server NextResponse for API route tests
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: (data: unknown, init?: { status?: number; headers?: Record<string, string> }) => ({
+      status: init?.status ?? 200,
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'content-type' ? 'application/json' : null),
+      },
+      json: async () => data,
+    }),
+  },
+}));

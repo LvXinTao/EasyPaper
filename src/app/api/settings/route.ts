@@ -15,7 +15,8 @@ export async function GET() {
       embeddingBaseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
       hasEmbeddingApiKey: false,
       theme: { preset: 'dark-minimal', customAccent: null },
-      maxConcurrent: 3
+      maxConcurrent: 3,
+      zoteroDataDir: ''
     });
   }
   return NextResponse.json({
@@ -28,7 +29,8 @@ export async function GET() {
     embeddingBaseUrl: settings.embeddingBaseUrl || settings.baseUrl || 'https://api.openai.com/v1',
     hasEmbeddingApiKey: !!(settings.embeddingApiKeyEncrypted || (settings.useSameApiForEmbedding ? settings.apiKeyEncrypted : false)),
     theme: settings.theme || { preset: 'dark-minimal', customAccent: null },
-    maxConcurrent: settings.maxConcurrent || 3
+    maxConcurrent: settings.maxConcurrent || 3,
+    zoteroDataDir: (settings.zoteroDataDir as string) || ''
   });
 }
 
@@ -73,6 +75,9 @@ export async function POST(request: Request) {
     const val = parseInt(body.maxConcurrent);
     merged.maxConcurrent = (val >= 1 && val <= 10) ? val : 3;
   }
+
+  // Update zoteroDataDir if provided
+  if (body.zoteroDataDir !== undefined) merged.zoteroDataDir = body.zoteroDataDir;
 
   await storage.saveSettings(merged);
   return NextResponse.json({ success: true });
