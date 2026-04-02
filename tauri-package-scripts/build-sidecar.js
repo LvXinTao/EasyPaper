@@ -248,6 +248,15 @@ function rebuildNativeModulesForBundledNode(nodeDir, serverDir) {
 
   console.log(`  Rebuilding better-sqlite3 for bundled Node.js...`);
 
+  // Backup the original binary (compiled for dev Node.js) to restore later
+  const projectBinaryPath = path.join(projectBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node');
+  const backupBinaryPath = path.join(projectBetterSqlite3Dir, 'build', 'Release', 'better_sqlite3.node.dev-backup');
+
+  if (fs.existsSync(projectBinaryPath)) {
+    fs.copyFileSync(projectBinaryPath, backupBinaryPath);
+    console.log('  Backed up dev binary for restoration');
+  }
+
   // Remove existing build in project
   const projectBuildDir = path.join(projectBetterSqlite3Dir, 'build');
   if (fs.existsSync(projectBuildDir)) {
@@ -298,6 +307,27 @@ function rebuildNativeModulesForBundledNode(nodeDir, serverDir) {
     console.log(`  Copied rebuilt binary to sidecar`);
   } else {
     throw new Error('Rebuilt better_sqlite3.node not found');
+  }
+
+  // Restore the original dev binary so npm run dev continues to work
+  if (fs.existsSync(backupBinaryPath)) {
+    // Rebuild for dev Node.js to restore proper binary
+    console.log('  Restoring dev binary...');
+    const devNodeGypCache = path.join(require('node:os').homedir(), 'Library', 'Caches', 'node-gyp', '20.20.0');
+
+    // Remove the bundled-Node.js build
+    fs.rmSync(projectBuildDir, { recursive: true });
+
+    // Restore backup
+    if (fs.existsSync(path.dirname(backupBinaryPath))) {
+      // The backup was the actual file, we need to rebuild for dev
+      // Use npm rebuild with the dev Node.js
+      execSync('npm rebuild better-sqlite3 --build-from-source', {
+        cwd: PROJECT_ROOT,
+        stdio: 'inherit',
+      });
+      console.log('  Dev binary restored - npm run dev will work correctly');
+    }
   }
 }
 
