@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Folder } from '@/types';
+import { ZoteroImport } from './zotero-import';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -81,6 +82,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
   const [folders, setFolders] = useState<Folder[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [uploadResults, setUploadResults] = useState<{ success: number; failed: number; failedFiles: FailedFile[] } | null>(null);
+  const [activeTab, setActiveTab] = useState<'upload' | 'zotero'>('upload');
 
   // Filter initial files at render time
   const filteredInitialFiles = useMemo(() => {
@@ -314,8 +316,33 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
             Upload PDFs to add them to your library
           </p>
 
-          {/* Drop zone / file selection */}
-          {!uploading && !uploadResults && (
+          {/* Tab switcher */}
+          <div className="flex gap-1 mb-4 p-1 rounded-xl" style={{ background: 'var(--glass)' }}>
+            <button
+              onClick={() => setActiveTab('upload')}
+              className="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                background: activeTab === 'upload' ? 'var(--bg)' : 'transparent',
+                color: activeTab === 'upload' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              }}
+            >
+              Local Upload
+            </button>
+            <button
+              onClick={() => setActiveTab('zotero')}
+              className="flex-1 py-2 text-sm font-medium rounded-lg transition-colors"
+              style={{
+                background: activeTab === 'zotero' ? 'var(--bg)' : 'transparent',
+                color: activeTab === 'zotero' ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              }}
+            >
+              Zotero Import
+            </button>
+          </div>
+
+          {/* Local Upload Tab */}
+          {activeTab === 'upload' && (
+            <>
             <div
               className="rounded-xl text-center transition-all cursor-pointer"
               style={{
@@ -380,10 +407,9 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
                 </div>
               )}
             </div>
-          )}
 
           {/* Uploading progress */}
-          {uploading && uploadProgress && (
+          {activeTab === 'upload' && uploading && uploadProgress && (
             <div className="rounded-xl text-center" style={{ border: '2px solid var(--border-strong)', padding: '32px' }}>
               <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--accent)' }}>
                 Uploading {uploadProgress.current}/{uploadProgress.total}...
@@ -398,7 +424,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
           )}
 
           {/* Results */}
-          {uploadResults && (
+          {activeTab === 'upload' && uploadResults && (
             <div className="rounded-xl text-center" style={{ border: '2px solid var(--border-strong)', padding: '32px' }}>
               <div style={{ fontSize: '13px', fontWeight: 500, color: uploadResults.failed > 0 && uploadResults.success === 0 ? 'var(--rose)' : 'var(--accent)' }}>
                 {uploadResults.failed === 0
@@ -421,7 +447,7 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
           )}
 
           {/* Folder selector - shown when files are selected and not uploading */}
-          {selectedFiles.length > 0 && !uploading && !uploadResults && folders.length > 0 && (
+          {activeTab === 'upload' && selectedFiles.length > 0 && !uploading && !uploadResults && folders.length > 0 && (
             <div className="mt-3 flex items-center gap-2">
               <label style={{ fontSize: '11px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>Add to folder:</label>
               <select
@@ -442,30 +468,45 @@ export function UploadModal({ isOpen, onClose, onUploadComplete, initialFiles }:
             </div>
           )}
 
-          {error && (
+          {activeTab === 'upload' && error && (
             <div className="mt-3 rounded-lg" style={{ fontSize: '12px', color: 'var(--rose)', background: 'var(--rose-subtle)', padding: '8px 12px' }}>
               {error}
             </div>
           )}
 
-          <div className="flex justify-end gap-2 mt-4">
-            <button
-              onClick={uploading ? handleCancelUpload : handleClose}
-              className="cursor-pointer rounded-lg transition-colors"
-              style={{ padding: '6px 16px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
-            >
-              {uploading ? 'Cancel' : (uploadResults ? 'Close' : 'Cancel')}
-            </button>
-            {selectedFiles.length > 0 && !uploading && !uploadResults && (
+          {activeTab === 'upload' && (
+            <div className="flex justify-end gap-2 mt-4">
               <button
-                onClick={startBatchUpload}
+                onClick={uploading ? handleCancelUpload : handleClose}
                 className="cursor-pointer rounded-lg transition-colors"
-                style={{ padding: '6px 16px', fontSize: '12px', background: 'var(--text-primary)', color: 'var(--bg)', border: 'none', fontWeight: 500 }}
+                style={{ padding: '6px 16px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
               >
-                Upload {selectedFiles.length} {selectedFiles.length === 1 ? 'File' : 'Files'}
+                {uploading ? 'Cancel' : (uploadResults ? 'Close' : 'Cancel')}
               </button>
-            )}
-          </div>
+              {selectedFiles.length > 0 && !uploading && !uploadResults && (
+                <button
+                  onClick={startBatchUpload}
+                  className="cursor-pointer rounded-lg transition-colors"
+                  style={{ padding: '6px 16px', fontSize: '12px', background: 'var(--text-primary)', color: 'var(--bg)', border: 'none', fontWeight: 500 }}
+                >
+                  Upload {selectedFiles.length} {selectedFiles.length === 1 ? 'File' : 'Files'}
+                </button>
+              )}
+            </div>
+          )}
+            </>
+          )}
+
+          {/* Zotero Import Tab */}
+          {activeTab === 'zotero' && (
+            <ZoteroImport
+              folders={folders}
+              onImportComplete={() => {
+                window.dispatchEvent(new CustomEvent('paperUploaded'));
+              }}
+              onClose={handleClose}
+            />
+          )}
         </div>
       </div>
     </div>

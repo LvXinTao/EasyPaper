@@ -3,6 +3,16 @@ import { storage } from '@/lib/storage';
 jest.mock('@/lib/storage', () => ({ storage: { getSettings: jest.fn(), saveSettings: jest.fn() } }));
 jest.mock('@/lib/crypto', () => ({ encryptApiKey: jest.fn().mockReturnValue({ encrypted: 'enc-data', iv: 'enc-iv' }), decryptApiKey: jest.fn().mockReturnValue('sk-decrypted') }));
 
+// Mock next/server NextResponse
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: (data: unknown, init?: { status?: number }) => ({
+      status: init?.status ?? 200,
+      json: async () => data,
+    }),
+  },
+}));
+
 describe('GET /api/settings', () => {
   it('returns settings without exposing API key', async () => {
     (storage.getSettings as jest.Mock).mockResolvedValue({ baseUrl: 'https://api.test.com/v1', apiKeyEncrypted: 'encrypted', apiKeyIV: 'iv', model: 'gpt-4o', visionModel: 'gpt-4o' });

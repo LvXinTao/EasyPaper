@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     for (const item of body.items) {
       try {
-        const pdfPath = resolveZoteroPdfPath(zoteroDataDir ?? null, item.attachmentKey, item.pdfFilename);
+        const pdfPath = resolveZoteroPdfPath(zoteroDataDir ?? '', item.attachmentKey, item.pdfFilename);
         await fs.access(pdfPath);
         const buffer = await fs.readFile(pdfPath);
 
