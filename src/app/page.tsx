@@ -174,19 +174,34 @@ export default function HomePage() {
   };
 
   const handleRename = async (id: string, title: string) => {
-    await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title }) });
+    const trimmedTitle = title.trim().slice(0, 500);
+    if (!trimmedTitle) {
+      showToast('Paper title cannot be empty', 'error');
+      return;
+    }
+    await fetch(`/api/paper/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: trimmedTitle }) });
     await fetchPapers();
     showToast('Paper renamed', 'success');
   };
 
   const handleCreateFolder = async (name: string, parentId: string | null) => {
-    await fetch('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, parentId }) });
+    const trimmedName = name.trim().slice(0, 100);
+    if (!trimmedName) {
+      showToast('Folder name cannot be empty', 'error');
+      return;
+    }
+    await fetch('/api/folders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: trimmedName, parentId }) });
     await fetchFolders();
     showToast('Folder created', 'success');
   };
 
   const handleRenameFolder = async (folderId: string, name: string) => {
-    await fetch(`/api/folders/${folderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const trimmedName = name.trim().slice(0, 100);
+    if (!trimmedName) {
+      showToast('Folder name cannot be empty', 'error');
+      return;
+    }
+    await fetch(`/api/folders/${folderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: trimmedName }) });
     await fetchFolders();
     showToast('Folder renamed', 'success');
   };
@@ -229,6 +244,7 @@ export default function HomePage() {
     });
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleBatchMove = (paperIds: string[], _folderId: string | null) => {
     if (paperIds.length === 0) return;
     setFolderPickerModal({ isOpen: true, paperIds });
