@@ -254,6 +254,16 @@ export const storage = {
   async paperExists(paperId: string): Promise<boolean> {
     try { await fs.stat(paperDir(paperId)); return true; } catch { return false; }
   },
+  async findPaperByFilename(filename: string): Promise<string | null> {
+    const papers = await this.listPapers();
+    for (const paper of papers) {
+      try {
+        const metadata = await this.getMetadata(paper.id);
+        if (metadata.filename === filename) return paper.id;
+      } catch { /* skip */ }
+    }
+    return null;
+  },
   async getFolders(): Promise<Folder[]> {
     try {
       const filePath = path.join(getConfigDir(), 'folders.json');

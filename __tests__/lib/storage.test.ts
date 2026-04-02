@@ -126,6 +126,25 @@ describe('storage', () => {
       expect(papers).toEqual([]);
     });
   });
+
+  describe('findPaperByFilename', () => {
+    it('returns paperId when matching filename found', async () => {
+      const paperId = 'test-dedup-id';
+      await storage.createPaperDir(paperId);
+      await storage.saveMetadata(paperId, {
+        id: paperId, title: 'Test', filename: 'test.pdf',
+        pages: 1, createdAt: new Date().toISOString(), status: 'pending',
+      });
+
+      const result = await storage.findPaperByFilename('test.pdf');
+      expect(result).toBe(paperId);
+    });
+
+    it('returns null when no match', async () => {
+      const result = await storage.findPaperByFilename('nonexistent.pdf');
+      expect(result).toBeNull();
+    });
+  });
 });
 
 describe('default data directory', () => {
