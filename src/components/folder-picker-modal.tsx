@@ -48,7 +48,7 @@ export function FolderPickerModal({
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onCancel}>
-      <div style={{ background: 'var(--surface)', borderRadius: '12px', padding: '16px', minWidth: '280px', border: '1px solid var(--glass-border)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--modal-bg)', borderRadius: '12px', padding: '16px', minWidth: '280px', border: '1px solid var(--glass-border)' }} onClick={e => e.stopPropagation()}>
         <h3 style={{ color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, margin: '0 0 12px' }}>Move to Folder</h3>
         <div style={{ maxHeight: '300px', overflow: 'auto' }}>
           <button

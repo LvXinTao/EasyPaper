@@ -38,7 +38,7 @@ export function ConfirmModal({
     >
       <div
         style={{
-          background: 'var(--surface)',
+          background: 'var(--modal-bg)',
           borderRadius: '12px',
           padding: '24px',
           minWidth: '320px',
