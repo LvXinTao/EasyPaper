@@ -198,7 +198,7 @@ export function PaperTree({
       >
         <div style={{ flex: 1, overflow: 'auto' }}>
           {rootFolders.map(folder => (
-            <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onDropPaper={(paperId, folderId) => onMovePaper(paperId, folderId)} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
+            <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
           ))}
 
           {isCreatingRoot && (
