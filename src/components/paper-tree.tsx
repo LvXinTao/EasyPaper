@@ -5,6 +5,7 @@ import type { Folder, PaperListItem } from '@/types';
 import { PaperTreeItem } from './paper-tree-item';
 import { PaperTreeFolder } from './paper-tree-folder';
 import { BatchActionToolbar } from './batch-action-toolbar';
+import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 
 interface PaperTreeProps {
   papers: PaperListItem[];
@@ -75,6 +76,18 @@ export function PaperTree({
 
   const rootFolders = useMemo(() => folders.filter(f => !f.parentId), [folders]);
   const rootPapers = useMemo(() => filteredPapers.filter(p => !p.folderId), [filteredPapers]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const overData = over.data.current;
+
+    // Move paper to folder (only action for paper-tree.tsx)
+    if (overData?.type === 'folder') {
+      onMovePaper(active.id as string, over.id as string);
+    }
+  };
 
   const handleCreateRoot = () => {
     const trimmed = newRootName.trim();
@@ -179,21 +192,25 @@ export function PaperTree({
 
       <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', fontWeight: 600, padding: '8px 6px 4px' }}>LIBRARY</div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {rootFolders.map(folder => (
-          <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onDropPaper={(paperId, folderId) => onMovePaper(paperId, folderId)} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
-        ))}
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {rootFolders.map(folder => (
+            <PaperTreeFolder key={folder.id} folder={folder} depth={0} papers={filteredPapers} allFolders={folders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onCheckboxToggle} onPaperContextMenu={onContextMenuOpen} onDropPaper={(paperId, folderId) => onMovePaper(paperId, folderId)} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)} onToggleStar={onToggleStar} />
+          ))}
 
-        {isCreatingRoot && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px' }}>
-            <span style={{ fontSize: '13px' }}>📁</span>
-            <input autoFocus placeholder="Folder name" value={newRootName} onChange={e => setNewRootName(e.target.value)} onBlur={handleCreateRoot} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoot(); if (e.key === 'Escape') setIsCreatingRoot(false); }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '4px 6px' }} />
-          </div>
-        )}
+          {isCreatingRoot && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px' }}>
+              <span style={{ fontSize: '13px' }}>📁</span>
+              <input autoFocus placeholder="Folder name" value={newRootName} onChange={e => setNewRootName(e.target.value)} onBlur={handleCreateRoot} onKeyDown={e => { if (e.key === 'Enter') handleCreateRoot(); if (e.key === 'Escape') setIsCreatingRoot(false); }} style={{ flex: 1, fontSize: '12px', border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--text-primary)', borderRadius: '4px', padding: '4px 6px' }} />
+            </div>
+          )}
 
-        {rootPapers.map(paper => (
-          <div key={paper.id} draggable onDragStart={e => e.dataTransfer.setData('application/x-paper-id', paper.id)}>
+          {rootPapers.map(paper => (
             <PaperTreeItem
+              key={paper.id}
               paper={paper}
               isSelected={paper.id === selectedPaperId}
               isChecked={selectedPaperIds.has(paper.id)}
@@ -204,21 +221,21 @@ export function PaperTree({
               onContextMenu={e => onContextMenuOpen(e, paper.id)}
               onToggleStar={() => onToggleStar(paper.id)}
             />
-          </div>
-        ))}
+          ))}
 
-        {filteredPapers.length === 0 && papers.length > 0 && (
-          <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
-            No papers match current filters
-          </div>
-        )}
+          {filteredPapers.length === 0 && papers.length > 0 && (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+              No papers match current filters
+            </div>
+          )}
 
-        {papers.length === 0 && (
-          <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
-            No papers yet. Upload a PDF to get started.
-          </div>
-        )}
-      </div>
+          {papers.length === 0 && (
+            <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '12px' }}>
+              No papers yet. Upload a PDF to get started.
+            </div>
+          )}
+        </div>
+      </DndContext>
 
       <button onClick={() => setIsCreatingRoot(true)} style={{ marginTop: '8px', padding: '8px 12px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', width: '100%' }}>+ New Folder</button>
 
