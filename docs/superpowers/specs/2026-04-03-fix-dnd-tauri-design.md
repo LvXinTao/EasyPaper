@@ -162,15 +162,16 @@ const handleDragEnd = (event: DragEndEvent) => {
 
   // Reorder papers within same folder
   if (overData?.type === 'paper' && activeData?.folderId === overData?.folderId) {
-    // Use collision detection to determine position
-    // Reference existing logic in folder-tree.tsx lines 55-57:
-    // const rect = e.currentTarget.getBoundingClientRect();
-    // const midY = rect.top + rect.height / 2;
-    // position = e.clientY < midY ? 'before' : 'after'
+    // Use @dnd-kit's rect information to determine position
+    // over.rect provides { top, left, width, height } of the drop target
+    const overRect = over.rect;
+    const midY = overRect.top + overRect.height / 2;
 
-    const rect = getElementRect(over.id);
-    const midY = rect.top + rect.height / 2;
-    const position = event.activatorEvent.clientY < midY ? 'before' : 'after';
+    // active.rect.current.translated gives the dragged element's current position
+    const activeRect = active.rect.current.translated;
+    if (!activeRect) return;
+
+    const position: 'before' | 'after' = activeRect.top < midY ? 'before' : 'after';
 
     handleReorder(active.id as string, over.id as string, position);
   }
@@ -179,22 +180,37 @@ const handleDragEnd = (event: DragEndEvent) => {
 
 **Visual Drop Indicators for Reorder:**
 
-The existing `PaperRow` renders position-based indicators (blue line above/below target). With `useSortable`, replicate this using `isOver` state and computed position:
+The existing `PaperRow` renders position-based indicators (blue line above/below target). With `useSortable`, replicate this using drag overlay or computed position:
+
+Option A - Use `SortableContext` with `verticalListSortingStrategy` (automatic indicators):
 
 ```tsx
-const { setNodeRef, isOver } = useSortable({
-  id: paper.id,
-  data: { type: 'paper', folderId },
-});
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
-// Compute indicator position when isOver is true
-const showIndicatorBefore = isOver && mouseY < elementMidY;
-const showIndicatorAfter = isOver && mouseY >= elementMidY;
-
-// Render indicators (same style as current lines 38-40, 87-89)
-{showIndicatorBefore && <div style={{ position: 'absolute', top: 0, ... }} />}
-{showIndicatorAfter && <div style={{ position: 'absolute', bottom: 0, ... }} />}
+<SortableContext items={folderPapers.map(p => p.id)} strategy={verticalListSortingStrategy}>
+  {folderPapers.map(paper => <SortablePaperRow key={paper.id} paper={paper} />)}
+</SortableContext>
 ```
+
+Option B - Custom position detection (manual indicators):
+
+Track the active drag item and compute indicator position relative to each sortable item:
+
+```tsx
+// In the sortable item component
+const { isOver } = useSortable({ id: paper.id, data: { type: 'paper', folderId } });
+
+// Use @dnd-kit's DragOverlay for visual feedback during drag
+// The parent DndContext renders a single DragOverlay that follows the cursor:
+<DndContext onDragEnd={handleDragEnd}>
+  {/* Tree content */}
+  <DragOverlay>
+    {activeItem && <PaperRowOverlay paper={activeItem} />}
+  </DragOverlay>
+</DndContext>
+```
+
+The `DragOverlay` approach is recommended - it renders a copy of the dragged item that follows the cursor, while the original item stays in place with reduced opacity. Position indicators can be computed in the parent by comparing `active.rect.current.translated` with each sortable item's rect.
 
 **Reorder Logic (reference existing implementation at lines 263-275):**
 
@@ -211,6 +227,17 @@ const handleReorder = (draggedPaperId: string, targetPaperId: string, position: 
   currentOrder.splice(insertIndex, 0, dragged);
   const orders = currentOrder.map((p, i) => ({ id: p.id, sortIndex: i }));
   onReorderPapers(orders);
+};
+```
+
+**Note:** When using `useSortable`, apply the `transform` CSS property for smooth drag animations:
+
+```tsx
+const { transform, transition } = useSortable({ id: paper.id });
+
+const style = {
+  transform: CSS.Transform.toString(transform),
+  transition,
 };
 ```
 
@@ -303,6 +330,10 @@ Reordering only applies when dragging within the same folder (matching `folderId
 - [ ] Drag across folders triggers move (not reorder)
 - [ ] No console errors or warnings
 
+### Notes
+- Existing unit tests (`__tests__/components/paper-tree-item.test.tsx`) may need updates for the new hook-based implementation
+- Consider adding E2E tests (Playwright) for future regression prevention of drag-and-drop in Tauri
+
 ## Risks
 
 1. **Bundle size increase** - ~30KB added. Acceptable for improved UX.
@@ -314,9 +345,10 @@ Reordering only applies when dragging within the same folder (matching `folderId
 1. Install dependencies
 2. Refactor `paper-tree.tsx` (add DndContext)
 3. Refactor `paper-tree-folder.tsx` (useDroppable)
-4. Refactor `paper-tree-item.tsx` (useSortable)
-5. Refactor `folder-tree.tsx` (same pattern)
-6. Remove all HTML5 drag event handlers
-7. Test on web browser
-8. Test on Tauri app
-9. Update tests if needed
+4. Refactor `paper-tree-item.tsx` (useDraggable - move only, not sortable)
+5. Remove outer draggable wrappers from `paper-tree.tsx` and `paper-tree-folder.tsx`
+6. Refactor `folder-tree.tsx` (DndContext + useDroppable + useSortable)
+7. Remove all HTML5 drag event handlers
+8. Test on web browser
+9. Test on Tauri app
+10. Update tests if needed
