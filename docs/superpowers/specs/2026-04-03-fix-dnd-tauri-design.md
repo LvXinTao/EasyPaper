@@ -68,7 +68,6 @@ const handleDragEnd = (event: DragEndEvent) => {
   }
 };
 ```
-```
 
 ### 2. `paper-tree-folder.tsx` - Droppable Region
 
