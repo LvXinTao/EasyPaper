@@ -26,12 +26,15 @@ Total bundle impact: ~30KB gzipped
 
 ## Scope of Changes
 
-| Component | Current | After |
-|-----------|---------|-------|
-| `paper-tree.tsx` | HTML5 drag events | `DndContext` wrapper |
+| Component | Current Functionality | After |
+|-----------|----------------------|-------|
+| `paper-tree.tsx` | HTML5 drag events (move only) | `DndContext` wrapper (move only) |
 | `paper-tree-folder.tsx` | `onDragOver`, `onDrop` handlers | `useDroppable` hook |
-| `paper-tree-item.tsx` | `draggable` attribute wrapper | `useSortable` hook |
-| `folder-tree.tsx` | HTML5 drag events | `DndContext` + hooks |
+| `paper-tree.tsx` + `paper-tree-folder.tsx` | `<div draggable>` wrapper around `PaperTreeItem` | Move draggable logic into `PaperTreeItem` |
+| `paper-tree-item.tsx` | Pure display component (no drag logic) | `useDraggable` hook (move-only, no sortable) |
+| `folder-tree.tsx` | HTML5 drag events (move + reorder) | `DndContext` + hooks (move + reorder) |
+
+**Note:** `paper-tree.tsx` only supports moving papers to folders. `folder-tree.tsx` supports both moving and reordering. This spec fixes both components without adding new functionality.
 
 ## Detailed Design
 
@@ -50,27 +53,21 @@ import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 </DndContext>
 ```
 
-The `onDragEnd` handler determines the action based on the drop target:
+The `onDragEnd` handler for `paper-tree.tsx` (move-only, no reorder):
 
 ```tsx
 const handleDragEnd = (event: DragEndEvent) => {
   const { active, over } = event;
   if (!over) return;
 
-  const activeData = active.data.current;
   const overData = over.data.current;
 
-  // Move paper to folder
+  // Move paper to folder (only action for paper-tree.tsx)
   if (overData?.type === 'folder') {
     onMovePaper(active.id as string, over.id as string);
   }
-
-  // Reorder papers within same folder
-  if (overData?.type === 'paper' && activeData?.folderId === overData?.folderId) {
-    const position = determinePosition(event); // 'before' or 'after'
-    handleReorder(active.id as string, over.id as string, position);
-  }
 };
+```
 ```
 
 ### 2. `paper-tree-folder.tsx` - Droppable Region
@@ -102,22 +99,16 @@ Remove existing:
 - `isDragOver` state
 - `onDragOver`, `onDragLeave`, `onDrop` handlers
 
-### 3. `paper-tree-item.tsx` - Sortable Item
+### 3. `paper-tree-item.tsx` - Draggable Item (Move Only)
 
-Convert paper items to draggable/sortable elements:
+**Current state:** The draggable wrapper is applied in parent components (`paper-tree.tsx` line 195 and `paper-tree-folder.tsx` line 144) around `PaperTreeItem`. The item component itself has no drag logic.
+
+**After:** Move draggable logic into `PaperTreeItem` using `useDraggable` hook (not sortable - move only):
 
 ```tsx
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDraggable } from '@dnd-kit/core';
 
-const {
-  attributes,
-  listeners,
-  setNodeRef,
-  transform,
-  transition,
-  isDragging,
-} = useSortable({
+const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
   id: paper.id,
   data: {
     type: 'paper',
@@ -127,8 +118,6 @@ const {
 });
 
 const style = {
-  transform: CSS.Transform.toString(transform),
-  transition,
   opacity: isDragging ? 0.4 : 1,
   // ...existing styles
 };
@@ -139,26 +128,104 @@ const style = {
 </div>
 ```
 
+**Important:** Remove the outer `<div draggable onDragStart={...}>` wrapper from:
+- `paper-tree.tsx` (line 195-207)
+- `paper-tree-folder.tsx` (line 144-146)
+
 Note: The drag handle should cover the entire paper row (except checkbox/star buttons which need `stopPropagation`).
 
-### 4. `folder-tree.tsx` - Parallel Implementation
+### 4. `folder-tree.tsx` - Full Implementation (Move + Reorder)
 
-Apply the same pattern to `folder-tree.tsx`:
+This component supports both moving papers to folders and reordering within folders.
+
+**Apply the pattern:**
 
 1. Add `DndContext` wrapper with `onDragEnd` handler
 2. Convert `FolderRow` to use `useDroppable`
-3. Convert `PaperRow` to use `useSortable`
+3. Convert `PaperRow` to use `useSortable` (sortable for reorder support)
+
+The `onDragEnd` handler:
+
+```tsx
+const handleDragEnd = (event: DragEndEvent) => {
+  const { active, over } = event;
+  if (!over) return;
+
+  const activeData = active.data.current;
+  const overData = over.data.current;
+
+  // Move paper to folder
+  if (overData?.type === 'folder') {
+    onMovePaper(active.id as string, over.id as string);
+    return;
+  }
+
+  // Reorder papers within same folder
+  if (overData?.type === 'paper' && activeData?.folderId === overData?.folderId) {
+    // Use collision detection to determine position
+    // Reference existing logic in folder-tree.tsx lines 55-57:
+    // const rect = e.currentTarget.getBoundingClientRect();
+    // const midY = rect.top + rect.height / 2;
+    // position = e.clientY < midY ? 'before' : 'after'
+
+    const rect = getElementRect(over.id);
+    const midY = rect.top + rect.height / 2;
+    const position = event.activatorEvent.clientY < midY ? 'before' : 'after';
+
+    handleReorder(active.id as string, over.id as string, position);
+  }
+};
+```
+
+**Visual Drop Indicators for Reorder:**
+
+The existing `PaperRow` renders position-based indicators (blue line above/below target). With `useSortable`, replicate this using `isOver` state and computed position:
+
+```tsx
+const { setNodeRef, isOver } = useSortable({
+  id: paper.id,
+  data: { type: 'paper', folderId },
+});
+
+// Compute indicator position when isOver is true
+const showIndicatorBefore = isOver && mouseY < elementMidY;
+const showIndicatorAfter = isOver && mouseY >= elementMidY;
+
+// Render indicators (same style as current lines 38-40, 87-89)
+{showIndicatorBefore && <div style={{ position: 'absolute', top: 0, ... }} />}
+{showIndicatorAfter && <div style={{ position: 'absolute', bottom: 0, ... }} />}
+```
+
+**Reorder Logic (reference existing implementation at lines 263-275):**
+
+```tsx
+const handleReorder = (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => {
+  if (!onReorderPapers) return;
+  const currentOrder = [...folderPapers];
+  const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
+  if (draggedIndex === -1) return;
+  const [dragged] = currentOrder.splice(draggedIndex, 1);
+  const targetIndex = currentOrder.findIndex(p => p.id === targetPaperId);
+  if (targetIndex === -1) return;
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  currentOrder.splice(insertIndex, 0, dragged);
+  const orders = currentOrder.map((p, i) => ({ id: p.id, sortIndex: i }));
+  onReorderPapers(orders);
+};
+```
 
 This component has its own drag-and-drop context separate from `paper-tree.tsx`.
 
 ## Data Flow
 
+### paper-tree.tsx (Move Only)
+
 ```
 User initiates drag on paper
         ↓
-useSortable provides drag state
+useDraggable provides drag state
         ↓
-User drags over folder or another paper
+User drags over folder
         ↓
 useDroppable detects hover (visual feedback)
         ↓
@@ -166,9 +233,37 @@ User releases (drop)
         ↓
 DndContext.onDragEnd fires
         ↓
-Handler determines action type:
+Handler checks: over.data.current?.type === 'folder'
+        ↓
+onMovePaper(paperId, folderId)
+        ↓
+API call + state update
+        ↓
+UI reflects new folder
+```
+
+### folder-tree.tsx (Move + Reorder)
+
+```
+User initiates drag on paper
+        ↓
+useSortable provides drag state
+        ↓
+User drags over folder OR another paper
+        ↓
+useDroppable/useSortable detects hover
+        ↓
+Visual feedback:
+  ├─ folder: background highlight
+  └─ paper: position indicator (before/after line)
+        ↓
+User releases (drop)
+        ↓
+DndContext.onDragEnd fires
+        ↓
+Handler determines action:
   ├─ folder target → onMovePaper(paperId, folderId)
-  └─ paper target → handleReorder(paperId, targetId, position)
+  └─ paper target (same folder) → handleReorder(paperId, targetId, position)
         ↓
 API call + state update
         ↓
@@ -191,13 +286,21 @@ Reordering only applies when dragging within the same folder (matching `folderId
 
 ## Testing Checklist
 
+### paper-tree.tsx (Move Only)
+- [ ] Drag paper to folder in web browser - moves correctly
+- [ ] Drag paper to folder in Tauri app - moves correctly
+- [ ] Drag to collapsed folder - still works
+- [ ] Visual feedback (folder highlight) shows on hover
+- [ ] Checkbox/star clicks do not trigger drag
+- [ ] No console errors or warnings
+
+### folder-tree.tsx (Move + Reorder)
 - [ ] Drag paper to folder in web browser - moves correctly
 - [ ] Drag paper to folder in Tauri app - moves correctly
 - [ ] Reorder paper within folder in web browser - updates sortIndex
 - [ ] Reorder paper within folder in Tauri app - updates sortIndex
-- [ ] Drag to collapsed folder - still works
-- [ ] Visual feedback (highlight) shows on hover
-- [ ] Checkbox/star clicks do not trigger drag
+- [ ] Position indicator (blue line) shows before/after target
+- [ ] Drag across folders triggers move (not reorder)
 - [ ] No console errors or warnings
 
 ## Risks
