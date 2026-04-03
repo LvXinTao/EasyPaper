@@ -70,10 +70,14 @@ function PaperRow({
             flexDirection: 'column',
             justifyContent: 'center',
             gap: '1px',
-            width: '12px',
-            height: '14px',
+            width: '16px',
+            height: '16px',
             cursor: 'grab',
             flexShrink: 0,
+            padding: '3px',
+            borderRadius: '4px',
+            // Make the hit area larger than visible area
+            marginLeft: '-2px',
           }}
           title="Drag to move"
         >
@@ -222,16 +226,25 @@ function FolderRow({
     return () => document.removeEventListener('click', handleClick);
   }, [showMenu]);
 
-  const childFolders = folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name));
-  const folderPapers = papers
-    .filter((p) => p.folderId === folder.id)
-    .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
-      if (a.sortIndex != null) return -1;
-      if (b.sortIndex != null) return 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+  const childFolders = useMemo(
+    () => folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name)),
+    [folders, folder.id]
+  );
+  const folderPapers = useMemo(
+    () => papers
+      .filter((p) => p.folderId === folder.id)
+      .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => {
+        if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+        if (a.sortIndex != null) return -1;
+        if (b.sortIndex != null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
+    [papers, folder.id, searchQuery]
+  );
+
+  // Paper IDs for this folder's SortableContext
+  const folderPaperIds = useMemo(() => folderPapers.map(p => p.id), [folderPapers]);
 
   // Count all papers in this folder and descendants
   const allDescendantIds = new Set<string>([folder.id]);
@@ -432,13 +445,16 @@ function FolderRow({
               selectedFolderId={selectedFolderId}
             />
           ))}
-          {folderPapers.map((paper) => (
-            <PaperRow
-              key={paper.id}
-              paper={paper}
-              depth={depth + 1}
-            />
-          ))}
+          {/* Each folder has its own SortableContext for papers */}
+          <SortableContext items={folderPaperIds} strategy={verticalListSortingStrategy}>
+            {folderPapers.map((paper) => (
+              <PaperRow
+                key={paper.id}
+                paper={paper}
+                depth={depth + 1}
+              />
+            ))}
+          </SortableContext>
         </div>
       )}
     </div>
@@ -488,29 +504,21 @@ export function FolderTree(props: FolderTreeProps) {
     [papers, searchQuery]
   );
 
-  // Get folder papers for handleReorder
-  const folderPapersMap = useMemo(() => {
-    const map = new Map<string | null, PaperListItem[]>();
-    papers.forEach(p => {
-      const key = p.folderId ?? null;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(p);
-    });
-    // Sort each folder's papers
-    map.forEach((paperList, _folderId) => {
-      paperList.sort((a, b) => {
+  // Get papers for a specific folder (used in handleReorder)
+  const getPapersInFolder = (folderId: string | null): PaperListItem[] => {
+    return papers
+      .filter(p => p.folderId === folderId)
+      .sort((a, b) => {
         if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
         if (a.sortIndex != null) return -1;
         if (b.sortIndex != null) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-    });
-    return map;
-  }, [papers]);
+  };
 
   const handleReorder = (draggedPaperId: string, targetPaperId: string, folderId: string | null, position: 'before' | 'after') => {
     if (!onReorderPapers) return;
-    const folderPapers = folderPapersMap.get(folderId) || [];
+    const folderPapers = getPapersInFolder(folderId);
     const currentOrder = [...folderPapers];
     const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
     if (draggedIndex === -1) return;
@@ -555,8 +563,8 @@ export function FolderTree(props: FolderTreeProps) {
 
   const activePaper = activeId ? papers.find(p => p.id === activeId) : null;
 
-  // Get all paper IDs for SortableContext
-  const allPaperIds = useMemo(() => papers.map(p => p.id), [papers]);
+  // Get paper IDs for root papers SortableContext
+  const rootPaperIds = useMemo(() => rootPapers.map(p => p.id), [rootPapers]);
 
   return (
     <DndContext
@@ -565,9 +573,8 @@ export function FolderTree(props: FolderTreeProps) {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <SortableContext items={allPaperIds} strategy={verticalListSortingStrategy}>
-        <div>
-          <div
+      <div>
+        <div
             className="flex items-center justify-between"
             style={{ padding: '6px 12px 4px 10px' }}
           >
@@ -624,15 +631,17 @@ export function FolderTree(props: FolderTreeProps) {
               selectedFolderId={selectedFolderId}
             />
           ))}
-          {rootPapers.map((paper) => (
-            <PaperRow
-              key={paper.id}
-              paper={paper}
-              depth={0}
-            />
-          ))}
+          {/* Root papers have their own SortableContext */}
+          <SortableContext items={rootPaperIds} strategy={verticalListSortingStrategy}>
+            {rootPapers.map((paper) => (
+              <PaperRow
+                key={paper.id}
+                paper={paper}
+                depth={0}
+              />
+            ))}
+          </SortableContext>
         </div>
-      </SortableContext>
       <DragOverlay>
         {activePaper && (
           <div

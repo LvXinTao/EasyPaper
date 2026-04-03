@@ -85,14 +85,16 @@ export function PaperTreeItem({
             flexDirection: 'column',
             justifyContent: 'center',
             gap: '2px',
-            width: '14px',
-            height: '20px',
+            width: '20px',
+            height: '24px',
             cursor: 'grab',
             flexShrink: 0,
-            marginTop: '2px',
-            padding: '2px',
+            marginTop: '1px',
+            padding: '4px',
             borderRadius: '4px',
             userSelect: 'none',
+            // Make the hit area larger than visible area
+            marginLeft: '-4px',
           }}
           title="Drag to move"
         >
