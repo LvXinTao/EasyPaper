@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import type { Folder, PaperListItem } from '@/types';
-import { DndContext, DragEndEvent, DragStartEvent, closestCenter, DragOverlay, useDroppable } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragStartEvent, closestCenter, DragOverlay, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -54,15 +54,38 @@ function PaperRow({
     paddingRight: '12px',
     fontSize: '11px',
     color: 'var(--text-primary)',
-    cursor: 'grab',
     opacity: isDragging ? 0.4 : 1,
     background: isDragging ? 'var(--accent-subtle)' : 'transparent',
     borderRadius: '4px',
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} title={paper.title}>
-      <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{paper.title}
+    <div ref={setNodeRef} style={style} {...attributes} title={paper.title}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Drag Handle */}
+        <div
+          {...listeners}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '1px',
+            width: '12px',
+            height: '14px',
+            cursor: 'grab',
+            flexShrink: 0,
+          }}
+          title="Drag to move"
+        >
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+        </div>
+        {/* Title - clickable area for selection */}
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {paper.title}
+        </span>
+      </div>
     </div>
   );
 }
@@ -429,6 +452,15 @@ export function FolderTree(props: FolderTreeProps) {
   const [newRootName, setNewRootName] = useState('');
   const [activeId, setActiveId] = useState<string | null>(null);
 
+  // Configure pointer sensor with constraints for better Tauri compatibility
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Require 5px movement before starting drag
+      },
+    })
+  );
+
   const handleCreateRoot = async () => {
     const trimmed = newRootName.trim();
     if (trimmed) {
@@ -528,6 +560,7 @@ export function FolderTree(props: FolderTreeProps) {
 
   return (
     <DndContext
+      sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -605,17 +638,25 @@ export function FolderTree(props: FolderTreeProps) {
           <div
             style={{
               paddingLeft: '10px',
-              paddingTop: '3px',
-              paddingBottom: '3px',
+              paddingTop: '6px',
+              paddingBottom: '6px',
               paddingRight: '12px',
               fontSize: '11px',
               color: 'var(--text-primary)',
               background: 'var(--surface)',
               borderRadius: '4px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+              cursor: 'grabbing',
             }}
           >
-            <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{activePaper.title}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+              </div>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activePaper.title}</span>
+            </div>
           </div>
         )}
       </DragOverlay>

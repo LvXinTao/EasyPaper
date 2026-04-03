@@ -5,7 +5,7 @@ import type { Folder, PaperListItem } from '@/types';
 import { PaperTreeItem } from './paper-tree-item';
 import { PaperTreeFolder } from './paper-tree-folder';
 import { BatchActionToolbar } from './batch-action-toolbar';
-import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragStartEvent, closestCenter, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 
 interface PaperTreeProps {
   papers: PaperListItem[];
@@ -68,6 +68,16 @@ export function PaperTree({
   const [isCreatingRoot, setIsCreatingRoot] = useState(false);
   const [newRootName, setNewRootName] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Configure pointer sensor with constraints for better Tauri compatibility
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Require 5px movement before starting drag
+      },
+    })
+  );
 
   const filteredPapers = useMemo(() => papers.filter(p => {
     if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -77,8 +87,13 @@ export function PaperTree({
   const rootFolders = useMemo(() => folders.filter(f => !f.parentId), [folders]);
   const rootPapers = useMemo(() => filteredPapers.filter(p => !p.folderId), [filteredPapers]);
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveId(null);
     if (!over) return;
 
     const overData = over.data.current;
@@ -88,6 +103,8 @@ export function PaperTree({
       onMovePaper(active.id as string, over.id as string);
     }
   };
+
+  const activePaper = activeId ? filteredPapers.find(p => p.id === activeId) : null;
 
   const handleCreateRoot = () => {
     const trimmed = newRootName.trim();
@@ -193,7 +210,9 @@ export function PaperTree({
       <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', fontWeight: 600, padding: '8px 6px 4px' }}>LIBRARY</div>
 
       <DndContext
+        sensors={sensors}
         collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
         <div style={{ flex: 1, overflow: 'auto' }}>
@@ -235,6 +254,33 @@ export function PaperTree({
             </div>
           )}
         </div>
+
+        <DragOverlay>
+          {activePaper && (
+            <div
+              style={{
+                padding: '10px 12px',
+                background: 'var(--surface)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: '8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                cursor: 'grabbing',
+                maxWidth: '280px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                  <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                  <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {activePaper.title}
+                </span>
+              </div>
+            </div>
+          )}
+        </DragOverlay>
       </DndContext>
 
       <button onClick={() => setIsCreatingRoot(true)} style={{ marginTop: '8px', padding: '8px 12px', fontSize: '12px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', borderRadius: '6px', cursor: 'pointer', width: '100%' }}>+ New Folder</button>

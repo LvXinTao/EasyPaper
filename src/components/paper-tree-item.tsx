@@ -75,9 +75,33 @@ export function PaperTreeItem({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       {...attributes}
-      {...listeners}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+        {/* Drag Handle - only this area triggers drag */}
+        <div
+          {...listeners}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '2px',
+            width: '14px',
+            height: '20px',
+            cursor: 'grab',
+            flexShrink: 0,
+            marginTop: '2px',
+            padding: '2px',
+            borderRadius: '4px',
+            userSelect: 'none',
+          }}
+          title="Drag to move"
+        >
+          {/* Three dots as drag handle icon */}
+          <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '3px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+        </div>
+
         {/* Checkbox */}
         <input
           type="checkbox"
