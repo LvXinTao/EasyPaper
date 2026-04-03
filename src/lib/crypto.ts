@@ -1,9 +1,48 @@
 import crypto from 'crypto';
 import os from 'os';
+import path from 'path';
+import fs from 'fs';
 
+let cachedKey: Buffer | null = null;
+
+/**
+ * Get or create a stable encryption key for this machine.
+ * Uses a stored random key file for stability across hostname changes.
+ * Falls back to hostname-based key only if file access fails.
+ */
 function getMachineKey(): Buffer {
-  const hostname = os.hostname();
-  return crypto.createHash('sha256').update(hostname).digest();
+  if (cachedKey) return cachedKey;
+
+  const keyPath = path.join(os.homedir(), '.easypaper', '.key');
+
+  try {
+    // Try to read existing key file
+    if (fs.existsSync(keyPath)) {
+      const keyData = fs.readFileSync(keyPath, 'utf-8').trim();
+      if (keyData.length === 64 && /^[0-9a-f]+$/i.test(keyData)) {
+        cachedKey = Buffer.from(keyData, 'hex');
+        return cachedKey;
+      }
+    }
+
+    // Generate new random key
+    const newKey = crypto.randomBytes(32);
+
+    // Ensure directory exists
+    const dir = path.dirname(keyPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Write key file with restricted permissions
+    fs.writeFileSync(keyPath, newKey.toString('hex'), { mode: 0o600 });
+    cachedKey = newKey;
+    return cachedKey;
+  } catch {
+    // Fallback to hostname-based key (less stable but works if file access fails)
+    const hostname = os.hostname();
+    return crypto.createHash('sha256').update(hostname).digest();
+  }
 }
 
 export function encryptApiKey(apiKey: string): { encrypted: string; iv: string } {

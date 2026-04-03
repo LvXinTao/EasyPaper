@@ -549,7 +549,27 @@ export default function PaperDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ paperId, sessionId: activeSessionId, message, quote: quoteToSend, expandContext }),
         });
-        if (!response.ok) throw new Error('Failed to send message');
+        if (!response.ok) {
+          // Try to parse error message from response
+          let errorMsg = 'Failed to send message';
+          try {
+            const errorData = await response.json();
+            if (errorData.error?.message) {
+              errorMsg = errorData.error.message;
+              if (errorData.error.code === 'API_KEY_MISSING') {
+                errorMsg = 'API key is not configured. Please go to Settings to configure your API key.';
+              }
+            }
+          } catch { /* fallback to default message */ }
+          // Show error as assistant message so user can see it
+          if (activeSessionIdRef.current === sendingSessionId) {
+            setChatMessages((prev) => [
+              ...prev,
+              { role: 'assistant', content: `⚠️ Error: ${errorMsg}` },
+            ]);
+          }
+          return;
+        }
 
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
@@ -600,6 +620,14 @@ export default function PaperDetailPage() {
         }
       } catch (error) {
         console.error('Chat error:', error);
+        // Show network error as assistant message
+        if (activeSessionIdRef.current === sendingSessionId) {
+          const errorMsg = error instanceof Error ? error.message : 'Network error';
+          setChatMessages((prev) => [
+            ...prev,
+            { role: 'assistant', content: `⚠️ Network Error: ${errorMsg}. Please check if the server is running.` },
+          ]);
+        }
       } finally {
         // Only clear streaming state if still on the same session
         if (activeSessionIdRef.current === sendingSessionId) {
