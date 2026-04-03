@@ -1,7 +1,7 @@
 # Fix Drag-and-Drop in Tauri App
 
 **Date:** 2026-04-03
-**Status:** Draft
+**Status:** Implemented
 **Scope:** Replace HTML5 drag API with @dnd-kit for cross-platform compatibility
 
 ## Problem
