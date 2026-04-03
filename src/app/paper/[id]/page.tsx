@@ -625,7 +625,7 @@ export default function PaperDetailPage() {
           const errorMsg = error instanceof Error ? error.message : 'Network error';
           setChatMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: `⚠️ Network Error: ${errorMsg}. Please check if the server is running.` },
+            { role: 'assistant', content: `⚠️ Error: ${errorMsg}. Please check if the server is running.` },
           ]);
         }
       } finally {
