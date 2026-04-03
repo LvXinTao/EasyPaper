@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Folder, PaperListItem } from '@/types';
 import { PaperTreeItem } from './paper-tree-item';
+import { useDroppable } from '@dnd-kit/core';
 
 interface PaperTreeFolderProps {
   folder: Folder;
@@ -15,7 +16,6 @@ interface PaperTreeFolderProps {
   onPaperDoubleClick: (paperId: string) => void;
   onPaperCheckboxToggle: (paperId: string) => void;
   onPaperContextMenu: (e: React.MouseEvent, paperId: string) => void;
-  onDropPaper: (paperId: string, folderId: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onCreateChildFolder: (name: string, parentId: string) => void;
@@ -33,7 +33,6 @@ export function PaperTreeFolder({
   onPaperDoubleClick,
   onPaperCheckboxToggle,
   onPaperContextMenu,
-  onDropPaper,
   onRenameFolder,
   onDeleteFolder,
   onCreateChildFolder,
@@ -45,8 +44,15 @@ export function PaperTreeFolder({
   const [renameValue, setRenameValue] = useState(folder.name);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
-  const [isDragOver, setIsDragOver] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: folder.id,
+    data: {
+      type: 'folder',
+      folderId: folder.id,
+    },
+  });
 
   useEffect(() => {
     if (!showMenu) return;
@@ -92,13 +98,14 @@ export function PaperTreeFolder({
   return (
     <div>
       <div
+        ref={setNodeRef}
         style={{
           display: 'flex',
           alignItems: 'center',
           padding: '6px 10px',
           paddingLeft: `${10 + depth * 16}px`,
-          background: isDragOver ? 'var(--accent-subtle)' : 'transparent',
-          outline: isDragOver ? '2px solid var(--accent)' : undefined,
+          background: isOver ? 'var(--accent-subtle)' : 'transparent',
+          outline: isOver ? '2px solid var(--accent)' : undefined,
           outlineOffset: '-2px',
           borderRadius: '8px',
           cursor: 'pointer',
@@ -107,9 +114,6 @@ export function PaperTreeFolder({
           marginBottom: '2px',
         }}
         onClick={() => setExpanded(!expanded)}
-        onDragOver={e => { if (e.dataTransfer.types.includes('application/x-paper-id')) { e.preventDefault(); setIsDragOver(true); } }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={e => { e.preventDefault(); setIsDragOver(false); const paperId = e.dataTransfer.getData('application/x-paper-id'); if (paperId) onDropPaper(paperId, folder.id); }}
       >
         <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '14px', fontSize: '10px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
         <span style={{ fontSize: '14px' }}>📁</span>
@@ -138,12 +142,10 @@ export function PaperTreeFolder({
             </div>
           )}
           {childFolders.map(child => (
-            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onDropPaper={onDropPaper} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
+            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
           ))}
           {folderPapers.map(paper => (
-            <div key={paper.id} draggable onDragStart={e => e.dataTransfer.setData('application/x-paper-id', paper.id)}>
-              <PaperTreeItem paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onDoubleClick={() => onPaperDoubleClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
-            </div>
+            <PaperTreeItem key={paper.id} paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onDoubleClick={() => onPaperDoubleClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
           ))}
         </div>
       )}

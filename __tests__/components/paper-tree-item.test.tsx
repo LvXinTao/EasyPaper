@@ -4,6 +4,16 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { PaperTreeItem } from '@/components/paper-tree-item';
 import type { PaperListItem } from '@/types';
 
+// Mock @dnd-kit/core
+jest.mock('@dnd-kit/core', () => ({
+  useDraggable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: jest.fn(),
+    isDragging: false,
+  }),
+}));
+
 const mockPaper: PaperListItem = {
   id: 'paper-1',
   title: 'Test Paper Title',

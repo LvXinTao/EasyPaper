@@ -2,6 +2,9 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import type { Folder, PaperListItem } from '@/types';
+import { DndContext, DragEndEvent, DragStartEvent, closestCenter, DragOverlay, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface FolderTreeProps {
   folders: Folder[];
@@ -22,71 +25,71 @@ interface FolderTreeProps {
 function PaperRow({
   paper,
   depth,
-  onReorder,
 }: {
   paper: PaperListItem;
   depth: number;
-  onReorder?: (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => void;
 }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [dropIndicator, setDropIndicator] = useState<'before' | 'after' | null>(null);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: paper.id,
+    data: {
+      type: 'paper',
+      paperId: paper.id,
+      folderId: paper.folderId,
+    },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    paddingLeft: `${10 + depth * 14}px`,
+    paddingTop: '3px',
+    paddingBottom: '3px',
+    paddingRight: '12px',
+    fontSize: '11px',
+    color: 'var(--text-primary)',
+    opacity: isDragging ? 0.4 : 1,
+    background: isDragging ? 'var(--accent-subtle)' : 'transparent',
+    borderRadius: '4px',
+  };
 
   return (
-    <div
-      style={{ position: 'relative' }}
-    >
-      {dropIndicator === 'before' && (
-        <div style={{ position: 'absolute', top: 0, left: `${10 + depth * 14}px`, right: '12px', height: '2px', background: 'var(--accent)', borderRadius: '1px', zIndex: 5 }} />
-      )}
-      <div
-        className="truncate"
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData('application/x-paper-id', paper.id);
-          e.dataTransfer.setData('application/x-paper-reorder', 'true');
-          e.dataTransfer.effectAllowed = 'move';
-          setIsDragging(true);
-        }}
-        onDragEnd={() => setIsDragging(false)}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/x-paper-reorder')) {
-            e.preventDefault();
-            e.stopPropagation();
-            const rect = e.currentTarget.getBoundingClientRect();
-            const midY = rect.top + rect.height / 2;
-            setDropIndicator(e.clientY < midY ? 'before' : 'after');
-          }
-        }}
-        onDragLeave={() => setDropIndicator(null)}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const draggedId = e.dataTransfer.getData('application/x-paper-id');
-          if (draggedId && draggedId !== paper.id && onReorder && dropIndicator) {
-            onReorder(draggedId, paper.id, dropIndicator);
-          }
-          setDropIndicator(null);
-        }}
-        style={{
-          paddingLeft: `${10 + depth * 14}px`,
-          paddingTop: '3px',
-          paddingBottom: '3px',
-          paddingRight: '12px',
-          fontSize: '11px',
-          color: 'var(--text-primary)',
-          cursor: 'grab',
-          opacity: isDragging ? 0.4 : 1,
-          background: isDragging ? 'var(--accent-subtle)' : 'transparent',
-          borderRadius: '4px',
-          transition: 'background 0.15s, opacity 0.15s',
-        }}
-        title={paper.title}
-      >
-        <span style={{ color: 'var(--text-tertiary)', marginRight: '4px' }}>•</span>{paper.title}
+    <div ref={setNodeRef} style={style} {...attributes} title={paper.title}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Drag Handle */}
+        <div
+          {...listeners}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '1px',
+            width: '16px',
+            height: '16px',
+            cursor: 'grab',
+            flexShrink: 0,
+            padding: '3px',
+            borderRadius: '4px',
+            // Make the hit area larger than visible area
+            marginLeft: '-2px',
+          }}
+          title="Drag to move"
+        >
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+          <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+        </div>
+        {/* Title - clickable area for selection */}
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {paper.title}
+        </span>
       </div>
-      {dropIndicator === 'after' && (
-        <div style={{ position: 'absolute', bottom: 0, left: `${10 + depth * 14}px`, right: '12px', height: '2px', background: 'var(--accent)', borderRadius: '1px', zIndex: 5 }} />
-      )}
     </div>
   );
 }
@@ -207,7 +210,14 @@ function FolderRow({
   const [renameValue, setRenameValue] = useState(folder.name);
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
-  const [isDragOver, setIsDragOver] = useState(false);
+
+  const { setNodeRef: setFolderRef, isOver: isFolderOver } = useDroppable({
+    id: folder.id,
+    data: {
+      type: 'folder',
+      folderId: folder.id,
+    },
+  });
 
   useEffect(() => {
     if (!showMenu) return;
@@ -216,16 +226,25 @@ function FolderRow({
     return () => document.removeEventListener('click', handleClick);
   }, [showMenu]);
 
-  const childFolders = folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name));
-  const folderPapers = papers
-    .filter((p) => p.folderId === folder.id)
-    .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
-      if (a.sortIndex != null) return -1;
-      if (b.sortIndex != null) return 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+  const childFolders = useMemo(
+    () => folders.filter((f) => f.parentId === folder.id).sort((a, b) => a.name.localeCompare(b.name)),
+    [folders, folder.id]
+  );
+  const folderPapers = useMemo(
+    () => papers
+      .filter((p) => p.folderId === folder.id)
+      .filter((p) => !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase()))
+      .sort((a, b) => {
+        if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+        if (a.sortIndex != null) return -1;
+        if (b.sortIndex != null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
+    [papers, folder.id, searchQuery]
+  );
+
+  // Paper IDs for this folder's SortableContext
+  const folderPaperIds = useMemo(() => folderPapers.map(p => p.id), [folderPapers]);
 
   // Count all papers in this folder and descendants
   const allDescendantIds = new Set<string>([folder.id]);
@@ -260,60 +279,26 @@ function FolderRow({
     setIsCreatingChild(false);
   };
 
-  const handleReorder = (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => {
-    if (!onReorderPapers) return;
-    const currentOrder = [...folderPapers];
-    const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
-    if (draggedIndex === -1) return;
-    const [dragged] = currentOrder.splice(draggedIndex, 1);
-    const targetIndex = currentOrder.findIndex(p => p.id === targetPaperId);
-    if (targetIndex === -1) return;
-    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-    currentOrder.splice(insertIndex, 0, dragged);
-    const orders = currentOrder.map((p, i) => ({ id: p.id, sortIndex: i }));
-    onReorderPapers(orders);
-  };
-
   return (
     <div>
       <div
+        ref={setFolderRef}
         className="flex items-center gap-1.5 cursor-pointer group transition-colors"
         style={{
           paddingLeft: `${6 + depth * 14}px`,
           paddingTop: '6px',
           paddingBottom: '6px',
           paddingRight: '12px',
-          background: isDragOver ? 'var(--accent-subtle)' : isSelected ? 'var(--accent-subtle)' : 'transparent',
-          outline: isDragOver ? '2px solid var(--accent)' : undefined,
+          background: isFolderOver ? 'var(--accent-subtle)' : isSelected ? 'var(--accent-subtle)' : 'transparent',
+          outline: isFolderOver ? '2px solid var(--accent)' : undefined,
           outlineOffset: '-2px',
-          borderRadius: isDragOver ? '6px' : undefined,
+          borderRadius: isFolderOver ? '6px' : undefined,
           position: 'relative',
           zIndex: showMenu ? 10 : undefined,
         }}
         onClick={() => {
           setExpanded(!expanded);
           onSelectFolder?.(folder.id);
-        }}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('application/x-paper-id')) {
-            e.preventDefault();
-            setIsDragOver(true);
-          }
-        }}
-        onDragEnter={(e) => {
-          if (e.dataTransfer.types.includes('application/x-paper-id')) {
-            e.preventDefault();
-            setIsDragOver(true);
-          }
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-          const paperId = e.dataTransfer.getData('application/x-paper-id');
-          if (paperId) {
-            onMovePaper(paperId, folder.id);
-          }
         }}
       >
         <button
@@ -460,14 +445,16 @@ function FolderRow({
               selectedFolderId={selectedFolderId}
             />
           ))}
-          {folderPapers.map((paper) => (
-            <PaperRow
-              key={paper.id}
-              paper={paper}
-              depth={depth + 1}
-              onReorder={handleReorder}
-            />
-          ))}
+          {/* Each folder has its own SortableContext for papers */}
+          <SortableContext items={folderPaperIds} strategy={verticalListSortingStrategy}>
+            {folderPapers.map((paper) => (
+              <PaperRow
+                key={paper.id}
+                paper={paper}
+                depth={depth + 1}
+              />
+            ))}
+          </SortableContext>
         </div>
       )}
     </div>
@@ -479,6 +466,16 @@ export function FolderTree(props: FolderTreeProps) {
 
   const [isCreatingRoot, setIsCreatingRoot] = useState(false);
   const [newRootName, setNewRootName] = useState('');
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Configure pointer sensor with constraints for better Tauri compatibility
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5, // Require 5px movement before starting drag
+      },
+    })
+  );
 
   const handleCreateRoot = async () => {
     const trimmed = newRootName.trim();
@@ -507,9 +504,22 @@ export function FolderTree(props: FolderTreeProps) {
     [papers, searchQuery]
   );
 
-  const handleRootReorder = (draggedPaperId: string, targetPaperId: string, position: 'before' | 'after') => {
+  // Get papers for a specific folder (used in handleReorder)
+  const getPapersInFolder = (folderId: string | null): PaperListItem[] => {
+    return papers
+      .filter(p => p.folderId === folderId)
+      .sort((a, b) => {
+        if (a.sortIndex != null && b.sortIndex != null) return a.sortIndex - b.sortIndex;
+        if (a.sortIndex != null) return -1;
+        if (b.sortIndex != null) return 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  };
+
+  const handleReorder = (draggedPaperId: string, targetPaperId: string, folderId: string | null, position: 'before' | 'after') => {
     if (!onReorderPapers) return;
-    const currentOrder = [...rootPapers];
+    const folderPapers = getPapersInFolder(folderId);
+    const currentOrder = [...folderPapers];
     const draggedIndex = currentOrder.findIndex(p => p.id === draggedPaperId);
     if (draggedIndex === -1) return;
     const [dragged] = currentOrder.splice(draggedIndex, 1);
@@ -521,73 +531,144 @@ export function FolderTree(props: FolderTreeProps) {
     onReorderPapers(orders);
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over) return;
+
+    const activeData = active.data.current;
+    const overData = over.data.current;
+
+    // Move paper to folder
+    if (overData?.type === 'folder') {
+      onMovePaper(active.id as string, over.id as string);
+      return;
+    }
+
+    // Reorder papers within same folder
+    if (overData?.type === 'paper' && activeData?.folderId === overData?.folderId) {
+      const overRect = over.rect;
+      const midY = overRect.top + overRect.height / 2;
+      const activeRect = active.rect.current.translated;
+      if (!activeRect) return;
+
+      const position: 'before' | 'after' = activeRect.top < midY ? 'before' : 'after';
+      handleReorder(active.id as string, over.id as string, activeData?.folderId ?? null, position);
+    }
+  };
+
+  const activePaper = activeId ? papers.find(p => p.id === activeId) : null;
+
+  // Get paper IDs for root papers SortableContext
+  const rootPaperIds = useMemo(() => rootPapers.map(p => p.id), [rootPapers]);
+
   return (
-    <div>
-      <div
-        className="flex items-center justify-between"
-        style={{ padding: '6px 12px 4px 10px' }}
-      >
-        <span className="text-xs font-medium uppercase" style={{ color: 'var(--text-tertiary)' }}>Folders</span>
-        <button
-          onClick={() => { setIsCreatingRoot(true); setNewRootName(''); }}
-          className="text-sm leading-none"
-          style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
-          title="New folder"
-        >
-          +
-        </button>
-      </div>
-      {isCreatingRoot && (
-        <div className="flex items-center gap-2 px-3 py-1.5">
-          <span>📁</span>
-          <input
-            autoFocus
-            placeholder="Folder name"
-            value={newRootName}
-            onChange={(e) => setNewRootName(e.target.value)}
-            onBlur={handleCreateRoot}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleCreateRoot();
-              if (e.key === 'Escape') setIsCreatingRoot(false);
-            }}
-            className="text-sm rounded px-1 py-0.5 outline-none flex-1"
-            style={{
-              border: '1px solid var(--border-strong)',
-              background: 'var(--surface)',
-              color: 'var(--text-primary)',
-            }}
-            maxLength={100}
-          />
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div>
+        <div
+            className="flex items-center justify-between"
+            style={{ padding: '6px 12px 4px 10px' }}
+          >
+            <span className="text-xs font-medium uppercase" style={{ color: 'var(--text-tertiary)' }}>Folders</span>
+            <button
+              onClick={() => { setIsCreatingRoot(true); setNewRootName(''); }}
+              className="text-sm leading-none"
+              style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
+              title="New folder"
+            >
+              +
+            </button>
+          </div>
+          {isCreatingRoot && (
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <span>📁</span>
+              <input
+                autoFocus
+                placeholder="Folder name"
+                value={newRootName}
+                onChange={(e) => setNewRootName(e.target.value)}
+                onBlur={handleCreateRoot}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateRoot();
+                  if (e.key === 'Escape') setIsCreatingRoot(false);
+                }}
+                className="text-sm rounded px-1 py-0.5 outline-none flex-1"
+                style={{
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--surface)',
+                  color: 'var(--text-primary)',
+                }}
+                maxLength={100}
+              />
+            </div>
+          )}
+          {rootFolders.map((folder) => (
+            <FolderRow
+              key={folder.id}
+              folder={folder}
+              depth={0}
+              papers={papers}
+              folders={folders}
+              currentPaperId={currentPaperId}
+              searchQuery={searchQuery}
+              onClose={onClose}
+              onCreateFolder={onCreateFolder}
+              onRenameFolder={onRenameFolder}
+              onDeleteFolder={onDeleteFolder}
+              onMovePaper={onMovePaper}
+              onDeletePaper={onDeletePaper}
+              onReorderPapers={onReorderPapers}
+              onSelectFolder={onSelectFolder}
+              selectedFolderId={selectedFolderId}
+            />
+          ))}
+          {/* Root papers have their own SortableContext */}
+          <SortableContext items={rootPaperIds} strategy={verticalListSortingStrategy}>
+            {rootPapers.map((paper) => (
+              <PaperRow
+                key={paper.id}
+                paper={paper}
+                depth={0}
+              />
+            ))}
+          </SortableContext>
         </div>
-      )}
-      {rootFolders.map((folder) => (
-        <FolderRow
-          key={folder.id}
-          folder={folder}
-          depth={0}
-          papers={papers}
-          folders={folders}
-          currentPaperId={currentPaperId}
-          searchQuery={searchQuery}
-          onClose={onClose}
-          onCreateFolder={onCreateFolder}
-          onRenameFolder={onRenameFolder}
-          onDeleteFolder={onDeleteFolder}
-          onMovePaper={onMovePaper}
-          onDeletePaper={onDeletePaper}
-          onReorderPapers={onReorderPapers}
-          onSelectFolder={onSelectFolder}
-          selectedFolderId={selectedFolderId}
-        />
-      ))}
-      {rootPapers.map((paper) => (
-        <PaperRow
-          key={paper.id}
-          paper={paper}
-          depth={0}
-          onReorder={handleRootReorder}
-        />
-      ))}
-    </div>
+      <DragOverlay>
+        {activePaper && (
+          <div
+            style={{
+              paddingLeft: '10px',
+              paddingTop: '6px',
+              paddingBottom: '6px',
+              paddingRight: '12px',
+              fontSize: '11px',
+              color: 'var(--text-primary)',
+              background: 'var(--surface)',
+              borderRadius: '4px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+              cursor: 'grabbing',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+                <div style={{ width: '4px', height: '2px', background: 'var(--text-tertiary)', borderRadius: '1px' }} />
+              </div>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activePaper.title}</span>
+            </div>
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
   );
 }
