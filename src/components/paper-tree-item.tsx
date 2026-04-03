@@ -2,6 +2,7 @@
 
 import type { PaperListItem, PaperStatus } from '@/types';
 import { formatRelativeTime } from '@/lib/format';
+import { useDraggable } from '@dnd-kit/core';
 
 interface PaperTreeItemProps {
   paper: PaperListItem;
@@ -38,6 +39,20 @@ export function PaperTreeItem({
   const status = statusConfig[paper.status] || statusConfig.pending;
   const isStarred = paper.starred === true;
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    isDragging,
+  } = useDraggable({
+    id: paper.id,
+    data: {
+      type: 'paper',
+      paperId: paper.id,
+      folderId: paper.folderId,
+    },
+  });
+
   const handleStarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleStar?.();
@@ -45,6 +60,7 @@ export function PaperTreeItem({
 
   return (
     <div
+      ref={setNodeRef}
       style={{
         padding: '10px 10px 10px ' + `${12 + depth * 16}px`,
         marginBottom: '2px',
@@ -53,10 +69,13 @@ export function PaperTreeItem({
         borderRadius: '8px',
         cursor: 'pointer',
         transition: 'background 0.15s ease, border 0.15s ease',
+        opacity: isDragging ? 0.4 : 1,
       }}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
+      {...attributes}
+      {...listeners}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
         {/* Checkbox */}
