@@ -1,9 +1,62 @@
 import crypto from 'crypto';
 import os from 'os';
+import path from 'path';
+import fs from 'fs';
 
+let cachedKey: Buffer | null = null;
+
+/**
+ * Get or create a stable encryption key for this machine.
+ * Uses a stored random key file for stability across hostname changes.
+ * Falls back to hostname-based key only if file access fails.
+ */
 function getMachineKey(): Buffer {
-  const hostname = os.hostname();
-  return crypto.createHash('sha256').update(hostname).digest();
+  if (cachedKey) return cachedKey;
+
+  const baseDir = path.join(os.homedir(), '.easypaper');
+  const keyPath = path.join(baseDir, '.key');
+
+  try {
+    // Ensure base directory exists with restricted permissions
+    if (!fs.existsSync(baseDir)) {
+      fs.mkdirSync(baseDir, { recursive: true, mode: 0o700 });
+    } else {
+      // Fix permissions on existing directory if needed
+      try {
+        fs.chmodSync(baseDir, 0o700);
+      } catch {
+        // Ignore chmod errors (e.g., on some filesystems)
+      }
+    }
+
+    // Try to read existing key file
+    try {
+      const keyData = fs.readFileSync(keyPath, 'utf-8').trim();
+      if (keyData.length === 64 && /^[0-9a-f]+$/i.test(keyData)) {
+        cachedKey = Buffer.from(keyData, 'hex');
+        return cachedKey;
+      }
+    } catch {
+      // Key file doesn't exist or is unreadable, will create new one
+    }
+
+    // Generate new random key
+    const newKey = crypto.randomBytes(32);
+
+    // Write to temp file first, then rename for atomic operation
+    const tempPath = keyPath + '.tmp';
+    fs.writeFileSync(tempPath, newKey.toString('hex'), { mode: 0o600 });
+    fs.renameSync(tempPath, keyPath);
+
+    cachedKey = newKey;
+    return cachedKey;
+  } catch (error) {
+    // Log fallback activation for debugging
+    console.warn('[crypto] Falling back to hostname-based key due to file access error:', error);
+    // Fallback to hostname-based key (less stable but works if file access fails)
+    const hostname = os.hostname();
+    return crypto.createHash('sha256').update(hostname).digest();
+  }
 }
 
 export function encryptApiKey(apiKey: string): { encrypted: string; iv: string } {
