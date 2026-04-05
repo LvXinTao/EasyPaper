@@ -52,11 +52,9 @@ const NODE_DOWNLOAD_URLS = {
 function main() {
   console.log('Building sidecar for Tauri...\n');
 
-  // Step 1: Ensure Next.js standalone build exists
-  if (!fs.existsSync(NEXT_STANDALONE)) {
-    console.log('Running next build...');
-    execSync('npm run build', { cwd: PROJECT_ROOT, stdio: 'inherit' });
-  }
+  // Step 1: Always run next build to ensure latest code is included
+  console.log('Running next build...');
+  execSync('npm run build', { cwd: PROJECT_ROOT, stdio: 'inherit' });
 
   if (!fs.existsSync(NEXT_STANDALONE)) {
     console.error('ERROR: Next.js standalone build not found at', NEXT_STANDALONE);

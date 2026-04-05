@@ -39,7 +39,7 @@ interface InlineNoteEditorProps {
   selection?: TextSelection;
   triggerPosition: { x: number; y: number };
   onSave: (data: { title: string; content: string; tags: NoteTag[]; selection?: TextSelection }) => Promise<void>;
-  onDelete?: () => Promise<void>;
+  onDelete?: (noteId: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -87,11 +87,11 @@ export function InlineNoteEditor({
   };
 
   const handleDelete = async () => {
-    if (!onDelete) return;
+    if (!onDelete || !note) return;
     setLoading(true);
     setError(null);
     try {
-      await onDelete();
+      await onDelete(note.id);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete note');
@@ -112,7 +112,8 @@ export function InlineNoteEditor({
       }}
       role="dialog"
       aria-label="Edit note"
-      onClick={(e) => e.stopPropagation()} // Prevent clicks inside from triggering document's click handler
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Error banner */}
       {error && (
