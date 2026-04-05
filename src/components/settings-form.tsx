@@ -95,74 +95,87 @@ export function SettingsForm() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="mb-6 pb-6" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>Appearance</h3>
+    <div className="flex flex-col gap-3">
+      {/* Appearance */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px' }}>
+          Appearance
+        </h3>
         <ThemePicker />
       </div>
 
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-          Base URL
-        </label>
-        <input
-          type="url"
-          value={settings.baseUrl}
-          onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
-          className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-          style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-          placeholder="https://api.openai.com/v1"
-        />
+      {/* AI Provider */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px' }}>
+          AI Provider
+        </h3>
+        <div className="flex flex-col gap-2">
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              Base URL
+            </label>
+            <input
+              type="url"
+              value={settings.baseUrl}
+              onChange={(e) => setSettings({ ...settings, baseUrl: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+              style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+              placeholder="https://api.openai.com/v1"
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              API Key
+              {settings.hasApiKey && (
+                <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ color: 'var(--text-tertiary)', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>configured</span>
+              )}
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+              style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+              placeholder={settings.hasApiKey ? 'Enter new key to update' : 'sk-xxx'}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Model
+              </label>
+              <input
+                type="text"
+                value={settings.model}
+                onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+                placeholder="gpt-4o"
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Vision Model
+              </label>
+              <input
+                type="text"
+                value={settings.visionModel}
+                onChange={(e) => setSettings({ ...settings, visionModel: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+                placeholder="gpt-4o"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-          API Key
-          {settings.hasApiKey && (
-            <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ color: 'var(--text-tertiary)', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>configured</span>
-          )}
-        </label>
-        <input
-          type="password"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-          style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-          placeholder={settings.hasApiKey ? 'Enter new key to update' : 'sk-xxx'}
-        />
-      </div>
-
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-          Model
-        </label>
-        <input
-          type="text"
-          value={settings.model}
-          onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-          className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-          style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-          placeholder="gpt-4o"
-        />
-      </div>
-
-      <div>
-        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-          Vision Model
-        </label>
-        <input
-          type="text"
-          value={settings.visionModel}
-          onChange={(e) => setSettings({ ...settings, visionModel: e.target.value })}
-          className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-          style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-          placeholder="gpt-4o"
-        />
-      </div>
-
-      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
-          Analysis Concurrency
+      {/* Analysis */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px' }}>
+          Analysis
         </h3>
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
@@ -183,26 +196,26 @@ export function SettingsForm() {
         </div>
       </div>
 
-      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
-          Embedding Model
+      {/* Embedding */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px' }}>
+          Embedding
         </h3>
+        <div className="flex flex-col gap-2">
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+              Embedding Model
+            </label>
+            <input
+              type="text"
+              value={settings.embeddingModel}
+              onChange={(e) => setSettings({ ...settings, embeddingModel: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+              style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+              placeholder="text-embedding-3-small"
+            />
+          </div>
 
-        <div className="mb-4">
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-            Embedding Model
-          </label>
-          <input
-            type="text"
-            value={settings.embeddingModel}
-            onChange={(e) => setSettings({ ...settings, embeddingModel: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-            style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-            placeholder="text-embedding-3-small"
-          />
-        </div>
-
-        <div className="mb-4">
           <label
             style={{
               display: 'flex',
@@ -222,47 +235,48 @@ export function SettingsForm() {
             />
             Use same API service
           </label>
+
+          {!settings.useSameApiForEmbedding && (
+            <>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Embedding Base URL
+                </label>
+                <input
+                  type="url"
+                  value={settings.embeddingBaseUrl}
+                  onChange={(e) => setSettings({ ...settings, embeddingBaseUrl: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                  style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+                  placeholder="https://api.openai.com/v1"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Embedding API Key
+                  {settings.hasEmbeddingApiKey && (
+                    <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ color: 'var(--text-tertiary)', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>configured</span>
+                  )}
+                </label>
+                <input
+                  type="password"
+                  value={embeddingApiKey}
+                  onChange={(e) => setEmbeddingApiKey(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
+                  style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
+                  placeholder={settings.hasEmbeddingApiKey ? 'Enter new key to update' : 'sk-xxx'}
+                />
+              </div>
+            </>
+          )}
         </div>
-
-        {!settings.useSameApiForEmbedding && (
-          <>
-            <div className="mb-4">
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                Embedding Base URL
-              </label>
-              <input
-                type="url"
-                value={settings.embeddingBaseUrl}
-                onChange={(e) => setSettings({ ...settings, embeddingBaseUrl: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-                style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-                placeholder="https://api.openai.com/v1"
-              />
-            </div>
-
-            <div className="mb-2">
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                Embedding API Key
-                {settings.hasEmbeddingApiKey && (
-                  <span className="ml-2 text-xs font-normal px-2 py-0.5 rounded-full" style={{ color: 'var(--text-tertiary)', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>configured</span>
-                )}
-              </label>
-              <input
-                type="password"
-                value={embeddingApiKey}
-                onChange={(e) => setEmbeddingApiKey(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none"
-                style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}
-                placeholder={settings.hasEmbeddingApiKey ? 'Enter new key to update' : 'sk-xxx'}
-              />
-            </div>
-          </>
-        )}
       </div>
 
-      <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
-          Zotero Integration
+      {/* Zotero */}
+      <div className="rounded-xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <h3 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '12px' }}>
+          Zotero
         </h3>
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}>
@@ -282,6 +296,7 @@ export function SettingsForm() {
         </div>
       </div>
 
+      {/* Status message + Save button */}
       {message && (
         <div
           className="text-sm font-medium px-4 py-2.5 rounded-xl"
