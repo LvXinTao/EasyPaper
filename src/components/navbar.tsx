@@ -144,7 +144,6 @@ export function Navbar() {
               border: '1px solid var(--border-strong)',
               boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
               padding: '24px',
-              animation: 'fadeIn 150ms ease-out, scaleIn 150ms ease-out',
               maxHeight: '65vh',
               overflowY: 'auto',
             }}
