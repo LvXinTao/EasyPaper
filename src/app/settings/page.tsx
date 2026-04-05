@@ -10,7 +10,7 @@ export default function SettingsPage() {
         <p className="text-sm mb-4" style={{ color: 'var(--text-tertiary)' }}>
           Configure your AI provider and customize appearance.
         </p>
-        <div className="max-h-[calc(100vh-180px)] overflow-y-auto pr-1">
+        <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
           <SettingsForm />
         </div>
         <p className="mt-4 text-xs text-center" style={{ color: 'var(--text-tertiary)' }}>

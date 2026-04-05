@@ -139,7 +139,15 @@ export function Navbar() {
         >
           <div
             className="max-w-xl w-full mx-4 rounded-2xl"
-            style={{ background: 'var(--bg)', border: '1px solid var(--border-strong)', boxShadow: '0 16px 64px rgba(0,0,0,0.5)', padding: '24px', animation: 'fadeIn 150ms ease-out, scaleIn 150ms ease-out' }}
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border-strong)',
+              boxShadow: '0 16px 64px rgba(0,0,0,0.5)',
+              padding: '24px',
+              animation: 'fadeIn 150ms ease-out, scaleIn 150ms ease-out',
+              maxHeight: '65vh',
+              overflowY: 'auto',
+            }}
           >
             <div className="flex items-center justify-between mb-4">
               <div>
