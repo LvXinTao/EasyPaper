@@ -270,18 +270,8 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
     setEditorPopup(null);
   }, [page]);
 
-  // Close editor on click outside
-  useEffect(() => {
-    if (!editorPopup) return;
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-note-editor]') && !target.closest('[data-selection-toolbar]')) {
-        setEditorPopup(null);
-      }
-    };
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [editorPopup]);
+  // Close editor on click outside is handled by a backdrop overlay in the JSX below
+  // (replaces document.addEventListener which conflicts with React 19's event delegation)
 
   // Handle note creation
   const handleNoteCreate = useCallback(async (data: { title: string; content: string; tags: NoteTag[]; selection?: TextSelection }) => {
@@ -307,11 +297,8 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
     await onNoteUpdate(updatedNote);
   }, [onNoteUpdate, editorPopup]);
 
-  // Handle note delete
-  const handleNoteDelete = useCallback(async () => {
-    if (!onNoteDelete || !editorPopup?.note) return;
-    await onNoteDelete(editorPopup.note.id);
-  }, [onNoteDelete, editorPopup]);
+  // Note: onNoteDelete is passed directly to InlineNoteEditor (which passes noteId)
+  // to avoid stale closure issues with editorPopup
 
   // Handle annotation bubble click
   const handleAnnotationClick = useCallback((note: Note) => {
@@ -1106,19 +1093,24 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
         />
       ))}
 
-      {/* Inline Note Editor */}
+      {/* Inline Note Editor with click-outside backdrop */}
       {editorPopup && (
-        <div data-note-editor>
+        <>
+          {/* Invisible backdrop to catch clicks outside the editor */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setEditorPopup(null)}
+          />
           <InlineNoteEditor
             mode={editorPopup.mode}
             note={editorPopup.note}
             selection={editorPopup.selection}
             triggerPosition={editorPopup.position}
             onSave={editorPopup.mode === 'create' ? handleNoteCreate : handleNoteUpdate}
-            onDelete={editorPopup.mode === 'edit' ? handleNoteDelete : undefined}
+            onDelete={editorPopup.mode === 'edit' ? onNoteDelete : undefined}
             onClose={() => setEditorPopup(null)}
           />
-        </div>
+        </>
       )}
     </div>
   );
