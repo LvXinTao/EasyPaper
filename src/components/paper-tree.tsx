@@ -30,11 +30,11 @@ interface PaperTreeProps {
   // Filter props
   statusFilter: 'all' | 'analyzed' | 'pending' | 'error';
   starredOnly: boolean;
-  sortMode: 'recent' | 'name' | 'starred';
+  sortMode: 'recent' | 'name' | 'starred' | 'date';
   stats: { total: number; analyzed: number; pending: number; error: number; starred: number };
   onStatusFilterChange: (filter: 'all' | 'analyzed' | 'pending' | 'error') => void;
   onStarredOnlyChange: (value: boolean) => void;
-  onSortModeChange: (mode: 'recent' | 'name' | 'starred') => void;
+  onSortModeChange: (mode: 'recent' | 'name' | 'starred' | 'date') => void;
 }
 
 export function PaperTree({
@@ -188,10 +188,11 @@ export function PaperTree({
               <input type="checkbox" checked={starredOnly} onChange={e => onStarredOnlyChange(e.target.checked)} style={{ accentColor: 'var(--amber)', width: '14px', height: '14px' }} />
               ★ Starred ({stats.starred})
             </label>
-            <select value={sortMode} onChange={e => onSortModeChange(e.target.value as 'recent' | 'name' | 'starred')} style={{
+            <select value={sortMode} onChange={e => onSortModeChange(e.target.value as 'recent' | 'name' | 'starred' | 'date')} style={{
               flex: 1, padding: '4px 6px', fontSize: '11px', background: 'var(--surface)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer',
             }}>
               <option value="recent">Recent</option>
+              <option value="date">Date</option>
               <option value="name">Name</option>
               <option value="starred">Starred</option>
             </select>

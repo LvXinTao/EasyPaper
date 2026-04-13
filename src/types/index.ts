@@ -144,6 +144,7 @@ export interface PaperListItem {
   folderId?: string | null;
   sortIndex?: number;
   starred?: boolean;
+  pdfDate?: string;
 }
 
 export interface PaperData {
