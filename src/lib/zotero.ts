@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -65,21 +66,41 @@ function openDb(dbPath: string): { db: Database.Database; cleanup: () => void } 
   }
 
   // Copy to temp location to bypass lock from running Zotero
-  const tempDbPath = path.join(os.tmpdir(), `easypaper-zotero-${Date.now()}.sqlite`);
-  fs.copyFileSync(dbPath, tempDbPath);
-  for (const ext of ['-wal', '-shm']) {
-    const src = dbPath + ext;
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, tempDbPath + ext);
-    }
-  }
+  const tempDbPath = path.join(
+    os.tmpdir(),
+    `easypaper-zotero-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.sqlite`
+  );
 
-  const db = new Database(tempDbPath, { readonly: true });
-  const cleanup = () => {
-    db.close();
+  const cleanupTempFiles = () => {
     for (const f of [tempDbPath, tempDbPath + '-wal', tempDbPath + '-shm']) {
       try { fs.unlinkSync(f); } catch {}
     }
+  };
+
+  try {
+    fs.copyFileSync(dbPath, tempDbPath);
+    for (const ext of ['-wal', '-shm']) {
+      const src = dbPath + ext;
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, tempDbPath + ext);
+      }
+    }
+  } catch (err) {
+    cleanupTempFiles();
+    throw new Error(`Failed to copy Zotero database: ${err instanceof Error ? err.message : err}`);
+  }
+
+  let db: Database.Database;
+  try {
+    db = new Database(tempDbPath, { readonly: true });
+  } catch (err) {
+    cleanupTempFiles();
+    throw err;
+  }
+
+  const cleanup = () => {
+    db.close();
+    cleanupTempFiles();
   };
 
   return { db, cleanup };
