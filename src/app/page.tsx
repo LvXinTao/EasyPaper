@@ -35,7 +35,14 @@ export default function HomePage() {
   });
   const [statusFilter, setStatusFilter] = useState<'all' | 'analyzed' | 'pending' | 'error'>('all');
   const [starredOnly, setStarredOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>('recent');
+  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>(() => {
+    try { return (localStorage.getItem('homepageSortMode') as 'recent' | 'name' | 'starred' | 'date') || 'recent'; } catch { return 'recent'; }
+  });
+
+  const handleSortModeChange = useCallback((newMode: 'recent' | 'name' | 'starred' | 'date') => {
+    setSortMode(newMode);
+    try { localStorage.setItem('homepageSortMode', newMode); } catch { /* ignore */ }
+  }, []);
 
   const { toasts, showToast, dismissToast } = useToast();
 
@@ -365,7 +372,7 @@ export default function HomePage() {
         stats={stats}
         onStatusFilterChange={setStatusFilter}
         onStarredOnlyChange={setStarredOnly}
-        onSortModeChange={setSortMode}
+        onSortModeChange={handleSortModeChange}
       />
     </div>
   );
