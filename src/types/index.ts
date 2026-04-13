@@ -37,7 +37,21 @@ export interface PaperMetadata {
   };
   embeddingStatus?: EmbeddingStatus;
   embeddingError?: string;
-  embeddingGeneratedAt?: string;
+  pdfMetadata?: PdfMetadata;
+}
+
+export type MetadataSource = 'pdf-properties' | 'text-extraction' | 'manual';
+
+export interface PdfMetadata {
+  title?: string;
+  authors?: string[];
+  date?: string;
+  subject?: string;
+  keywords?: string[];
+  creator?: string;
+  producer?: string;
+  fieldSources: Record<string, MetadataSource>;
+  extractedAt: string;
 }
 
 export interface AnalysisSection {
