@@ -15,7 +15,7 @@ import { MetadataCard } from '@/components/paper/metadata-card';
 import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
-import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection } from '@/types';
+import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection, PdfMetadata } from '@/types';
 import type { PdfViewerRef } from '@/components/pdf-viewer';
 
 // Dynamic import for PdfViewer to skip SSR (required for react-pdf)
@@ -540,7 +540,7 @@ export default function PaperDetailPage() {
     }
   }, [paperId, refetch]);
 
-  const handleUpdateMetadata = useCallback(async (fields: any) => {
+  const handleUpdateMetadata = useCallback(async (fields: Partial<PdfMetadata>) => {
     const res = await fetch(`/api/paper/${paperId}/metadata`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
