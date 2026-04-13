@@ -140,6 +140,7 @@ export async function extractPdfMetadata(pdfPath: string): Promise<PdfMetadataRe
       interface CharInfo { text: string; size: number; x: number; y: number }
       const chars: CharInfo[] = [];
       stext.walk({
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         onChar(c: string, _origin: number[], _font: unknown, size: number, _quad: unknown, _color: unknown) {
           if (c.trim()) {
             chars.push({ text: c, size, x: _origin[0], y: _origin[1] });

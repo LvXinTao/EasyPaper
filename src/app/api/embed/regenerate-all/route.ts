@@ -19,6 +19,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 // POST - Regenerate embeddings for all analyzed papers
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function POST(request: NextRequest) {
   const papers = await storage.listPapers();
 

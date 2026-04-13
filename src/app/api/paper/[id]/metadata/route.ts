@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
-import type { PdfMetadata } from '@/types';
+import type { PdfMetadata, MetadataSource } from '@/types';
 
 interface RouteContext { params: Promise<{ id: string }>; }
 
@@ -17,20 +17,20 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const body = await request.json();
   const current = await storage.getMetadata(id);
-  const existingPdfMeta = (current as any).pdfMetadata || {
+  const existingPdfMeta = (current.pdfMetadata || {
     fieldSources: {},
     extractedAt: new Date().toISOString(),
-  };
+  }) as PdfMetadata;
 
   const updated = { ...existingPdfMeta };
-  const fieldSources = { ...updated.fieldSources };
+  const fieldSources = { ...updated.fieldSources } as Record<string, MetadataSource>;
 
   for (const field of EDITABLE_FIELDS) {
     if (body[field] !== undefined) {
       if (field === 'title' && (typeof body.title !== 'string' || !body.title.trim())) {
         return createErrorResponse('VALIDATION_ERROR', 'Title cannot be empty');
       }
-      (updated as any)[field] = body[field];
+      updated[field] = body[field];
       fieldSources[field] = 'manual';
     }
   }
@@ -40,7 +40,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const newMetadata = await storage.updateMetadata(id, {
     pdfMetadata: updated,
-  } as any);
+  });
 
-  return NextResponse.json({ pdfMetadata: (newMetadata as any).pdfMetadata });
+  return NextResponse.json({ pdfMetadata: (newMetadata as { pdfMetadata: PdfMetadata }).pdfMetadata });
 }

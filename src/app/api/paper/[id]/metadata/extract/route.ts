@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
 import { extractPdfMetadata } from '@/lib/pdf-metadata';
+import type { PdfMetadataResult } from '@/lib/pdf-metadata';
 
 interface RouteContext { params: Promise<{ id: string }>; }
 
@@ -15,13 +16,13 @@ export async function POST(_request: Request, context: RouteContext) {
   const newMetadata = await extractPdfMetadata(pdfPath);
 
   const current = await storage.getMetadata(id);
-  const existingPdfMeta = current.pdfMetadata;
+  const existingPdfMeta = current.pdfMetadata as PdfMetadataResult | undefined;
 
   // Preserve manually edited fields
   if (existingPdfMeta && existingPdfMeta.fieldSources) {
     for (const field of Object.keys(existingPdfMeta.fieldSources)) {
       if (existingPdfMeta.fieldSources[field] === 'manual') {
-        (newMetadata as any)[field] = (existingPdfMeta as any)[field];
+        (newMetadata as Record<string, unknown>)[field] = (existingPdfMeta as Record<string, unknown>)[field];
         newMetadata.fieldSources[field] = 'manual';
       }
     }
@@ -31,7 +32,7 @@ export async function POST(_request: Request, context: RouteContext) {
   await storage.updateMetadata(id, {
     pages: newMetadata.pageCount,
     pdfMetadata: newMetadata,
-  } as any);
+  });
 
   return NextResponse.json({ pdfMetadata: newMetadata });
 }

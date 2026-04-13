@@ -21,7 +21,8 @@ jest.mock('mupdf', () => {
   };
 });
 
-const mupdfMocks = require('mupdf').__mocks as {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mupdfMocks = require('mupdf').__mocks as {
   mockGetMetaData: jest.Mock;
   mockCountPages: jest.Mock;
   mockLoadPage: jest.Mock;

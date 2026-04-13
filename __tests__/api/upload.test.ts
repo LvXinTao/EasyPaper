@@ -67,6 +67,7 @@ describe('POST /api/upload', () => {
     expect(response.status).toBe(400);
   });
   it('extracts PDF metadata on upload', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { extractPdfMetadata } = require('@/lib/pdf-metadata');
 
     const file = createMockFile('fake pdf content', 'test.pdf', 'application/pdf');
@@ -76,7 +77,7 @@ describe('POST /api/upload', () => {
     expect(response.status).toBe(201);
     expect(extractPdfMetadata).toHaveBeenCalledWith('/test/paper/original.pdf');
 
-    // Verify metadata was saved with pdfMetadata
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { storage } = require('@/lib/storage');
     const savedMetadata = storage.saveMetadata.mock.calls[0][1];
     expect(savedMetadata.pages).toBe(5);

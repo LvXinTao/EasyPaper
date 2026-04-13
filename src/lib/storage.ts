@@ -241,7 +241,8 @@ export const storage = {
       for (const dir of dirs) {
         try {
           const metadata = await this.getMetadata(dir);
-          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null, sortIndex: metadata.sortIndex, starred: metadata.starred, pdfDate: (metadata as any).pdfMetadata?.date });
+          const pdfMeta = metadata.pdfMetadata as { date?: string } | undefined;
+          papers.push({ id: metadata.id, title: metadata.title, createdAt: metadata.createdAt, status: metadata.status, folderId: metadata.folderId ?? null, sortIndex: metadata.sortIndex, starred: metadata.starred, pdfDate: pdfMeta?.date });
         } catch { /* Skip directories without valid metadata */ }
       }
       return papers;
