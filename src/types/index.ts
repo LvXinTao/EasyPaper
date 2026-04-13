@@ -37,6 +37,7 @@ export interface PaperMetadata {
   };
   embeddingStatus?: EmbeddingStatus;
   embeddingError?: string;
+  embeddingGeneratedAt?: string;
   pdfMetadata?: PdfMetadata;
 }
 
