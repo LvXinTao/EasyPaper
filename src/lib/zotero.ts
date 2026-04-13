@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -44,12 +45,65 @@ export function getZoteroDbPath(settings: ZoteroSettings): string {
 
 /**
  * Opens a read-only connection to the Zotero database.
+ * If the database is locked (Zotero is running), copies it to a temp location first.
  */
-function openDb(dbPath: string): Database.Database {
+function openDb(dbPath: string): { db: Database.Database; cleanup: () => void } {
   if (!fs.existsSync(dbPath)) {
     throw new Error(`Zotero database not found at ${dbPath}`);
   }
-  return new Database(dbPath, { readonly: true });
+
+  // Try opening directly (works when Zotero is not running)
+  try {
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      db.prepare('SELECT 1').get();
+      return { db, cleanup: () => db.close() };
+    } catch {
+      db.close();
+    }
+  } catch {
+    // Database open itself failed, fall through to copy approach
+  }
+
+  // Copy to temp location to bypass lock from running Zotero
+  const tempDbPath = path.join(
+    os.tmpdir(),
+    `easypaper-zotero-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.sqlite`
+  );
+
+  const cleanupTempFiles = () => {
+    for (const f of [tempDbPath, tempDbPath + '-wal', tempDbPath + '-shm']) {
+      try { fs.unlinkSync(f); } catch {}
+    }
+  };
+
+  try {
+    fs.copyFileSync(dbPath, tempDbPath);
+    for (const ext of ['-wal', '-shm']) {
+      const src = dbPath + ext;
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, tempDbPath + ext);
+      }
+    }
+  } catch (err) {
+    cleanupTempFiles();
+    throw new Error(`Failed to copy Zotero database: ${err instanceof Error ? err.message : err}`);
+  }
+
+  let db: Database.Database;
+  try {
+    db = new Database(tempDbPath, { readonly: true });
+  } catch (err) {
+    cleanupTempFiles();
+    throw err;
+  }
+
+  const cleanup = () => {
+    db.close();
+    cleanupTempFiles();
+  };
+
+  return { db, cleanup };
 }
 
 /**
@@ -109,7 +163,7 @@ export function getCollections(
     return { collections: [], totalPapers: 0 };
   }
 
-  const db = openDb(dbPath);
+  const { db, cleanup } = openDb(dbPath);
   try {
     const rows = db
       .prepare(
@@ -138,7 +192,7 @@ export function getCollections(
 
     return { collections: buildCollectionTree(rows), totalPapers: count };
   } finally {
-    db.close();
+    cleanup();
   }
 }
 
@@ -164,7 +218,7 @@ export function getItems(
     return [];
   }
 
-  const db = openDb(dbPath);
+  const { db, cleanup } = openDb(dbPath);
   try {
     let query: string;
     let params: unknown[];
@@ -225,7 +279,7 @@ export function getItems(
       pdfFilename: extractFilename(row.pdfPath),
     }));
   } finally {
-    db.close();
+    cleanup();
   }
 }
 
