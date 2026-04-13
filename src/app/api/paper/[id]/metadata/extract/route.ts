@@ -22,7 +22,8 @@ export async function POST(_request: Request, context: RouteContext) {
   if (existingPdfMeta && existingPdfMeta.fieldSources) {
     for (const field of Object.keys(existingPdfMeta.fieldSources)) {
       if (existingPdfMeta.fieldSources[field] === 'manual') {
-        (newMetadata as Record<string, unknown>)[field] = (existingPdfMeta as Record<string, unknown>)[field];
+        const value = (existingPdfMeta as unknown as Record<string, unknown>)[field];
+        (newMetadata as unknown as Record<string, unknown>)[field] = value;
         newMetadata.fieldSources[field] = 'manual';
       }
     }
