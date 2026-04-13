@@ -25,6 +25,7 @@ interface ParseOptions {
 const BATCH_SIZE = 15;
 const BATCH_OVERLAP = 2;
 const MAX_TOKENS = 16384;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TIMEOUT_MS = 300_000; // 5 minutes max - but actual timeout is based on idle time
 const IDLE_TIMEOUT_MS = 60_000; // Abort if no chunk received for 60 seconds
 const DPI = 120;
@@ -266,6 +267,7 @@ async function executeBatchWithRetry(
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const controller = new AbortController();
     let idleTimeout: NodeJS.Timeout | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     let lastChunkTime = Date.now();
 
     // Reset idle timeout whenever we receive a chunk

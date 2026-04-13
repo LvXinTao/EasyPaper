@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
+import type { PdfMetadataResult } from '@/lib/pdf-metadata';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -20,19 +21,27 @@ export async function POST(request: Request) {
     await storage.createPaperDir(paperId);
     await storage.savePdf(paperId, buffer);
 
-    // Extract page count by scanning PDF structure
+    // Extract PDF metadata and accurate page count (best-effort, doesn't block upload)
     let pageCount = 0;
+    let pdfMetadata: PdfMetadataResult | undefined = undefined;
     try {
-      const content = buffer.toString('binary');
-      const matches = content.match(/\/Type\s*\/Page(?!s)/g);
-      pageCount = matches ? matches.length : 0;
+      const { extractPdfMetadata } = await import('@/lib/pdf-metadata');
+      const result = await extractPdfMetadata(storage.getPdfPath(paperId));
+      pageCount = result.pageCount;
+      pdfMetadata = result;
     } catch {
-      // If page extraction fails, default to 0
+      // Fallback to regex if mupdf fails
+      try {
+        const content = buffer.toString('binary');
+        const matches = content.match(/\/Type\s*\/Page(?!s)/g);
+        pageCount = matches ? matches.length : 0;
+      } catch { /* If regex also fails, keep pageCount as 0 */ }
     }
 
     await storage.saveMetadata(paperId, {
       id: paperId, title: file.name.replace(/\.pdf$/i, ''), filename: file.name,
       pages: pageCount, createdAt: new Date().toISOString(), status: 'pending',
+      pdfMetadata,
     });
     return NextResponse.json({ id: paperId, status: 'pending' }, { status: 201 });
   } catch (error) {

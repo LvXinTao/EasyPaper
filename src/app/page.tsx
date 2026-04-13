@@ -35,7 +35,7 @@ export default function HomePage() {
   });
   const [statusFilter, setStatusFilter] = useState<'all' | 'analyzed' | 'pending' | 'error'>('all');
   const [starredOnly, setStarredOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred'>('recent');
+  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>('recent');
 
   const { toasts, showToast, dismissToast } = useToast();
 
@@ -118,6 +118,11 @@ export default function HomePage() {
 
     filtered.sort((a, b) => {
       if (sortMode === 'name') return a.title.localeCompare(b.title);
+      if (sortMode === 'date') {
+        const dateA = a.pdfDate || a.createdAt;
+        const dateB = b.pdfDate || b.createdAt;
+        return dateB.localeCompare(dateA);
+      }
       if (sortMode === 'starred') {
         if (a.starred && !b.starred) return -1;
         if (!a.starred && b.starred) return 1;

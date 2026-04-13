@@ -2,8 +2,9 @@
 
 import { useState, useLayoutEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { PaperListItem, PaperAnalysis, Note } from '@/types';
+import type { PaperListItem, PaperAnalysis, Note, PdfMetadata } from '@/types';
 import { MarkdownContent } from '@/components/markdown-content';
+import { MetadataCard } from '@/components/paper/metadata-card';
 
 interface PreviewPanelProps {
   paper: PaperListItem | null;
@@ -22,6 +23,7 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
   const [noteCount, setNoteCount] = useState(0);
   const [chatCount, setChatCount] = useState(0);
   const [pages, setPages] = useState(0);
+  const [pdfMetadata, setPdfMetadata] = useState<PdfMetadata | undefined>(undefined);
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderSubmenuOpen, setFolderSubmenuOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -35,6 +37,7 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
     setNoteCount(0);
     setChatCount(0);
     setPages(0);
+    setPdfMetadata(undefined);
 
     (async () => {
       try {
@@ -42,6 +45,7 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
         const data = await res.json();
         if (data.analysis) setAnalysis(data.analysis);
         setPages(data.metadata?.pages || 0);
+        if (data.metadata?.pdfMetadata) setPdfMetadata(data.metadata.pdfMetadata);
         setChatCount(data.chatHistory?.messages?.filter((m: { role: string }) => m.role === 'user').length || 0);
       } catch { /* ignore */ }
       try {
@@ -206,6 +210,26 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
           </div>
         ))}
       </div>
+
+      {/* Metadata Card */}
+      <MetadataCard
+        pdfMetadata={pdfMetadata}
+        pages={pages}
+        onReParse={async () => {
+          const res = await fetch(`/api/paper/${paper.id}/metadata/extract`, { method: 'POST' });
+          const data = await res.json();
+          if (data.pdfMetadata) setPdfMetadata(data.pdfMetadata);
+        }}
+        onUpdate={async (fields: Partial<PdfMetadata>) => {
+          const res = await fetch(`/api/paper/${paper.id}/metadata`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fields),
+          });
+          const data = await res.json();
+          if (data.pdfMetadata) setPdfMetadata(data.pdfMetadata);
+        }}
+      />
 
       {/* Analysis sections */}
       {analysis && (

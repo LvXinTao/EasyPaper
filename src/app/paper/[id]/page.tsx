@@ -124,6 +124,7 @@ export default function PaperDetailPage() {
   }, []);
 
   // Auto-trigger embedding generation after analysis completes
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const embeddingsExist = data?.metadata?.embeddingStatus === 'generated';
   const embeddingInProgress = data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered;
 

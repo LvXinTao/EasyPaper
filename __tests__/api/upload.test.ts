@@ -3,9 +3,19 @@ import { POST } from '@/app/api/upload/route';
 // Note: File polyfill is now handled globally in jest.setup.ts
 
 jest.mock('@/lib/storage', () => ({
-  storage: { createPaperDir: jest.fn(), savePdf: jest.fn(), saveMetadata: jest.fn() },
+  storage: { createPaperDir: jest.fn(), savePdf: jest.fn(), saveMetadata: jest.fn(), getPdfPath: jest.fn().mockReturnValue('/test/paper/original.pdf') },
 }));
 jest.mock('uuid', () => ({ v4: () => 'test-uuid-123' }));
+jest.mock('@/lib/pdf-metadata', () => ({
+  extractPdfMetadata: jest.fn().mockResolvedValue({
+    title: 'Test Paper',
+    authors: ['Test Author'],
+    date: '2024-01-01',
+    fieldSources: { title: 'pdf-properties', authors: 'pdf-properties', date: 'pdf-properties' },
+    extractedAt: new Date().toISOString(),
+    pageCount: 5,
+  }),
+}));
 
 // Helper to create a mock File object that works in both Node 18 and 20
 function createMockFile(content: string, name: string, type: string): File {
@@ -55,5 +65,23 @@ describe('POST /api/upload', () => {
     const request = createMockRequest(null);
     const response = await POST(request);
     expect(response.status).toBe(400);
+  });
+  it('extracts PDF metadata on upload', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { extractPdfMetadata } = require('@/lib/pdf-metadata');
+
+    const file = createMockFile('fake pdf content', 'test.pdf', 'application/pdf');
+    const request = createMockRequest(file);
+    const response = await POST(request);
+
+    expect(response.status).toBe(201);
+    expect(extractPdfMetadata).toHaveBeenCalledWith('/test/paper/original.pdf');
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { storage } = require('@/lib/storage');
+    const savedMetadata = storage.saveMetadata.mock.calls[0][1];
+    expect(savedMetadata.pages).toBe(5);
+    expect(savedMetadata.pdfMetadata).toBeDefined();
+    expect(savedMetadata.pdfMetadata.title).toBe('Test Paper');
   });
 });
