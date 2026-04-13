@@ -88,14 +88,14 @@ export async function extractPdfMetadata(pdfPath: string): Promise<PdfMetadataRe
   const fieldSources: Record<string, MetadataSource> = {};
 
   // Layer 1: PDF Document Properties
-  const pdfMeta = doc.getMetaData();
-  const title = pdfMeta.Title?.trim();
-  const author = pdfMeta.Author?.trim();
-  const subject = pdfMeta.Subject?.trim();
-  const keywords = pdfMeta.Keywords?.trim();
-  const creationDate = pdfMeta.CreationDate?.trim();
-  const creator = pdfMeta.Creator?.trim();
-  const producer = pdfMeta.Producer?.trim();
+  // mupdf uses getMetaData(key) with keys like 'info:Title', 'info:Author', etc.
+  const title = doc.getMetaData('info:Title')?.trim();
+  const author = doc.getMetaData('info:Author')?.trim();
+  const subject = doc.getMetaData('info:Subject')?.trim();
+  const keywords = doc.getMetaData('info:Keywords')?.trim();
+  const creationDate = doc.getMetaData('info:CreationDate')?.trim();
+  const creator = doc.getMetaData('info:Creator')?.trim();
+  const producer = doc.getMetaData('info:Producer')?.trim();
 
   if (title) {
     metadata.title = title;
@@ -140,7 +140,7 @@ export async function extractPdfMetadata(pdfPath: string): Promise<PdfMetadataRe
       interface CharInfo { text: string; size: number; x: number; y: number }
       const chars: CharInfo[] = [];
       stext.walk({
-        onChar(c: string, _origin: number[], _font: string, size: number, _quad: unknown, _color: unknown) {
+        onChar(c: string, _origin: number[], _font: unknown, size: number, _quad: unknown, _color: unknown) {
           if (c.trim()) {
             chars.push({ text: c, size, x: _origin[0], y: _origin[1] });
           }

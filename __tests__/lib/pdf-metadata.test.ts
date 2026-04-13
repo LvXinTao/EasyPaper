@@ -2,15 +2,7 @@ import { extractPdfMetadata, splitAuthors, parsePdfDate } from '@/lib/pdf-metada
 
 // Mock mupdf module
 jest.mock('mupdf', () => {
-  const mockGetMetaData = jest.fn().mockReturnValue({
-    Title: 'Test Paper Title',
-    Author: 'John Smith; Jane Doe',
-    Subject: 'Machine Learning',
-    Keywords: 'AI, ML, Deep Learning',
-    CreationDate: 'D:20240101120000',
-    Creator: 'LaTeX with hyperref',
-    Producer: 'pdfTeX-1.40.25',
-  });
+  const mockGetMetaData = jest.fn();
   const mockCountPages = jest.fn().mockReturnValue(10);
   const mockLoadPage = jest.fn().mockReturnValue({
     toStructuredText: jest.fn().mockReturnValue({
@@ -39,6 +31,11 @@ const mupdfMocks = require('mupdf').__mocks as {
 jest.mock('fs/promises', () => ({
   readFile: jest.fn().mockResolvedValue(Buffer.from('fake-pdf')),
 }));
+
+/** Helper to set up metadata store for a test */
+function setMetaData(store: Record<string, string>) {
+  mupdfMocks.mockGetMetaData.mockImplementation((key: string) => store[key]);
+}
 
 describe('splitAuthors', () => {
   it('splits by semicolons', () => {
@@ -91,29 +88,32 @@ describe('parsePdfDate', () => {
 });
 
 describe('extractPdfMetadata', () => {
-  afterEach(() => {
-    mupdfMocks.mockGetMetaData.mockReset();
-    mupdfMocks.mockGetMetaData.mockReturnValue({
-      Title: 'Test Paper Title',
-      Author: 'John Smith; Jane Doe',
-      Subject: 'Machine Learning',
-      Keywords: 'AI, ML, Deep Learning',
-      CreationDate: 'D:20240101120000',
-      Creator: 'LaTeX with hyperref',
-      Producer: 'pdfTeX-1.40.25',
+  beforeEach(() => {
+    setMetaData({
+      'info:Title': 'Test Paper Title',
+      'info:Author': 'John Smith; Jane Doe',
+      'info:Subject': 'Machine Learning',
+      'info:Keywords': 'AI, ML, Deep Learning',
+      'info:CreationDate': 'D:20240101120000',
+      'info:Creator': 'LaTeX with hyperref',
+      'info:Producer': 'pdfTeX-1.40.25',
     });
     mupdfMocks.mockCountPages.mockReturnValue(10);
   });
 
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('extracts all fields from PDF properties', async () => {
-    mupdfMocks.mockGetMetaData.mockReturnValue({
-      Title: 'Attention Is All You Need',
-      Author: 'Vaswani, A.; Shazeer, N.',
-      Subject: 'Neural Networks',
-      Keywords: 'transformer, attention',
-      CreationDate: 'D:20170612',
-      Creator: 'LaTeX',
-      Producer: 'pdfTeX',
+    setMetaData({
+      'info:Title': 'Attention Is All You Need',
+      'info:Author': 'Vaswani, A.; Shazeer, N.',
+      'info:Subject': 'Neural Networks',
+      'info:Keywords': 'transformer, attention',
+      'info:CreationDate': 'D:20170612',
+      'info:Creator': 'LaTeX',
+      'info:Producer': 'pdfTeX',
     });
 
     const result = await extractPdfMetadata('/test.pdf');
@@ -137,7 +137,7 @@ describe('extractPdfMetadata', () => {
   });
 
   it('returns empty metadata when PDF has no properties', async () => {
-    mupdfMocks.mockGetMetaData.mockReturnValue({});
+    setMetaData({});
 
     const result = await extractPdfMetadata('/test.pdf');
 

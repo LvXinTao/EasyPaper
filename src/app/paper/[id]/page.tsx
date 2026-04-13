@@ -11,11 +11,10 @@ import { ChatMessages } from '@/components/chat-messages';
 import { ChatInput } from '@/components/chat-input';
 import { EditableTitle } from '@/components/editable-title';
 import { ResizableDivider } from '@/components/resizable-divider';
-import { MetadataCard } from '@/components/paper/metadata-card';
 import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import { ChatSessionBar } from '@/components/chat-session-bar';
-import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection, PdfMetadata } from '@/types';
+import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection } from '@/types';
 import type { PdfViewerRef } from '@/components/pdf-viewer';
 
 // Dynamic import for PdfViewer to skip SSR (required for react-pdf)
@@ -532,25 +531,6 @@ export default function PaperDetailPage() {
     } catch { /* ignore */ }
   }, [paperId, activeSessionId, sessions, handleSelectSession]);
 
-  // Metadata handlers
-  const handleReParseMetadata = useCallback(async () => {
-    const res = await fetch(`/api/paper/${paperId}/metadata/extract`, { method: 'POST' });
-    if (res.ok) {
-      await refetch();
-    }
-  }, [paperId, refetch]);
-
-  const handleUpdateMetadata = useCallback(async (fields: Partial<PdfMetadata>) => {
-    const res = await fetch(`/api/paper/${paperId}/metadata`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fields),
-    });
-    if (res.ok) {
-      await refetch();
-    }
-  }, [paperId, refetch]);
-
   const handleSendMessage = useCallback(
     async (message: string, expandContext: boolean = false) => {
       // Capture the session this message belongs to, so we can guard UI updates
@@ -844,15 +824,6 @@ export default function PaperDetailPage() {
           }}>
           {/* Top Zone: Analysis/Notes tabs */}
           <div style={{ height: `${effectiveTopHeight}px`, minHeight: '150px', flexShrink: 0 }} className="flex flex-col overflow-hidden">
-            {/* Metadata Card */}
-            <div className="px-4 pt-3" style={{ flexShrink: 0 }}>
-              <MetadataCard
-                pdfMetadata={data?.metadata.pdfMetadata}
-                pages={data?.metadata.pages ?? 0}
-                onReParse={handleReParseMetadata}
-                onUpdate={handleUpdateMetadata}
-              />
-            </div>
             {/* Tab bar */}
             <div className="flex items-center gap-1 px-4" style={{ height: '40px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
               <button

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createErrorResponse } from '@/lib/errors';
+import type { PdfMetadataResult } from '@/lib/pdf-metadata';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
 
     // Extract PDF metadata and accurate page count (best-effort, doesn't block upload)
     let pageCount = 0;
-    let pdfMetadata: unknown = undefined;
+    let pdfMetadata: PdfMetadataResult | undefined = undefined;
     try {
       const { extractPdfMetadata } = await import('@/lib/pdf-metadata');
       const result = await extractPdfMetadata(storage.getPdfPath(paperId));
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     await storage.saveMetadata(paperId, {
       id: paperId, title: file.name.replace(/\.pdf$/i, ''), filename: file.name,
       pages: pageCount, createdAt: new Date().toISOString(), status: 'pending',
-      ...(pdfMetadata ? { pdfMetadata } : {}),
+      pdfMetadata,
     });
     return NextResponse.json({ id: paperId, status: 'pending' }, { status: 201 });
   } catch (error) {
