@@ -208,6 +208,45 @@ export default function HomePage() {
     showToast('Paper renamed', 'success');
   };
 
+  const handleAnalyze = async (paperId: string) => {
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to start analysis', 'error');
+        return;
+      }
+
+      const contentType = res.headers.get('Content-Type') || '';
+
+      if (contentType.includes('text/event-stream')) {
+        // SSE stream — analysis started immediately. Close stream; homepage doesn't consume it.
+        res.body?.cancel();
+        setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: 'analyzing' as const } : p));
+      } else {
+        const data = await res.json();
+        if (data.status === 'queued') {
+          setPapers(prev => prev.map(p => p.id === paperId ? { ...p, status: 'queued' as const } : p));
+        } else if (data.status === 'already_queued') {
+          showToast('Analysis already queued', 'info');
+        } else if (data.status === 'already_running') {
+          showToast('Analysis already in progress', 'info');
+        }
+      }
+    } catch {
+      showToast('Failed to start analysis', 'error');
+    }
+  };
+
+  const handleAnalysisComplete = useCallback(() => {
+    fetchPapers();
+  }, [fetchPapers]);
+
   const handleCreateFolder = async (name: string, parentId: string | null) => {
     const trimmedName = name.trim().slice(0, 100);
     if (!trimmedName) {
@@ -389,9 +428,11 @@ export default function HomePage() {
   const rightPanel = (
     <div className="flex flex-col overflow-hidden" style={{ height: '100%', background: 'rgba(255,255,255,0.006)' }}>
       <PreviewPanel
+        key={selectedPaper?.id ?? 'none'}
         paper={selectedPaper}
         multiSelectCount={selectedPaperIds.size}
         onDelete={handleDelete}
+        onAnalyze={handleAnalyze}
         onMovePaper={handleMovePaper}
         onRename={handleRename}
         onToggleStar={handleToggleStar}
