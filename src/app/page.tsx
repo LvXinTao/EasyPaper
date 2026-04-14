@@ -35,17 +35,17 @@ export default function HomePage() {
   });
   const [statusFilter, setStatusFilter] = useState<'all' | 'analyzed' | 'pending' | 'error'>('all');
   const [starredOnly, setStarredOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>('recent');
-
-  // Restore sort mode from localStorage after hydration
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('homepageSortMode');
-      if (saved === 'recent' || saved === 'name' || saved === 'starred' || saved === 'date') {
-        setSortMode(saved);
-      }
-    } catch { /* ignore */ }
-  }, []);
+  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('homepageSortMode');
+        if (saved === 'recent' || saved === 'name' || saved === 'starred' || saved === 'date') {
+          return saved;
+        }
+      } catch { /* ignore */ }
+    }
+    return 'recent';
+  });
 
   const handleSortModeChange = useCallback((newMode: 'recent' | 'name' | 'starred' | 'date') => {
     setSortMode(newMode);
