@@ -1,23 +1,25 @@
 'use client';
 
-import { useState, useLayoutEffect } from 'react';
+import { useState, useLayoutEffect, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PaperListItem, PaperAnalysis, Note, PdfMetadata } from '@/types';
 import { MarkdownContent } from '@/components/markdown-content';
 import { MetadataCard } from '@/components/paper/metadata-card';
+import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 
 interface PreviewPanelProps {
   paper: PaperListItem | null;
   multiSelectCount?: number;
   onDelete?: (id: string) => void;
   onAnalyze?: (id: string) => void;
+  onAnalysisComplete?: () => void;
   onMovePaper?: (paperId: string, folderId: string | null) => void;
   onRename?: (id: string, title: string) => Promise<void>;
   onToggleStar?: (id: string) => void;
   folders?: { id: string; name: string }[];
 }
 
-export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onMovePaper, onRename, onToggleStar, folders }: PreviewPanelProps) {
+export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onAnalysisComplete, onMovePaper, onRename, onToggleStar, folders }: PreviewPanelProps) {
   const router = useRouter();
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [noteCount, setNoteCount] = useState(0);
@@ -28,6 +30,18 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
   const [folderSubmenuOpen, setFolderSubmenuOpen] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+
+  // Analysis polling for progress feedback
+  const { isPolling, analysisStep, isStale, completedStatus } = useAnalysisPolling(
+    paper?.id ?? '',
+    paper?.status ?? null
+  );
+
+  useEffect(() => {
+    if (completedStatus && onAnalysisComplete) {
+      onAnalysisComplete();
+    }
+  }, [completedStatus, onAnalysisComplete]);
 
   // Reset state when paper changes - intentional cascading state reset
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -150,8 +164,14 @@ export function PreviewPanel({ paper, multiSelectCount, onDelete, onAnalyze, onM
         </div>
         <div className="flex gap-1.5 flex-shrink-0">
           <button onClick={() => router.push(`/paper/${paper.id}`)} className="cursor-pointer rounded-lg" style={{ padding: '5px 11px', fontSize: '11px', fontWeight: 500, background: 'var(--text-primary)', color: 'var(--bg)', border: 'none' }}>Open</button>
-          {paper.status !== 'analyzed' && paper.status !== 'analyzing' && paper.status !== 'parsing' && onAnalyze && (
-            <button onClick={() => onAnalyze(paper.id)} className="cursor-pointer rounded-lg" style={{ padding: '5px 11px', fontSize: '11px', fontWeight: 500, background: 'var(--glass)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}>Analyze</button>
+          {isPolling ? (
+            <span className="rounded-lg" style={{ padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: 'var(--text-tertiary)', background: 'var(--glass)', border: '1px solid var(--glass-border)' }}>
+              {isStale ? 'Analysis stuck' : (analysisStep ? `${analysisStep.charAt(0).toUpperCase() + analysisStep.slice(1)}...` : 'Queued...')}
+            </span>
+          ) : (
+            paper.status !== 'analyzed' && paper.status !== 'analyzing' && paper.status !== 'parsing' && paper.status !== 'queued' && onAnalyze && (
+              <button onClick={() => onAnalyze(paper.id)} className="cursor-pointer rounded-lg" style={{ padding: '5px 11px', fontSize: '11px', fontWeight: 500, background: 'var(--glass)', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)' }}>Analyze</button>
+            )
           )}
           <div className="relative">
             <button onClick={() => { setMenuOpen(!menuOpen); if (menuOpen) setFolderSubmenuOpen(false); }} className="cursor-pointer rounded-lg" style={{ padding: '5px 8px', fontSize: '11px', background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}>⋯</button>

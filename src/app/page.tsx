@@ -433,6 +433,7 @@ export default function HomePage() {
         multiSelectCount={selectedPaperIds.size}
         onDelete={handleDelete}
         onAnalyze={handleAnalyze}
+        onAnalysisComplete={handleAnalysisComplete}
         onMovePaper={handleMovePaper}
         onRename={handleRename}
         onToggleStar={handleToggleStar}
