@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PreviewPanel } from '@/components/preview-panel';
+import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
 import type { PaperListItem } from '@/types';
 
 // Mock next/navigation
@@ -48,8 +49,6 @@ const basePaper: PaperListItem = {
 };
 
 describe('PreviewPanel — Analyze', () => {
-  const { useAnalysisPolling } = require('@/hooks/use-analysis-polling');
-
   beforeEach(() => {
     jest.clearAllMocks();
     (useAnalysisPolling as jest.Mock).mockReturnValue({ ...mockPollingReturn });
