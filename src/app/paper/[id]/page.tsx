@@ -5,15 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { AnalysisPanel } from '@/components/analysis-panel';
-import { NotesPanel } from '@/components/notes-panel';
-import { BookmarksPanel } from '@/components/bookmarks-panel';
-import { ChatMessages } from '@/components/chat-messages';
-import { ChatInput } from '@/components/chat-input';
 import { EditableTitle } from '@/components/editable-title';
 import { ResizableDivider } from '@/components/resizable-divider';
+import { PaperTabs } from '@/components/paper-tabs';
+import { SettingsForm } from '@/components/settings-form';
+import { PromptsForm } from '@/components/prompts-form';
 import { usePaper } from '@/hooks/use-paper';
 import { useAnalysisPolling } from '@/hooks/use-analysis-polling';
-import { ChatSessionBar } from '@/components/chat-session-bar';
 import type { PaperAnalysis, ChatMessage, ChatSessionMeta, Bookmark, Note, NoteTag, TextSelection } from '@/types';
 import type { PdfViewerRef } from '@/components/pdf-viewer';
 
@@ -52,7 +50,6 @@ export default function PaperDetailPage() {
   const [avgBatchTime, setAvgBatchTime] = useState<number>(0);
   const [analysis, setAnalysis] = useState<PaperAnalysis | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'analysis' | 'notes' | 'bookmarks'>('analysis');
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -78,8 +75,11 @@ export default function PaperDetailPage() {
   // Session state
   const [sessions, setSessions] = useState<ChatSessionMeta[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [showSessionBar, setShowSessionBar] = useState(true);
   const activeSessionIdRef = useRef<string | null>(null);
+
+  // Modal state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPromptsOpen, setIsPromptsOpen] = useState(false);
 
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
@@ -101,17 +101,13 @@ export default function PaperDetailPage() {
 
   // Resizable panel state — restored from localStorage per paper
   const containerRef = useRef<HTMLDivElement>(null);
-  const rightPanelRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
-  const [topHeight, setTopHeight] = useState<number | null>(null);
 
   // Load saved panel ratios from localStorage
   useEffect(() => {
     try {
       const savedLeft = localStorage.getItem(`easypaper-left-${paperId}`);
-      const savedTop = localStorage.getItem(`easypaper-top-${paperId}`);
       if (savedLeft) setLeftWidth(parseFloat(savedLeft));
-      if (savedTop) setTopHeight(parseFloat(savedTop));
     } catch { /* ignore */ }
   }, [paperId]);
 
@@ -295,10 +291,9 @@ export default function PaperDetailPage() {
     pdfViewerRef.current?.scrollToNote(note);
   }, []);
 
-  // Handle Ask AI from PDF selection - set pending quote and switch to chat
+  // Handle Ask AI from PDF selection - set pending quote
   const handleAskAI = useCallback((selection: TextSelection) => {
     setPendingQuote(selection);
-    setActiveTab('analysis');
     window.getSelection()?.removeAllRanges();
   }, []);
 
@@ -656,15 +651,6 @@ export default function PaperDetailPage() {
     [paperId]
   );
 
-  // Vertical divider: save top panel height to localStorage
-  const handleTopHeightChange = useCallback(
-    (newHeight: number) => {
-      setTopHeight(newHeight);
-      try { localStorage.setItem(`easypaper-top-${paperId}`, String(newHeight)); } catch {}
-    },
-    [paperId]
-  );
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-44px)]" style={{ background: 'var(--bg)' }}>
@@ -693,11 +679,8 @@ export default function PaperDetailPage() {
 
   // Compute initial sizes from container if not set (guard for SSR)
   const safeWindowWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
-  const safeWindowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
   const containerWidth = containerRef.current?.clientWidth ?? safeWindowWidth;
-  const rightPanelHeight = rightPanelRef.current?.clientHeight ?? (safeWindowHeight - 44 - 48);
   const effectiveLeftWidth = leftWidth ?? containerWidth * 0.55;
-  const effectiveTopHeight = topHeight ?? rightPanelHeight * 0.55;
 
   return (
     <div style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
@@ -755,6 +738,39 @@ export default function PaperDetailPage() {
             {effectiveIsAnalyzing ? 'Analyzing...' : needsAnalysis ? 'Analyze' : 'Re-analyze'}
           </button>
         )}
+
+        {/* Prompts button */}
+        <button
+          onClick={() => setIsPromptsOpen(true)}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 flex-shrink-0"
+          style={{
+            background: 'var(--glass)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--glass-border)',
+          }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Prompts
+        </button>
+
+        {/* Settings button */}
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 flex-shrink-0"
+          style={{
+            background: 'var(--glass)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--glass-border)',
+          }}
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Settings
+        </button>
       </div>
 
       {/* Analysis error banner */}
@@ -797,7 +813,6 @@ export default function PaperDetailPage() {
             bookmarks={bookmarks}
             onAddBookmark={handleAddBookmark}
             onRemoveBookmark={handleRemoveBookmark}
-            onBookmarksChange={() => setActiveTab('bookmarks')}
             notes={notes}
             onNoteCreate={handleNoteCreate}
             onNoteUpdate={handleNoteUpdate}
@@ -815,273 +830,81 @@ export default function PaperDetailPage() {
           }}
         />
 
-        {/* Right: Split Panel */}
-        <div ref={rightPanelRef} className="flex-1 flex flex-col" style={{ minWidth: '280px', overflow: 'hidden' }}>
-          {/* Shared card container for Analysis + Chat */}
-          <div className="flex-1 flex flex-col overflow-hidden" style={{
-            borderRadius: '12px',
-            border: '1px solid var(--glass-border)',
-            margin: '4px',
-          }}>
-          {/* Top Zone: Analysis/Notes tabs */}
-          <div style={{ height: `${effectiveTopHeight}px`, minHeight: '150px', flexShrink: 0 }} className="flex flex-col overflow-hidden">
-            {/* Tab bar */}
-            <div className="flex items-center gap-1 px-4" style={{ height: '40px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <button
-                onClick={() => setActiveTab('analysis')}
-                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: activeTab === 'analysis' ? 'var(--accent-subtle)' : 'transparent',
-                  color: activeTab === 'analysis' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  border: activeTab === 'analysis' ? '1px solid var(--accent)' : '1px solid transparent',
-                }}
-              >
-                Analysis
-                {displayAnalysis && (
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
-                    {Object.keys(displayAnalysis).filter(k => k !== 'generatedAt').length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('notes')}
-                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: activeTab === 'notes' ? 'var(--accent-subtle)' : 'transparent',
-                  color: activeTab === 'notes' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  border: activeTab === 'notes' ? '1px solid var(--accent)' : '1px solid transparent',
-                }}
-              >
-                Notes
-                {noteCount > 0 && (
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
-                    {noteCount}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('bookmarks')}
-                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors"
-                style={{
-                  background: activeTab === 'bookmarks' ? 'var(--amber-subtle)' : 'transparent',
-                  color: activeTab === 'bookmarks' ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  border: activeTab === 'bookmarks' ? '1px solid var(--amber)' : '1px solid transparent',
-                }}
-              >
-                Bookmarks
-                {bookmarks.length > 0 && (
-                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--glass)', color: 'var(--text-tertiary)' }}>
-                    {bookmarks.length}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-hidden">
-              {activeTab === 'analysis' ? (
-                <AnalysisPanel
-                  analysis={displayAnalysis}
-                  isAnalyzing={effectiveIsAnalyzing}
-                  analysisStep={effectiveStep}
-                  analysisMessage={effectiveMessage}
-                  parseBatchProgress={parseBatchProgress}
-                  streamingParsedContent={streamingParsedContent}
-                  avgBatchTime={avgBatchTime}
-                  onReAnalyze={handleAnalyze}
-                />
-              ) : activeTab === 'notes' ? (
-                <NotesPanel
-                  paperId={paperId}
-                  currentPage={currentPage}
-                  onPageChange={setCurrentPage}
-                  onNoteClick={handleNoteClick}
-                  notes={notes}
-                  onNoteSave={handleNoteSave}
-                  onNoteDelete={handleNoteDelete}
-                />
-              ) : (
-                <BookmarksPanel
-                  paperId={paperId}
-                  currentPage={currentPage}
-                  onPageChange={setCurrentPage}
-                  onBookmarksChange={fetchBookmarks}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Vertical resizable divider */}
-          <ResizableDivider
-            direction="vertical"
-            onResize={(delta) => {
-              const maxTop = (rightPanelRef.current?.clientHeight ?? rightPanelHeight) - 120;
-              const newHeight = Math.max(150, Math.min(effectiveTopHeight + delta, maxTop));
-              handleTopHeightChange(newHeight);
-            }}
-            barStyle={{
-              background: 'linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent), white 25%), var(--accent))',
-              opacity: 0.6,
-              width: '100%',
-              borderRadius: 0,
-            }}
+        {/* Right: Paper Tabs */}
+        <div className="flex-1" style={{ minWidth: '280px', overflow: 'hidden' }}>
+          <PaperTabs
+            paperId={paperId}
+            analysis={displayAnalysis}
+            isAnalyzing={effectiveIsAnalyzing}
+            analysisStep={effectiveStep}
+            analysisMessage={effectiveMessage}
+            parseBatchProgress={parseBatchProgress}
+            streamingParsedContent={streamingParsedContent}
+            avgBatchTime={avgBatchTime}
+            onReAnalyze={handleAnalyze}
+            notes={notes}
+            currentPage={currentPage}
+            onPageChange={setCurrentPage}
+            onNoteClick={handleNoteClick}
+            onNoteSave={handleNoteSave}
+            onNoteDelete={handleNoteDelete}
+            chatMessages={chatMessages}
+            streamingContent={streamingContent}
+            isChatStreaming={isChatStreaming}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            pendingQuote={pendingQuote}
+            lowConfidence={lowConfidence}
+            onSelectSession={handleSelectSession}
+            onNewSession={handleNewSession}
+            onDeleteSession={handleDeleteSession}
+            onSendMessage={handleSendMessage}
+            onClearQuote={handleClearQuote}
+            onExpandContext={handleExpandContext}
+            pdfMetadata={data.metadata.pdfMetadata}
+            pages={data.metadata.pages || 1}
+            shortTitle={data.metadata.shortTitle}
+            editableTitle={data.metadata.title}
+            onTitleChange={handleRename}
           />
-
-          {/* Bottom Zone: AI Chat */}
-          <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: '120px' }}>
-            {/* Chat header with model badge */}
-            <div className="flex items-center justify-between px-4" style={{ height: '36px', borderBottom: sessions.length > 0 && showSessionBar ? 'none' : '1px solid var(--border)', flexShrink: 0 }}>
-              <div className="flex items-center gap-2">
-                <div
-                  className="flex items-center justify-center"
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent), white 25%))',
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <circle cx="12" cy="5" r="2" />
-                    <path d="M12 7v4" />
-                    <line x1="8" y1="16" x2="8" y2="16" />
-                    <line x1="16" y1="16" x2="16" y2="16" />
-                  </svg>
-                </div>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>AI Chat</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {sessions.length > 0 && (
-                  <button
-                    onClick={() => setShowSessionBar(prev => !prev)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md transition-colors"
-                    style={{
-                      fontSize: '10px',
-                      color: 'var(--text-tertiary)',
-                      background: 'var(--glass)',
-                      border: '1px solid var(--glass-border)',
-                    }}
-                  >
-                    Sessions
-                    <span style={{ fontSize: '8px', transform: showSessionBar ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
-                  </button>
-                )}
-                <button
-                  onClick={handleNewSession}
-                  className="flex items-center justify-center rounded-md transition-colors"
-                  style={{
-                    width: '22px',
-                    height: '22px',
-                    background: 'var(--glass)',
-                    border: '1px solid var(--glass-border)',
-                    color: 'var(--text-tertiary)',
-                    fontSize: '14px',
-                    lineHeight: 1,
-                  }}
-                  title="New session"
-                >
-                  +
-                </button>
-                {modelName && (
-                  <span
-                    className="flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-tertiary)' }}
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--green)' }} />
-                    {modelName}
-                  </span>
-                )}
-                {/* Embedding status pill */}
-                {(embeddingInProgress || data?.metadata?.embeddingStatus === 'generated' || data?.metadata?.embeddingStatus === 'error') && (
-                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                    data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300' :
-                    data?.metadata?.embeddingStatus === 'generated' ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300' :
-                    'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
-                  }`}>
-                    {(data?.metadata?.embeddingStatus === 'generating' || isEmbeddingTriggered) && (
-                      <>
-                        <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Building index...
-                      </>
-                    )}
-                    {data?.metadata?.embeddingStatus === 'generated' && (
-                      <>
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        RAG
-                        <button
-                          onClick={async () => {
-                            setIsEmbeddingTriggered(true);
-                            await fetch(`/api/embed/${paperId}?force=true`, { method: 'POST' });
-                            setTimeout(() => refetch(), 500);
-                          }}
-                          className="underline hover:no-underline"
-                        >
-                          Regen
-                        </button>
-                      </>
-                    )}
-                    {data?.metadata?.embeddingStatus === 'error' && (
-                      <>
-                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Error
-                        <button
-                          onClick={async () => {
-                            setIsEmbeddingTriggered(true);
-                            await fetch(`/api/embed/${paperId}`, { method: 'POST' });
-                            setTimeout(() => refetch(), 500);
-                          }}
-                          className="underline hover:no-underline"
-                        >
-                          Retry
-                        </button>
-                      </>
-                    )}
-                  </span>
-                )}
-              </div>
-            </div>
-            {showSessionBar && (
-              <ChatSessionBar
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSelectSession={handleSelectSession}
-                onDeleteSession={handleDeleteSession}
-              />
-            )}
-
-            {/* Messages */}
-            <div className="flex-1 overflow-auto px-4">
-              <ChatMessages
-                messages={chatMessages}
-                streamingContent={streamingContent}
-                isStreaming={isChatStreaming}
-                onJumpToQuote={handleJumpToQuote}
-                lowConfidence={lowConfidence}
-                onExpandContext={handleExpandContext}
-              />
-            </div>
-
-            {/* Input */}
-            <div className="px-4 pb-3 pt-2">
-              <ChatInput
-                onSend={handleSendMessage}
-                disabled={isChatStreaming}
-                pendingQuote={pendingQuote}
-                onClearQuote={handleClearQuote}
-              />
-            </div>
-          </div>
-          </div>{/* end shared card container */}
         </div>
       </div>
+
+      {/* Settings modal overlay */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="relative max-w-2xl w-full mx-4" style={{ maxHeight: '90vh' }}>
+            <button
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute top-3 right-3 z-10 p-1 rounded-md transition-colors"
+              style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <SettingsForm />
+          </div>
+        </div>
+      )}
+
+      {/* Prompts modal overlay */}
+      {isPromptsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="relative max-w-2xl w-full mx-4" style={{ maxHeight: '90vh' }}>
+            <button
+              onClick={() => setIsPromptsOpen(false)}
+              className="absolute top-3 right-3 z-10 p-1 rounded-md transition-colors"
+              style={{ background: 'var(--glass)', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)' }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <PromptsForm />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

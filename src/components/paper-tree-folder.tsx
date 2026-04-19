@@ -1,42 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import type { Folder, PaperListItem } from '@/types';
-import { PaperTreeItem } from './paper-tree-item';
-import { useDroppable } from '@dnd-kit/core';
+import type { Folder } from '@/types';
 
 interface PaperTreeFolderProps {
   folder: Folder;
   depth: number;
-  papers: PaperListItem[];
   allFolders: Folder[];
-  selectedPaperIds: Set<string>;
-  selectedPaperId: string | null;
-  onPaperClick: (paperId: string) => void;
-  onPaperDoubleClick: (paperId: string) => void;
-  onPaperCheckboxToggle: (paperId: string) => void;
-  onPaperContextMenu: (e: React.MouseEvent, paperId: string) => void;
+  isSelected?: boolean;
+  onFolderSelect?: (folderId: string | null) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onCreateChildFolder: (name: string, parentId: string) => void;
-  onToggleStar: (paperId: string) => void;
 }
 
 export function PaperTreeFolder({
   folder,
   depth,
-  papers,
   allFolders,
-  selectedPaperIds,
-  selectedPaperId,
-  onPaperClick,
-  onPaperDoubleClick,
-  onPaperCheckboxToggle,
-  onPaperContextMenu,
+  isSelected,
+  onFolderSelect,
   onRenameFolder,
   onDeleteFolder,
   onCreateChildFolder,
-  onToggleStar,
 }: PaperTreeFolderProps) {
   const [expanded, setExpanded] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -46,24 +32,12 @@ export function PaperTreeFolder({
   const [newChildName, setNewChildName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const { setNodeRef, isOver } = useDroppable({
-    id: folder.id,
-    data: {
-      type: 'folder',
-      folderId: folder.id,
-    },
-  });
-
   useEffect(() => {
     if (!showMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
     };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowMenu(false);
-    };
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowMenu(false); };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
     return () => {
@@ -73,15 +47,6 @@ export function PaperTreeFolder({
   }, [showMenu]);
 
   const childFolders = useMemo(() => allFolders.filter(f => f.parentId === folder.id), [allFolders, folder.id]);
-  const folderPapers = useMemo(() => papers.filter(p => p.folderId === folder.id), [papers, folder.id]);
-  const totalPapers = useMemo(() => papers.filter(p => {
-    const checkFolder = (fid: string | null): boolean => {
-      if (fid === folder.id) return true;
-      const parent = allFolders.find(f => f.id === fid);
-      return parent ? checkFolder(parent.parentId) : false;
-    };
-    return checkFolder(p.folderId ?? null);
-  }).length, [papers, folder.id, allFolders]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -98,22 +63,20 @@ export function PaperTreeFolder({
   return (
     <div>
       <div
-        ref={setNodeRef}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '6px 10px',
+          display: 'flex', alignItems: 'center', padding: '6px 10px',
           paddingLeft: `${10 + depth * 16}px`,
-          background: isOver ? 'var(--accent-subtle)' : 'transparent',
-          outline: isOver ? '2px solid var(--accent)' : undefined,
-          outlineOffset: '-2px',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          gap: '6px',
-          position: 'relative',
-          marginBottom: '2px',
+          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+          outline: isSelected ? '1px solid var(--accent)' : undefined,
+          outlineOffset: '-2px', borderRadius: '8px', cursor: 'pointer',
+          gap: '6px', position: 'relative', marginBottom: '2px',
         }}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          setExpanded(!expanded);
+          if (onFolderSelect) {
+            onFolderSelect(isSelected ? null : folder.id);
+          }
+        }}
       >
         <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '14px', fontSize: '10px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
         <span style={{ fontSize: '14px' }}>📁</span>
@@ -122,7 +85,6 @@ export function PaperTreeFolder({
         ) : (
           <span style={{ flex: 1, fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{folder.name}</span>
         )}
-        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{totalPapers}</span>
         <button onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }} style={{ fontSize: '14px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>⋯</button>
         {showMenu && (
           <div ref={menuRef} style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', width: '160px', borderRadius: '8px', padding: '4px 0', background: 'var(--bg)', border: '1px solid var(--glass-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 50 }} onClick={e => e.stopPropagation()}>
@@ -142,10 +104,7 @@ export function PaperTreeFolder({
             </div>
           )}
           {childFolders.map(child => (
-            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} papers={papers} allFolders={allFolders} selectedPaperIds={selectedPaperIds} selectedPaperId={selectedPaperId} onPaperClick={onPaperClick} onPaperDoubleClick={onPaperDoubleClick} onPaperCheckboxToggle={onPaperCheckboxToggle} onPaperContextMenu={onPaperContextMenu} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} onToggleStar={onToggleStar} />
-          ))}
-          {folderPapers.map(paper => (
-            <PaperTreeItem key={paper.id} paper={paper} isSelected={paper.id === selectedPaperId} isChecked={selectedPaperIds.has(paper.id)} depth={depth + 1} onClick={() => onPaperClick(paper.id)} onDoubleClick={() => onPaperDoubleClick(paper.id)} onCheckboxToggle={() => onPaperCheckboxToggle(paper.id)} onContextMenu={e => onPaperContextMenu(e, paper.id)} onToggleStar={() => onToggleStar(paper.id)} />
+            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} allFolders={allFolders} isSelected={isSelected} onFolderSelect={onFolderSelect} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} />
           ))}
         </div>
       )}

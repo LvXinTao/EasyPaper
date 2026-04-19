@@ -10,6 +10,7 @@ import { FolderPickerModal } from '@/components/folder-picker-modal';
 import { Toast } from '@/components/toast';
 import { PreviewPanel } from '@/components/preview-panel';
 import { UploadModal } from '@/components/upload-modal';
+import { PaperTable } from '@/components/paper-table';
 import { useToast } from '@/hooks/use-toast';
 import type { PaperListItem, Folder } from '@/types';
 
@@ -19,6 +20,7 @@ export default function HomePage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
@@ -196,6 +198,20 @@ export default function HomePage() {
     await fetchPapers();
     showToast('Paper moved', 'success');
   };
+
+  const handleShortTitleChange = useCallback(async (paperId: string, shortTitle: string) => {
+    try {
+      const res = await fetch(`/api/paper/${paperId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortTitle: shortTitle || null }),
+      });
+      if (!res.ok) throw new Error('Failed to update short title');
+    } catch {
+      showToast('Failed to update short title', 'error');
+    }
+    await fetchPapers();
+  }, [fetchPapers, showToast]);
 
   const handleRename = async (id: string, title: string) => {
     const trimmedTitle = title.trim().slice(0, 500);
@@ -394,32 +410,12 @@ export default function HomePage() {
       onDrop={handleDrop}
     >
       <PaperTree
-        papers={visiblePapers}
         folders={folders}
-        selectedPaperId={selectedPaperId}
-        selectedPaperIds={selectedPaperIds}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        onPaperClick={(id) => setSelectedPaperId(id)}
-        onPaperDoubleClick={handlePaperDoubleClick}
-        onCheckboxToggle={handleCheckboxToggle}
-        onBatchDelete={handleBatchDelete}
-        onBatchMove={handleBatchMove}
-        onBatchStar={handleBatchStar}
-        onMovePaper={handleMovePaper}
-        onClearSelection={() => setSelectedPaperIds(new Set())}
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={setSelectedFolderId}
         onCreateFolder={handleCreateFolder}
         onRenameFolder={handleRenameFolder}
         onDeleteFolder={handleDeleteFolder}
-        onContextMenuOpen={handleContextMenuOpen}
-        onToggleStar={handleToggleStar}
-        statusFilter={statusFilter}
-        starredOnly={starredOnly}
-        sortMode={sortMode}
-        stats={stats}
-        onStatusFilterChange={setStatusFilter}
-        onStarredOnlyChange={setStarredOnly}
-        onSortModeChange={handleSortModeChange}
       />
     </div>
   );
@@ -446,10 +442,40 @@ export default function HomePage() {
     <div style={{ height: 'calc(100vh - 44px)' }}>
       <ResizablePanels
         leftPanel={leftPanel}
+        centerPanel={
+          <div className="flex flex-col overflow-hidden" style={{ height: '100%' }}>
+            <PaperTable
+              papers={papers}
+              selectedPaperId={selectedPaperId}
+              selectedPaperIds={selectedPaperIds}
+              selectedFolderId={selectedFolderId}
+              searchQuery={searchQuery}
+              statusFilter={statusFilter}
+              starredOnly={starredOnly}
+              sortMode={sortMode}
+              stats={stats}
+              onPaperClick={(id) => setSelectedPaperId(id)}
+              onPaperDoubleClick={handlePaperDoubleClick}
+              onCheckboxToggle={handleCheckboxToggle}
+              onToggleStar={handleToggleStar}
+              onContextMenuOpen={handleContextMenuOpen}
+              onSortModeChange={handleSortModeChange}
+              onStatusFilterChange={setStatusFilter}
+              onStarredOnlyChange={setStarredOnly}
+              onClearSelection={() => setSelectedPaperIds(new Set())}
+              onShortTitleChange={handleShortTitleChange}
+              onClearFolderFilter={() => setSelectedFolderId(null)}
+              activeFolderName={folders.find(f => f.id === selectedFolderId)?.name}
+            />
+          </div>
+        }
         rightPanel={rightPanel}
-        defaultLeftWidth={300}
-        minLeftWidth={240}
+        defaultLeftWidth={240}
+        defaultRightWidth={400}
+        minLeftWidth={200}
         maxLeftWidth={500}
+        minRightWidth={240}
+        maxRightWidth={400}
       />
 
       <UploadModal
