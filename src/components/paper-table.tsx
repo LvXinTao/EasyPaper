@@ -240,7 +240,7 @@ export function PaperTable({
                       {paper.starred ? '★' : '☆'}
                     </button>
                   </td>
-                  <td style={{ padding: '6px 10px', fontSize: '12px', maxWidth: '200px' }}>
+                  <td style={{ padding: '6px 10px', fontSize: '12px', minWidth: '200px', width: '200px' }}>
                     {editingShortTitle?.id === paper.id ? (
                       <input
                         autoFocus
@@ -267,7 +267,7 @@ export function PaperTable({
                     ) : (
                       <span
                         onClick={e => { e.stopPropagation(); setEditingShortTitle({ id: paper.id, value: paper.shortTitle || '' }); }}
-                        style={{ cursor: 'text', color: paper.shortTitle ? 'var(--text-primary)' : 'var(--text-tertiary)', opacity: 0.7 }}
+                        style={{ cursor: 'text', color: paper.shortTitle ? 'var(--text-primary)' : 'var(--text-tertiary)', opacity: 0.7, display: 'inline-block', minWidth: '120px', width: '100%' }}
                         title="Click to edit"
                       >
                         {paper.shortTitle || '—'}
