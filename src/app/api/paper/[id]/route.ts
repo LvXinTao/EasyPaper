@@ -82,6 +82,16 @@ export async function PATCH(request: Request, context: RouteContext) {
     updates.starred = body.starred;
   }
 
+  if (body.shortTitle !== undefined) {
+    if (body.shortTitle !== null && typeof body.shortTitle !== 'string') {
+      return createErrorResponse('VALIDATION_ERROR', 'shortTitle must be a string or null');
+    }
+    if (typeof body.shortTitle === 'string' && body.shortTitle.length > 100) {
+      return createErrorResponse('VALIDATION_ERROR', 'shortTitle must be 100 characters or less');
+    }
+    updates.shortTitle = body.shortTitle;
+  }
+
   if (Object.keys(updates).length === 0) {
     return createErrorResponse('VALIDATION_ERROR', 'No valid fields to update');
   }

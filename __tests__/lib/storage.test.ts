@@ -115,6 +115,23 @@ describe('storage', () => {
       const papers = await storage.listPapers();
       expect(papers).toEqual([]);
     });
+    it('includes shortTitle, authors, and year fields in PaperListItem', async () => {
+      await storage.createPaperDir('paper-meta');
+      await storage.saveMetadata('paper-meta', {
+        id: 'paper-meta', title: 'Meta Paper', filename: 'meta.pdf', pages: 3,
+        createdAt: '2025-03-11T10:00:00Z', status: 'analyzed', shortTitle: 'MP',
+        pdfMetadata: {
+          authors: ['Smith', 'Jones'], date: '2020-06-15T00:00:00Z',
+          fieldSources: { title: 'text-extraction' }, extractedAt: '2025-03-11T10:00:00Z',
+        },
+      });
+      const papers = await storage.listPapers();
+      const metaPaper = papers.find(p => p.id === 'paper-meta');
+      expect(metaPaper).toBeDefined();
+      expect(metaPaper!.shortTitle).toBe('MP');
+      expect(metaPaper!.authors).toEqual(['Smith', 'Jones']);
+      expect(metaPaper!.year).toBe('2020');
+    });
   });
 
   describe('deletePaper', () => {

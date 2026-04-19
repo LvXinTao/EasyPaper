@@ -27,6 +27,7 @@ export interface PaperMetadata {
   folderId?: string | null;
   sortIndex?: number;
   starred?: boolean;
+  shortTitle?: string;
   analysisProgress?: {
     step: 'queued' | 'parsing' | 'analyzing' | 'saving';
     message: string;
@@ -146,6 +147,9 @@ export interface PaperListItem {
   sortIndex?: number;
   starred?: boolean;
   pdfDate?: string;
+  shortTitle?: string;
+  authors?: string[];
+  year?: string;
 }
 
 export interface PaperData {

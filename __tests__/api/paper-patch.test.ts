@@ -101,4 +101,49 @@ describe('PATCH /api/paper/[id]', () => {
     const response = await PATCH(request, { params: Promise.resolve({ id: 'test-123' }) });
     expect(response.status).toBe(400);
   });
+
+  it('updates paper shortTitle', async () => {
+    (storage.paperExists as jest.Mock).mockResolvedValue(true);
+    (storage.updateMetadata as jest.Mock).mockResolvedValue({
+      id: 'test-123', title: 'Test', filename: 'test.pdf',
+      pages: 5, createdAt: '2025-03-11', status: 'analyzed', shortTitle: 'Attn',
+    });
+    const request = new Request('http://localhost/api/paper/test-123', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortTitle: 'Attn' }),
+    });
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'test-123' }) });
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(storage.updateMetadata).toHaveBeenCalledWith('test-123', { shortTitle: 'Attn' });
+  });
+
+  it('accepts null shortTitle to clear it', async () => {
+    (storage.paperExists as jest.Mock).mockResolvedValue(true);
+    (storage.updateMetadata as jest.Mock).mockResolvedValue({
+      id: 'test-123', title: 'Test', filename: 'test.pdf',
+      pages: 5, createdAt: '2025-03-11', status: 'analyzed',
+    });
+    const request = new Request('http://localhost/api/paper/test-123', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortTitle: null }),
+    });
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'test-123' }) });
+    expect(response.status).toBe(200);
+    expect(storage.updateMetadata).toHaveBeenCalledWith('test-123', { shortTitle: null });
+  });
+
+  it('rejects shortTitle over 100 characters', async () => {
+    (storage.paperExists as jest.Mock).mockResolvedValue(true);
+    const request = new Request('http://localhost/api/paper/test-123', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortTitle: 'a'.repeat(101) }),
+    });
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'test-123' }) });
+    expect(response.status).toBe(400);
+  });
 });
