@@ -395,32 +395,10 @@ export default function HomePage() {
       onDrop={handleDrop}
     >
       <PaperTree
-        papers={visiblePapers}
         folders={folders}
-        selectedPaperId={selectedPaperId}
-        selectedPaperIds={selectedPaperIds}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        onPaperClick={(id) => setSelectedPaperId(id)}
-        onPaperDoubleClick={handlePaperDoubleClick}
-        onCheckboxToggle={handleCheckboxToggle}
-        onBatchDelete={handleBatchDelete}
-        onBatchMove={handleBatchMove}
-        onBatchStar={handleBatchStar}
-        onMovePaper={handleMovePaper}
-        onClearSelection={() => setSelectedPaperIds(new Set())}
         onCreateFolder={handleCreateFolder}
         onRenameFolder={handleRenameFolder}
         onDeleteFolder={handleDeleteFolder}
-        onContextMenuOpen={handleContextMenuOpen}
-        onToggleStar={handleToggleStar}
-        statusFilter={statusFilter}
-        starredOnly={starredOnly}
-        sortMode={sortMode}
-        stats={stats}
-        onStatusFilterChange={setStatusFilter}
-        onStarredOnlyChange={setStarredOnly}
-        onSortModeChange={handleSortModeChange}
       />
     </div>
   );
