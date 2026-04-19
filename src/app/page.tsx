@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PaperTree } from '@/components/paper-tree';
 import { ResizablePanels } from '@/components/resizable-panels';
@@ -14,14 +14,64 @@ import { PaperTable } from '@/components/paper-table';
 import { useToast } from '@/hooks/use-toast';
 import type { PaperListItem, Folder } from '@/types';
 
+const VIEW_STATE_KEY = 'homepageViewState';
+
+interface SavedViewState {
+  selectedFolderId: string | null;
+  searchQuery: string;
+  statusFilter: 'all' | 'analyzed' | 'pending' | 'error';
+  starredOnly: boolean;
+  sortMode: 'recent' | 'name' | 'starred' | 'date';
+}
+
+function loadSavedViewState(): SavedViewState {
+  const defaults: SavedViewState = {
+    selectedFolderId: null,
+    searchQuery: '',
+    statusFilter: 'all',
+    starredOnly: false,
+    sortMode: 'recent',
+  };
+  if (typeof window === 'undefined') return defaults;
+  try {
+    const oldSortMode = localStorage.getItem('homepageSortMode');
+    const raw = localStorage.getItem(VIEW_STATE_KEY);
+    if (!raw) {
+      if (oldSortMode) {
+        const validModes: SavedViewState['sortMode'][] = ['recent', 'name', 'starred', 'date'];
+        const validSortMode = validModes.includes(oldSortMode as SavedViewState['sortMode'])
+          ? (oldSortMode as SavedViewState['sortMode'])
+          : 'recent';
+        const migrated = { ...defaults, sortMode: validSortMode };
+        localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(migrated));
+        localStorage.removeItem('homepageSortMode');
+        return migrated;
+      }
+      return defaults;
+    }
+    const parsed = JSON.parse(raw) as Partial<SavedViewState>;
+    return { ...defaults, ...parsed };
+  } catch {
+    return defaults;
+  }
+}
+
+function saveViewState(state: SavedViewState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(state));
+  } catch { /* ignore */ }
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [papers, setPapers] = useState<PaperListItem[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
+  const savedState = loadSavedViewState();
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(savedState.selectedFolderId);
+  const [searchQuery, setSearchQuery] = useState(savedState.searchQuery);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
 
@@ -35,26 +85,25 @@ export default function HomePage() {
   const [folderPickerModal, setFolderPickerModal] = useState<{ isOpen: boolean; paperIds: string[] }>({
     isOpen: false, paperIds: []
   });
-  const [statusFilter, setStatusFilter] = useState<'all' | 'analyzed' | 'pending' | 'error'>('all');
-  const [starredOnly, setStarredOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<'recent' | 'name' | 'starred' | 'date'>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('homepageSortMode');
-        if (saved === 'recent' || saved === 'name' || saved === 'starred' || saved === 'date') {
-          return saved;
-        }
-      } catch { /* ignore */ }
-    }
-    return 'recent';
-  });
+  const [statusFilter, setStatusFilter] = useState(savedState.statusFilter);
+  const [starredOnly, setStarredOnly] = useState(savedState.starredOnly);
+  const [sortMode, setSortMode] = useState(savedState.sortMode);
 
   const handleSortModeChange = useCallback((newMode: 'recent' | 'name' | 'starred' | 'date') => {
     setSortMode(newMode);
-    try { localStorage.setItem('homepageSortMode', newMode); } catch { /* ignore */ }
   }, []);
 
   const { toasts, showToast, dismissToast } = useToast();
+
+  // Persist view state changes to localStorage (debounced to avoid jank)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveViewState({ selectedFolderId, searchQuery, statusFilter, starredOnly, sortMode });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [selectedFolderId, searchQuery, statusFilter, starredOnly, sortMode]);
 
   const fetchPapers = useCallback(async () => {
     try {
