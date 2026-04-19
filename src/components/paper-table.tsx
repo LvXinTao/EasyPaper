@@ -179,7 +179,7 @@ export function PaperTable({
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '100px' }}>Date</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '100px' }}>Status</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '36px' }}>★</th>
-              <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '120px' }}>Short Title</th>
+              <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '200px' }}>Short Title</th>
             </tr>
           </thead>
           <tbody>
@@ -240,7 +240,7 @@ export function PaperTable({
                       {paper.starred ? '★' : '☆'}
                     </button>
                   </td>
-                  <td style={{ padding: '6px 10px', fontSize: '12px', maxWidth: '120px' }}>
+                  <td style={{ padding: '6px 10px', fontSize: '12px', maxWidth: '200px' }}>
                     {editingShortTitle?.id === paper.id ? (
                       <input
                         autoFocus
