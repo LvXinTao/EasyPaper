@@ -14,6 +14,28 @@ interface ResizablePanelsProps {
   maxRightWidth?: number;
 }
 
+interface DividerProps {
+  dividerIndex: number;
+  isDragging: boolean;
+  onMouseDown: (index: number) => (e: React.MouseEvent) => void;
+}
+
+const Divider = ({ dividerIndex, isDragging, onMouseDown }: DividerProps) => (
+  <div
+    onMouseDown={onMouseDown(dividerIndex)}
+    style={{
+      width: '1px',
+      background: isDragging ? 'var(--accent)' : 'var(--border)',
+      cursor: 'col-resize',
+      flexShrink: 0,
+      transition: isDragging ? 'none' : 'background 0.2s ease',
+      position: 'relative',
+    }}
+  >
+    <div style={{ position: 'absolute', top: 0, bottom: 0, left: '-4px', right: '-4px', zIndex: 10 }} />
+  </div>
+);
+
 export function ResizablePanels({
   leftPanel, rightPanel, centerPanel,
   defaultLeftWidth = 280, defaultRightWidth = 280,
@@ -65,22 +87,6 @@ export function ResizablePanels({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const Divider = ({ dividerIndex }: { dividerIndex: number }) => (
-    <div
-      onMouseDown={handleMouseDown(dividerIndex)}
-      style={{
-        width: '1px',
-        background: isDragging === dividerIndex ? 'var(--accent)' : 'var(--border)',
-        cursor: 'col-resize',
-        flexShrink: 0,
-        transition: isDragging === dividerIndex ? 'none' : 'background 0.2s ease',
-        position: 'relative',
-      }}
-    >
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: '-4px', right: '-4px', zIndex: 10 }} />
-    </div>
-  );
-
   // Two-column mode (legacy)
   if (!isThreeColumn) {
     return (
@@ -114,11 +120,11 @@ export function ResizablePanels({
       <div style={{ width: leftWidth, minWidth: minLeftWidth, maxWidth: maxLeftWidth, flexShrink: 0, overflow: 'hidden' }}>
         {leftPanel}
       </div>
-      <Divider dividerIndex={0} />
+      <Divider dividerIndex={0} isDragging={isDragging === 0} onMouseDown={handleMouseDown} />
       <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
         {centerPanel}
       </div>
-      <Divider dividerIndex={1} />
+      <Divider dividerIndex={1} isDragging={isDragging === 1} onMouseDown={handleMouseDown} />
       <div style={{ width: rightWidth, minWidth: minRightWidth, maxWidth: maxRightWidth, flexShrink: 0, overflow: 'hidden' }}>
         {rightPanel}
       </div>
