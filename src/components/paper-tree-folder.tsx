@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Folder } from '@/types';
-import { useDroppable } from '@dnd-kit/core';
 
 interface PaperTreeFolderProps {
   folder: Folder;
@@ -32,11 +31,6 @@ export function PaperTreeFolder({
   const [isCreatingChild, setIsCreatingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
-
-  const { setNodeRef, isOver } = useDroppable({
-    id: folder.id,
-    data: { type: 'folder', folderId: folder.id },
-  });
 
   useEffect(() => {
     if (!showMenu) return;
@@ -69,12 +63,11 @@ export function PaperTreeFolder({
   return (
     <div>
       <div
-        ref={setNodeRef}
         style={{
           display: 'flex', alignItems: 'center', padding: '6px 10px',
           paddingLeft: `${10 + depth * 16}px`,
-          background: isSelected ? 'var(--accent-subtle)' : isOver ? 'var(--accent-subtle)' : 'transparent',
-          outline: isOver ? '2px solid var(--accent)' : isSelected ? '1px solid var(--accent)' : undefined,
+          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+          outline: isSelected ? '1px solid var(--accent)' : undefined,
           outlineOffset: '-2px', borderRadius: '8px', cursor: 'pointer',
           gap: '6px', position: 'relative', marginBottom: '2px',
         }}

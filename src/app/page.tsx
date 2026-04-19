@@ -460,6 +460,7 @@ export default function HomePage() {
               onStarredOnlyChange={setStarredOnly}
               onClearSelection={() => setSelectedPaperIds(new Set())}
               onShortTitleChange={handleShortTitleChange}
+              onClearFolderFilter={() => setSelectedFolderId(null)}
             />
           </div>
         }

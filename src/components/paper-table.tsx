@@ -24,6 +24,7 @@ interface PaperTableProps {
   onStarredOnlyChange: (value: boolean) => void;
   onClearSelection: () => void;
   onShortTitleChange?: (paperId: string, shortTitle: string) => Promise<void>;
+  onClearFolderFilter?: () => void;
 }
 
 export function PaperTable({
@@ -31,7 +32,7 @@ export function PaperTable({
   statusFilter, starredOnly, sortMode, stats,
   onPaperClick, onPaperDoubleClick, onCheckboxToggle, onToggleStar,
   onContextMenuOpen, onSortModeChange, onStatusFilterChange,
-  onStarredOnlyChange, onClearSelection, onShortTitleChange,
+  onStarredOnlyChange, onClearSelection, onShortTitleChange, onClearFolderFilter,
 }: PaperTableProps) {
   const [editingShortTitle, setEditingShortTitle] = useState<{ id: string; value: string } | null>(null);
   const [shortTitleSaving, setShortTitleSaving] = useState<string | null>(null);
@@ -114,6 +115,12 @@ export function PaperTable({
     <div className="flex flex-col h-full overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}>
+        {selectedFolderId && (
+          <span className="px-2 py-1 text-xs rounded-full" style={{ background: 'var(--accent-subtle)', color: 'var(--accent)', fontWeight: 600 }}>
+            📁 Folder
+            <button onClick={() => onClearFolderFilter?.()} style={{ marginLeft: '6px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 700 }} title="Clear folder filter">×</button>
+          </span>
+        )}
         {(['all', 'analyzed', 'pending', 'error'] as const).map(key => (
           <button
             key={key}

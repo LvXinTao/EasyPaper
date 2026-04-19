@@ -34,7 +34,17 @@ export function PaperTree({
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '12px', overflow: 'hidden' }}>
-      <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', fontWeight: 600, padding: '8px 6px 4px' }}>LIBRARY</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+        <div className="uppercase" style={{ fontSize: '9px', letterSpacing: '1.2px', color: 'var(--text-tertiary)', fontWeight: 600 }}>LIBRARY</div>
+        {selectedFolderId && (
+          <button
+            onClick={() => onFolderSelect(null)}
+            style={{ fontSize: '10px', color: 'var(--accent)', background: 'var(--accent-subtle)', border: 'none', borderRadius: '4px', padding: '2px 6px', cursor: 'pointer' }}
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         {rootFolders.map(folder => (
