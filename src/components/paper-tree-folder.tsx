@@ -8,6 +8,8 @@ interface PaperTreeFolderProps {
   folder: Folder;
   depth: number;
   allFolders: Folder[];
+  isSelected?: boolean;
+  onFolderSelect?: (folderId: string | null) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onCreateChildFolder: (name: string, parentId: string) => void;
@@ -17,6 +19,8 @@ export function PaperTreeFolder({
   folder,
   depth,
   allFolders,
+  isSelected,
+  onFolderSelect,
   onRenameFolder,
   onDeleteFolder,
   onCreateChildFolder,
@@ -69,12 +73,17 @@ export function PaperTreeFolder({
         style={{
           display: 'flex', alignItems: 'center', padding: '6px 10px',
           paddingLeft: `${10 + depth * 16}px`,
-          background: isOver ? 'var(--accent-subtle)' : 'transparent',
-          outline: isOver ? '2px solid var(--accent)' : undefined,
+          background: isSelected ? 'var(--accent-subtle)' : isOver ? 'var(--accent-subtle)' : 'transparent',
+          outline: isOver ? '2px solid var(--accent)' : isSelected ? '1px solid var(--accent)' : undefined,
           outlineOffset: '-2px', borderRadius: '8px', cursor: 'pointer',
           gap: '6px', position: 'relative', marginBottom: '2px',
         }}
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => {
+          setExpanded(!expanded);
+          if (onFolderSelect) {
+            onFolderSelect(isSelected ? null : folder.id);
+          }
+        }}
       >
         <button onClick={e => { e.stopPropagation(); setExpanded(!expanded); }} style={{ width: '14px', fontSize: '10px', color: 'var(--text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{expanded ? '▼' : '▶'}</button>
         <span style={{ fontSize: '14px' }}>📁</span>
@@ -102,7 +111,7 @@ export function PaperTreeFolder({
             </div>
           )}
           {childFolders.map(child => (
-            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} allFolders={allFolders} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} />
+            <PaperTreeFolder key={child.id} folder={child} depth={depth + 1} allFolders={allFolders} isSelected={isSelected} onFolderSelect={onFolderSelect} onRenameFolder={onRenameFolder} onDeleteFolder={onDeleteFolder} onCreateChildFolder={onCreateChildFolder} />
           ))}
         </div>
       )}

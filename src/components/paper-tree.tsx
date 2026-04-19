@@ -6,6 +6,8 @@ import { PaperTreeFolder } from './paper-tree-folder';
 
 interface PaperTreeProps {
   folders: Folder[];
+  selectedFolderId: string | null;
+  onFolderSelect: (folderId: string | null) => void;
   onCreateFolder: (name: string, parentId: string | null) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
@@ -13,6 +15,8 @@ interface PaperTreeProps {
 
 export function PaperTree({
   folders,
+  selectedFolderId,
+  onFolderSelect,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -39,6 +43,8 @@ export function PaperTree({
             folder={folder}
             depth={0}
             allFolders={folders}
+            isSelected={selectedFolderId === folder.id}
+            onFolderSelect={onFolderSelect}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
             onCreateChildFolder={(name, parentId) => onCreateFolder(name, parentId)}

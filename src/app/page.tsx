@@ -20,6 +20,7 @@ export default function HomePage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedPaperId, setSelectedPaperId] = useState<string | null>(null);
   const [selectedPaperIds, setSelectedPaperIds] = useState<Set<string>>(new Set());
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
@@ -197,6 +198,15 @@ export default function HomePage() {
     await fetchPapers();
     showToast('Paper moved', 'success');
   };
+
+  const handleShortTitleChange = useCallback(async (paperId: string, shortTitle: string) => {
+    await fetch(`/api/paper/${paperId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shortTitle: shortTitle || null }),
+    });
+    await fetchPapers();
+  }, [fetchPapers]);
 
   const handleRename = async (id: string, title: string) => {
     const trimmedTitle = title.trim().slice(0, 500);
@@ -396,6 +406,8 @@ export default function HomePage() {
     >
       <PaperTree
         folders={folders}
+        selectedFolderId={selectedFolderId}
+        onFolderSelect={setSelectedFolderId}
         onCreateFolder={handleCreateFolder}
         onRenameFolder={handleRenameFolder}
         onDeleteFolder={handleDeleteFolder}
@@ -432,6 +444,7 @@ export default function HomePage() {
               folders={folders}
               selectedPaperId={selectedPaperId}
               selectedPaperIds={selectedPaperIds}
+              selectedFolderId={selectedFolderId}
               searchQuery={searchQuery}
               statusFilter={statusFilter}
               starredOnly={starredOnly}
@@ -446,6 +459,7 @@ export default function HomePage() {
               onStatusFilterChange={setStatusFilter}
               onStarredOnlyChange={setStarredOnly}
               onClearSelection={() => setSelectedPaperIds(new Set())}
+              onShortTitleChange={handleShortTitleChange}
             />
           </div>
         }
