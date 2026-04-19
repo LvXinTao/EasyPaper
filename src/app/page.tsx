@@ -467,7 +467,7 @@ export default function HomePage() {
         }
         rightPanel={rightPanel}
         defaultLeftWidth={240}
-        defaultRightWidth={280}
+        defaultRightWidth={400}
         minLeftWidth={200}
         maxLeftWidth={500}
         minRightWidth={240}
