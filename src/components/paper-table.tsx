@@ -104,7 +104,7 @@ export function PaperTable({
               border: statusFilter === key ? 'none' : '1px solid var(--glass-border)',
             }}
           >
-            {key === 'all' ? 'All' : key.charAt(0).toUpperCase() + key.slice(1)} ({stats[key]})
+            {key === 'all' ? 'All' : key.charAt(0).toUpperCase() + key.slice(1)} ({stats[key as keyof Omit<typeof stats, 'total'>]})
           </button>
         ))}
         <button

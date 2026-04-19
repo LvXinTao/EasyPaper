@@ -10,6 +10,7 @@ import { FolderPickerModal } from '@/components/folder-picker-modal';
 import { Toast } from '@/components/toast';
 import { PreviewPanel } from '@/components/preview-panel';
 import { UploadModal } from '@/components/upload-modal';
+import { PaperTable } from '@/components/paper-table';
 import { useToast } from '@/hooks/use-toast';
 import type { PaperListItem, Folder } from '@/types';
 
@@ -446,10 +447,37 @@ export default function HomePage() {
     <div style={{ height: 'calc(100vh - 44px)' }}>
       <ResizablePanels
         leftPanel={leftPanel}
+        centerPanel={
+          <div className="flex flex-col overflow-hidden" style={{ height: '100%' }}>
+            <PaperTable
+              papers={papers}
+              folders={folders}
+              selectedPaperId={selectedPaperId}
+              selectedPaperIds={selectedPaperIds}
+              searchQuery={searchQuery}
+              statusFilter={statusFilter}
+              starredOnly={starredOnly}
+              sortMode={sortMode}
+              stats={stats}
+              onPaperClick={(id) => setSelectedPaperId(id)}
+              onPaperDoubleClick={handlePaperDoubleClick}
+              onCheckboxToggle={handleCheckboxToggle}
+              onToggleStar={handleToggleStar}
+              onContextMenuOpen={handleContextMenuOpen}
+              onSortModeChange={handleSortModeChange}
+              onStatusFilterChange={setStatusFilter}
+              onStarredOnlyChange={setStarredOnly}
+              onClearSelection={() => setSelectedPaperIds(new Set())}
+            />
+          </div>
+        }
         rightPanel={rightPanel}
-        defaultLeftWidth={300}
-        minLeftWidth={240}
+        defaultLeftWidth={240}
+        defaultRightWidth={280}
+        minLeftWidth={200}
         maxLeftWidth={500}
+        minRightWidth={240}
+        maxRightWidth={400}
       />
 
       <UploadModal
