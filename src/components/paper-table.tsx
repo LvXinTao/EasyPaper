@@ -1,11 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { PaperListItem, Folder } from '@/types';
+import type { PaperListItem } from '@/types';
 
 interface PaperTableProps {
   papers: PaperListItem[];
-  folders: Folder[];
   selectedPaperId: string | null;
   selectedPaperIds: Set<string>;
   selectedFolderId: string | null;
@@ -29,7 +28,7 @@ interface PaperTableProps {
 }
 
 export function PaperTable({
-  papers, folders, selectedPaperId, selectedPaperIds, selectedFolderId, searchQuery,
+  papers, selectedPaperId, selectedPaperIds, selectedFolderId, searchQuery,
   statusFilter, starredOnly, sortMode, stats,
   onPaperClick, onPaperDoubleClick, onCheckboxToggle, onToggleStar,
   onContextMenuOpen, onSortModeChange, onStatusFilterChange,

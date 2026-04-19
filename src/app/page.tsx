@@ -200,13 +200,18 @@ export default function HomePage() {
   };
 
   const handleShortTitleChange = useCallback(async (paperId: string, shortTitle: string) => {
-    await fetch(`/api/paper/${paperId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shortTitle: shortTitle || null }),
-    });
+    try {
+      const res = await fetch(`/api/paper/${paperId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shortTitle: shortTitle || null }),
+      });
+      if (!res.ok) throw new Error('Failed to update short title');
+    } catch {
+      showToast('Failed to update short title', 'error');
+    }
     await fetchPapers();
-  }, [fetchPapers]);
+  }, [fetchPapers, showToast]);
 
   const handleRename = async (id: string, title: string) => {
     const trimmedTitle = title.trim().slice(0, 500);
@@ -441,7 +446,6 @@ export default function HomePage() {
           <div className="flex flex-col overflow-hidden" style={{ height: '100%' }}>
             <PaperTable
               papers={papers}
-              folders={folders}
               selectedPaperId={selectedPaperId}
               selectedPaperIds={selectedPaperIds}
               selectedFolderId={selectedFolderId}

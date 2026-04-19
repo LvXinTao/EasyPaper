@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { PaperTable } from '@/components/paper-table';
-import type { PaperListItem, Folder } from '@/types';
+import type { PaperListItem } from '@/types';
 
 const mockPapers: PaperListItem[] = [
   { id: '1', title: 'Attention Is All You Need', createdAt: '2024-01-01T00:00:00Z', status: 'analyzed', authors: ['Vaswani'], pdfDate: '2017-06-12', shortTitle: 'Attn' },
@@ -9,13 +9,10 @@ const mockPapers: PaperListItem[] = [
   { id: '3', title: 'GPT-3', createdAt: '2024-01-03T00:00:00Z', status: 'error', authors: ['Brown'], pdfDate: '2020-05-28', starred: true },
 ];
 
-const mockFolders: Folder[] = [{ id: 'f1', name: 'Transformer', parentId: null }];
-
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 const defaultProps = {
   papers: mockPapers,
-  folders: mockFolders,
   selectedPaperId: null as string | null,
   selectedPaperIds: new Set<string>(),
   selectedFolderId: null as string | null,
