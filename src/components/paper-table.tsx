@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { PaperListItem, Folder } from '@/types';
 
 interface PaperTableProps {
@@ -8,6 +8,7 @@ interface PaperTableProps {
   folders: Folder[];
   selectedPaperId: string | null;
   selectedPaperIds: Set<string>;
+  selectedFolderId: string | null;
   searchQuery: string;
   statusFilter: 'all' | 'analyzed' | 'pending' | 'error';
   starredOnly: boolean;
@@ -22,17 +23,32 @@ interface PaperTableProps {
   onStatusFilterChange: (filter: 'all' | 'analyzed' | 'pending' | 'error') => void;
   onStarredOnlyChange: (value: boolean) => void;
   onClearSelection: () => void;
+  onShortTitleChange?: (paperId: string, shortTitle: string) => Promise<void>;
 }
 
 export function PaperTable({
-  papers, folders, selectedPaperId, selectedPaperIds, searchQuery,
+  papers, folders, selectedPaperId, selectedPaperIds, selectedFolderId, searchQuery,
   statusFilter, starredOnly, sortMode, stats,
   onPaperClick, onPaperDoubleClick, onCheckboxToggle, onToggleStar,
   onContextMenuOpen, onSortModeChange, onStatusFilterChange,
-  onStarredOnlyChange, onClearSelection,
+  onStarredOnlyChange, onClearSelection, onShortTitleChange,
 }: PaperTableProps) {
+  const [editingShortTitle, setEditingShortTitle] = useState<{ id: string; value: string } | null>(null);
+  const [shortTitleSaving, setShortTitleSaving] = useState<string | null>(null);
+
+  const handleShortTitleSave = async (paperId: string, value: string) => {
+    if (!onShortTitleChange) return;
+    setShortTitleSaving(paperId);
+    try {
+      await onShortTitleChange(paperId, value);
+    } finally {
+      setShortTitleSaving(null);
+      setEditingShortTitle(null);
+    }
+  };
   const visiblePapers = useMemo(() => {
     const filtered = papers.filter(p => {
+      if (selectedFolderId && p.folderId !== selectedFolderId) return false;
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       if (statusFilter === 'analyzed' && p.status !== 'analyzed') return false;
       if (statusFilter === 'pending' && !['pending', 'parsing', 'analyzing', 'queued'].includes(p.status)) return false;
@@ -65,6 +81,11 @@ export function PaperTable({
     if (!authors || authors.length === 0) return '—';
     if (authors.length === 1) return authors[0];
     return authors[0] + ' et al.';
+  };
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   const statusConfig: Record<string, { label: string; badgeClass: string }> = {
@@ -147,7 +168,7 @@ export function PaperTable({
               </th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Title</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '180px' }}>Author</th>
-              <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '60px' }}>Year</th>
+              <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '100px' }}>Date</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '100px' }}>Status</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '36px' }}>★</th>
               <th style={{ padding: '8px 10px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', width: '120px' }}>Short Title</th>
@@ -187,8 +208,8 @@ export function PaperTable({
                   <td style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {formatAuthor(paper.authors)}
                   </td>
-                  <td className="text-center" style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                    {paper.year || '—'}
+                  <td style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--text-tertiary)', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {paper.pdfDate ? formatDate(paper.pdfDate) : '—'}
                   </td>
                   <td className="text-center" style={{ padding: '6px 10px' }}>
                     <span
@@ -211,8 +232,39 @@ export function PaperTable({
                       {paper.starred ? '★' : '☆'}
                     </button>
                   </td>
-                  <td style={{ padding: '6px 10px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                    {paper.shortTitle || ''}
+                  <td style={{ padding: '6px 10px', fontSize: '12px', maxWidth: '120px' }}>
+                    {editingShortTitle?.id === paper.id ? (
+                      <input
+                        autoFocus
+                        value={editingShortTitle.value}
+                        onChange={e => setEditingShortTitle({ id: paper.id, value: e.target.value })}
+                        onBlur={() => handleShortTitleSave(paper.id, editingShortTitle.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') handleShortTitleSave(paper.id, editingShortTitle.value);
+                          if (e.key === 'Escape') setEditingShortTitle(null);
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        onMouseDown={e => e.stopPropagation()}
+                        style={{
+                          width: '100%',
+                          fontSize: '12px',
+                          border: '1px solid var(--accent)',
+                          background: 'var(--surface)',
+                          color: shortTitleSaving === paper.id ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                          borderRadius: '4px',
+                          padding: '2px 6px',
+                        }}
+                        placeholder="Enter short title"
+                      />
+                    ) : (
+                      <span
+                        onClick={e => { e.stopPropagation(); setEditingShortTitle({ id: paper.id, value: paper.shortTitle || '' }); }}
+                        style={{ cursor: 'text', color: paper.shortTitle ? 'var(--text-primary)' : 'var(--text-tertiary)', opacity: 0.7 }}
+                        title="Click to edit"
+                      >
+                        {paper.shortTitle || '—'}
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

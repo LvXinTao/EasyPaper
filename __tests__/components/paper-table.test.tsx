@@ -4,9 +4,9 @@ import { PaperTable } from '@/components/paper-table';
 import type { PaperListItem, Folder } from '@/types';
 
 const mockPapers: PaperListItem[] = [
-  { id: '1', title: 'Attention Is All You Need', createdAt: '2024-01-01T00:00:00Z', status: 'analyzed', authors: ['Vaswani'], year: '2017', shortTitle: 'Attn' },
-  { id: '2', title: 'BERT', createdAt: '2024-01-02T00:00:00Z', status: 'pending', authors: ['Devlin', 'Chang'], year: '2019' },
-  { id: '3', title: 'GPT-3', createdAt: '2024-01-03T00:00:00Z', status: 'error', authors: ['Brown'], year: '2020', starred: true },
+  { id: '1', title: 'Attention Is All You Need', createdAt: '2024-01-01T00:00:00Z', status: 'analyzed', authors: ['Vaswani'], pdfDate: '2017-06-12', shortTitle: 'Attn' },
+  { id: '2', title: 'BERT', createdAt: '2024-01-02T00:00:00Z', status: 'pending', authors: ['Devlin', 'Chang'], pdfDate: '2019-05-18' },
+  { id: '3', title: 'GPT-3', createdAt: '2024-01-03T00:00:00Z', status: 'error', authors: ['Brown'], pdfDate: '2020-05-28', starred: true },
 ];
 
 const mockFolders: Folder[] = [{ id: 'f1', name: 'Transformer', parentId: null }];
@@ -18,6 +18,7 @@ const defaultProps = {
   folders: mockFolders,
   selectedPaperId: null as string | null,
   selectedPaperIds: new Set<string>(),
+  selectedFolderId: null as string | null,
   searchQuery: '',
   statusFilter: 'all' as const,
   starredOnly: false,
@@ -32,6 +33,7 @@ const defaultProps = {
   onStatusFilterChange: jest.fn(),
   onStarredOnlyChange: jest.fn(),
   onClearSelection: jest.fn(),
+  onShortTitleChange: jest.fn(),
 };
 
 describe('PaperTable', () => {
@@ -39,7 +41,7 @@ describe('PaperTable', () => {
     await act(async () => { render(<PaperTable {...defaultProps} />); });
     expect(screen.getByText('Title')).toBeInTheDocument();
     expect(screen.getByText('Author')).toBeInTheDocument();
-    expect(screen.getByText('Year')).toBeInTheDocument();
+    expect(screen.getByText('Date')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Short Title')).toBeInTheDocument();
   });
@@ -48,7 +50,8 @@ describe('PaperTable', () => {
     await act(async () => { render(<PaperTable {...defaultProps} />); });
     expect(screen.getByText('Attention Is All You Need')).toBeInTheDocument();
     expect(screen.getByText('Vaswani')).toBeInTheDocument();
-    expect(screen.getByText('2017')).toBeInTheDocument();
+    // Date column shows formatted pdfDate (Jun 12, 2017)
+    expect(screen.getByText(/Jun 12, 2017/)).toBeInTheDocument();
     expect(screen.getByText('Attn')).toBeInTheDocument();
   });
 
