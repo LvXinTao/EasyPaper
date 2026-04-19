@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PaperTree } from '@/components/paper-tree';
 import { ResizablePanels } from '@/components/resizable-panels';
@@ -38,7 +38,11 @@ function loadSavedViewState(): SavedViewState {
     const raw = localStorage.getItem(VIEW_STATE_KEY);
     if (!raw) {
       if (oldSortMode) {
-        const migrated = { ...defaults, sortMode: oldSortMode as SavedViewState['sortMode'] };
+        const validModes: SavedViewState['sortMode'][] = ['recent', 'name', 'starred', 'date'];
+        const validSortMode = validModes.includes(oldSortMode as SavedViewState['sortMode'])
+          ? (oldSortMode as SavedViewState['sortMode'])
+          : 'recent';
+        const migrated = { ...defaults, sortMode: validSortMode };
         localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(migrated));
         localStorage.removeItem('homepageSortMode');
         return migrated;
@@ -91,9 +95,14 @@ export default function HomePage() {
 
   const { toasts, showToast, dismissToast } = useToast();
 
-  // Persist view state changes to localStorage
+  // Persist view state changes to localStorage (debounced to avoid jank)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
   useEffect(() => {
-    saveViewState({ selectedFolderId, searchQuery, statusFilter, starredOnly, sortMode });
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveViewState({ selectedFolderId, searchQuery, statusFilter, starredOnly, sortMode });
+    }, 500);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [selectedFolderId, searchQuery, statusFilter, starredOnly, sortMode]);
 
   const fetchPapers = useCallback(async () => {
