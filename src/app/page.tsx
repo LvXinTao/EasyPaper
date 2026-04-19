@@ -461,6 +461,7 @@ export default function HomePage() {
               onClearSelection={() => setSelectedPaperIds(new Set())}
               onShortTitleChange={handleShortTitleChange}
               onClearFolderFilter={() => setSelectedFolderId(null)}
+              activeFolderName={folders.find(f => f.id === selectedFolderId)?.name}
             />
           </div>
         }
