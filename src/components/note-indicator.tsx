@@ -81,7 +81,7 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
           }}
           tabIndex={0}
           role="button"
-          aria-label="Edit note"
+          aria-label={`Note: ${note.title}`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -102,7 +102,7 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
               left: isNearLeftEdge ? '16px' : 'auto',
               right: isNearLeftEdge ? 'auto' : 'calc(100% + 12px)',
               width: '200px',
-              aspectRatio: '2.5 / 1',
+              maxHeight: '80px',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             }}
           >
