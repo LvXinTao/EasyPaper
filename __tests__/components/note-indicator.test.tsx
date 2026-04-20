@@ -20,31 +20,33 @@ const mockNote: Note = {
 describe('NoteIndicator', () => {
   it('renders a colored dot with correct tag color', () => {
     render(<NoteIndicator note={mockNote} position={{ x: 100, y: 200 }} onClick={() => {}} />);
-    const dot = screen.getByRole('button', { name: /Important feature semantics/i });
+    const dot = screen.getByRole('button', { name: 'Edit note' });
     expect(dot).toBeInTheDocument();
     expect(dot).toHaveStyle({ background: 'rgb(239, 68, 68)' });
   });
 
-  it('shows tooltip on hover with note preview', async () => {
+  it('shows tooltip on hover with note content preview', async () => {
     render(<NoteIndicator note={mockNote} position={{ x: 100, y: 200 }} onClick={() => {}} />);
-    const dot = screen.getByRole('button');
+    const dot = screen.getByRole('button', { name: 'Edit note' });
     fireEvent.mouseEnter(dot);
-    const tooltip = await screen.findByText(/Important feature semantics/);
-    expect(tooltip).toBeInTheDocument();
+    const content = await screen.findByText(/In the vanilla attention layer/);
+    expect(content).toBeInTheDocument();
     expect(screen.getByText(/重要/)).toBeInTheDocument();
+    // Title should NOT appear in tooltip
+    expect(screen.queryByText(/Important feature semantics/)).not.toBeInTheDocument();
   });
 
   it('calls onClick when dot is clicked', () => {
     const handleClick = jest.fn();
     render(<NoteIndicator note={mockNote} position={{ x: 100, y: 200 }} onClick={handleClick} />);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit note' }));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
   it('uses default gray color when note has no tags', () => {
     const noTagNote = { ...mockNote, tags: [] as unknown as typeof mockNote.tags };
     render(<NoteIndicator note={noTagNote} position={{ x: 100, y: 200 }} onClick={() => {}} />);
-    const dot = screen.getByRole('button');
+    const dot = screen.getByRole('button', { name: 'Edit note' });
     expect(dot).toHaveStyle({ background: 'rgb(156, 163, 175)' });
   });
 });

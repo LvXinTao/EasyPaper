@@ -45,7 +45,6 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
   const tagLabel = firstTag ? TAG_LABELS[firstTag] : null;
   const tagColor = firstTag ? TAG_COLORS[firstTag] : null;
 
-  const displayTitle = note.title.length > 40 ? note.title.slice(0, 40) + '...' : note.title;
   const strippedContent = stripMarkdown(note.content);
   const displayContent = strippedContent.length > 80
     ? strippedContent.slice(0, 80) + '...'
@@ -68,8 +67,8 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
           onClick={onClick}
           className="rounded-full transition-transform duration-150"
           style={{
-            width: '8px',
-            height: '8px',
+            width: '14px',
+            height: '14px',
             background: dotColor,
             border: 'none',
             padding: 0,
@@ -82,7 +81,7 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
           }}
           tabIndex={0}
           role="button"
-          aria-label={`Note: ${note.title}`}
+          aria-label="Edit note"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -94,7 +93,7 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
         {/* Tooltip */}
         {showTooltip && (
           <div
-            className="absolute px-3 py-2 rounded-lg text-xs max-w-[200px] z-50"
+            className="absolute px-3 py-2 rounded-lg text-xs z-50 overflow-hidden"
             style={{
               background: 'rgba(26, 26, 26, 0.95)',
               color: 'white',
@@ -102,22 +101,21 @@ export function NoteIndicator({ note, position, onClick }: NoteIndicatorProps) {
               transform: 'translateY(-50%)',
               left: isNearLeftEdge ? '16px' : 'auto',
               right: isNearLeftEdge ? 'auto' : 'calc(100% + 12px)',
+              width: '200px',
+              aspectRatio: '2.5 / 1',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             }}
           >
             {tagLabel && tagColor && (
               <span
-                className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold mb-1"
                 style={{ background: `${tagColor}33`, color: tagColor }}
               >
                 {tagLabel}
               </span>
             )}
-            <div className="font-medium mt-1" style={{ color: 'white' }}>
-              {displayTitle}
-            </div>
             {displayContent && (
-              <div className="mt-1 opacity-80 italic" style={{ color: 'rgba(255,255,255,0.8)' }}>
+              <div className="opacity-80 line-clamp-2" style={{ color: 'rgba(255,255,255,0.8)' }}>
                 {displayContent}
               </div>
             )}
