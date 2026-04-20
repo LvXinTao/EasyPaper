@@ -7,7 +7,7 @@ import 'react-pdf/dist/Page/AnnotationLayer.css';
 import type { Bookmark, Note, NoteTag, TextSelection } from '@/types';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { SelectionToolbar } from './selection-toolbar';
-import { AnnotationBubble } from './annotation-bubble';
+import { NoteIndicator } from './note-indicator';
 import { InlineNoteEditor } from './inline-note-editor';
 
 // Configure pdf.js worker - use static file from public folder
@@ -301,7 +301,7 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
   // to avoid stale closure issues with editorPopup
 
   // Handle annotation bubble click
-  const handleAnnotationClick = useCallback((note: Note) => {
+  const handleNoteIndicatorClick = useCallback((note: Note) => {
     if (!note.selection) return;
     const rightmostRect = note.selection.rects.reduce((max, r) =>
       r.left + r.width > max.left + max.width ? r : max, note.selection!.rects[0]);
@@ -1083,13 +1083,13 @@ export const PdfViewer = forwardRef<PdfViewerRef, PdfViewerProps>(({
         </div>
       )}
 
-      {/* Annotation Bubbles */}
+      {/* Note Indicator Dots */}
       {bubblePositions.map(({ note, x, y }) => (
-        <AnnotationBubble
+        <NoteIndicator
           key={note.id}
           note={note}
           position={{ x, y }}
-          onClick={() => handleAnnotationClick(note)}
+          onClick={() => handleNoteIndicatorClick(note)}
         />
       ))}
 
